@@ -2,7 +2,7 @@
 
 Deterministic C++17 simulation and benchmark for drone-swarm behavior under degraded communication and perception: bursty packet loss, weather-degraded LiDAR, neighbor state prediction, and a fallback state machine. Runs are reproducible from a seed. An Unreal Engine 5.4 plugin visualizes recorded runs.
 
-<!-- TODO: CI and license badges once the repository is on GitHub. Two badges at most. -->
+[![ci](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml/badge.svg)](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 <!-- TODO: hero GIF from the UE5.4 plugin, about 800 px wide, under 5 MB.
      Caption: scenario, drone count, seed.
