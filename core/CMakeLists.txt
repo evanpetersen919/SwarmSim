@@ -11,7 +11,9 @@ add_library(swarm_core STATIC
   sim/src/rng.cpp
   sim/src/delivery_queue.cpp
   sim/src/deterministic_channel.cpp
-  sim/src/lockstep_pool.cpp)
+  sim/src/lockstep_pool.cpp
+  sim/src/simulation.cpp
+  sim/src/demo_agent.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)
