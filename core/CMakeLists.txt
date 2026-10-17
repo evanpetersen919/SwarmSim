@@ -9,7 +9,8 @@ swarm_configure_target(swarm_format)
 add_library(swarm_core STATIC
   sim/src/sim_clock.cpp
   sim/src/rng.cpp
-  sim/src/delivery_queue.cpp)
+  sim/src/delivery_queue.cpp
+  sim/src/deterministic_channel.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 target_link_libraries(swarm_core PUBLIC swarm_format)
