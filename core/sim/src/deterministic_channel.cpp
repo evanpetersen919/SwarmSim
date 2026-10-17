@@ -19,6 +19,54 @@ DeterministicChannel::DeterministicChannel(std::uint32_t num_endpoints, ChannelC
   if (config_.loss_model != LossModel::kNone && !(config_.loss >= 0.0 && config_.loss <= 1.0)) {
     throw std::invalid_argument("DeterministicChannel: loss must be in [0, 1]");
   }
+
+  if (config_.loss_model == LossModel::kBurst) {
+    const double p = config_.loss;
+    const double burst = config_.mean_burst;
+    if (!(burst >= 1.0)) {
+      throw std::invalid_argument("DeterministicChannel: mean_burst must be at least 1");
+    }
+    if (p >= 1.0) {
+      p_good_to_bad_ = 1.0;
+      p_bad_to_good_ = 0.0;
+    } else {
+      p_bad_to_good_ = 1.0 / burst;
+      p_good_to_bad_ = p * p_bad_to_good_ / (1.0 - p);
+      if (p_good_to_bad_ > 1.0) {
+        throw std::invalid_argument(
+            "DeterministicChannel: mean_burst too short for the requested loss; need "
+            "mean_burst >= loss / (1 - loss)");
+      }
+    }
+
+    // Start every link in its stationary distribution so early messages are not biased.
+    link_bad_.assign(static_cast<std::size_t>(num_endpoints) * num_endpoints, 0);
+    for (auto& bad : link_bad_) {
+      bad = loss_rng_.bernoulli(p) ? 1 : 0;
+    }
+  }
+}
+
+bool DeterministicChannel::should_drop(std::uint32_t sender, std::uint32_t receiver) {
+  switch (config_.loss_model) {
+    case LossModel::kNone:
+      return false;
+    case LossModel::kIndependent:
+      return loss_rng_.bernoulli(config_.loss);
+    case LossModel::kBurst: {
+      auto& bad = link_bad_[static_cast<std::size_t>(sender) * num_endpoints_ + receiver];
+      const double u = loss_rng_.uniform();
+      if (bad != 0) {
+        if (u < p_bad_to_good_) {
+          bad = 0;
+        }
+      } else if (u < p_good_to_bad_) {
+        bad = 1;
+      }
+      return bad != 0;
+    }
+  }
+  return false;
 }
 
 void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
@@ -29,7 +77,7 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
   // seq is consumed even if the message is dropped, so it reflects send order.
   msg.seq = next_seq_[msg.sender]++;
 
-  if (config_.loss_model == LossModel::kIndependent && loss_rng_.bernoulli(config_.loss)) {
+  if (should_drop(msg.sender, msg.receiver)) {
     ++stats_.dropped_loss;
     return;
   }

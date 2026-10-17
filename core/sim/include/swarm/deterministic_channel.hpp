@@ -12,6 +12,10 @@ namespace swarm {
 enum class LossModel {
   kNone,
   kIndependent,  // each message is dropped with probability `loss`
+  // Two-state chain per directed link: the bad state drops everything, the good state nothing.
+  // With mean loss p and mean burst length L, P(bad to good) = 1/L and
+  // P(good to bad) = p / (L * (1 - p)), which gives a stationary bad-state probability of p.
+  kBurst,
 };
 
 struct ChannelConfig {
@@ -22,6 +26,10 @@ struct ChannelConfig {
   LossModel loss_model = LossModel::kNone;
   // Mean probability that a message is dropped, in [0, 1]. Ignored when loss_model is kNone.
   double loss = 0.0;
+  // Mean length, in messages on one link, of a run of consecutive drops. Used by kBurst only.
+  // Must be at least 1, and at least loss / (1 - loss) when loss < 1. Below that bound the
+  // good-to-bad probability would exceed 1, so the requested mean loss cannot be reached.
+  double mean_burst = 1.0;
 };
 
 // In-process channel whose behavior depends only on its configuration, its seed, and the order
@@ -36,9 +44,14 @@ class DeterministicChannel : public IChannel {
   const ChannelStats& stats() const override { return stats_; }
 
  private:
+  bool should_drop(std::uint32_t sender, std::uint32_t receiver);
+
   std::uint32_t num_endpoints_;
   ChannelConfig config_;
   Rng loss_rng_;
+  double p_good_to_bad_ = 0.0;
+  double p_bad_to_good_ = 1.0;
+  std::vector<std::uint8_t> link_bad_;  // index sender * num_endpoints + receiver
   DeliveryQueue queue_;
   std::vector<std::uint64_t> next_seq_;
   // Sized once at construction and never resized, so take_inbox() is safe from different
