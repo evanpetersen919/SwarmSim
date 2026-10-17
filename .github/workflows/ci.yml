@@ -43,10 +43,23 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
       - run: cmake --preset release && cmake --build --preset release
-      - run: |
-          ./build/release/apps/swarm_sim --seed 42 > a.txt
-          ./build/release/apps/swarm_sim --seed 42 > b.txt
-          diff a.txt b.txt
+      - name: Record on one thread, verify on eight
+        run: |
+          sim=./build/release/apps/swarm_sim
+          flags="--seed 42 --agents 16 --ticks 500 --loss-model burst --loss 0.2 --mean-burst 4"
+          flags="$flags --latency 2 --jitter 2 --rate-limit 3"
+          $sim --record run.log $flags --threads 1
+          $sim --replay run.log --verify --threads 8
+      - name: Same output for every thread count
+        run: |
+          sim=./build/release/apps/swarm_sim
+          for t in 1 2 4 8; do
+            $sim --seed 42 --agents 16 --ticks 500 --loss-model independent --loss 0.3 \
+              --threads $t > out_$t.txt
+          done
+          diff out_1.txt out_2.txt
+          diff out_1.txt out_4.txt
+          diff out_1.txt out_8.txt
 
   lint:
     runs-on: ubuntu-24.04
