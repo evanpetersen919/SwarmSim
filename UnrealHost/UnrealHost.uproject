@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.4",
+  "Category": "",
+  "Description": "Development host for the SwarmSim plugin.",
+  "Modules": [
+    {
+      "Name": "UnrealHost",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "SwarmSim",
+      "Enabled": true
+    }
+  ]
+}

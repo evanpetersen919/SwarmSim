@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        preset: [release, asan-ubsan]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - run: cmake --preset ${{ matrix.preset }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+
+  tsan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: cmake --preset tsan
+      - run: cmake --build --preset tsan
+      - run: ctest --preset tsan
+
+  cxx20:
+    # The Unreal plugin compiles core/format as C++20, so it must build that way too.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: cmake --preset release -DCMAKE_CXX_STANDARD=20
+      - run: cmake --build --preset release
+
+  determinism:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: cmake --preset release && cmake --build --preset release
+      - run: |
+          ./build/release/apps/swarm_sim --seed 42 > a.txt
+          ./build/release/apps/swarm_sim --seed 42 > b.txt
+          diff a.txt b.txt
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check_core_invariants.sh
+      - run: pip install clang-format==23.1.3
+      - run: git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run -Werror

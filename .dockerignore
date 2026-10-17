@@ -1,0 +1,12 @@
+.git
+build/
+out/
+UnrealHost/
+ue5-plugin/
+logs/
+runs/
+results/
+docs/img/
+**/Binaries
+**/Intermediate
+**/Saved

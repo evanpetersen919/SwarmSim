@@ -1,0 +1,6 @@
+{
+  "cmake.useCMakePresets": "always",
+  "editor.formatOnSave": false,
+  "C_Cpp.default.cppStandard": "c++17",
+  "files.eol": "\n"
+}

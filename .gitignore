@@ -1,0 +1,52 @@
+# Build output
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.pdb
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Unreal Engine
+**/Binaries/
+**/Intermediate/
+**/Saved/
+**/DerivedDataCache/
+*.sln
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+
+# Junctions created by scripts/link_ue.ps1
+UnrealHost/Plugins/
+ue5-plugin/SwarmSim/Source/SwarmSim/Private/swarm_format
+
+# Editors
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# Run output. Commit only small golden files under tests/golden/.
+logs/
+runs/
+*.log
+*.rec
+results/
+!tests/golden/**
+
+# Local
+.env

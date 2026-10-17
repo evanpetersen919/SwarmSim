@@ -1,0 +1,18 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "SwarmSim",
+  "Description": "Builds a scene from a SwarmSim scenario and replays run logs.",
+  "Category": "Simulation",
+  "CreatedBy": "Evan Petersen",
+  "EngineVersion": "5.4.0",
+  "CanContainContent": true,
+  "Modules": [
+    {
+      "Name": "SwarmSim",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

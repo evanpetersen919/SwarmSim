@@ -1,0 +1,10 @@
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  readability-braces-around-statements,
+  cppcoreguidelines-init-variables,
+  -bugprone-easily-swappable-parameters
+WarningsAsErrors: 'bugprone-*'
+HeaderFilterRegex: '(core|net|apps)/.*'
