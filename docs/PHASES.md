@@ -17,7 +17,7 @@ Each row is one commit. Every commit adds at least one new test, builds without 
 
 ## Phase 1: Deterministic runtime
 
-Goal: a lockstep simulation loop whose state hash does not depend on thread count, with a log that replays exactly.
+Goal: a lockstep simulation loop whose state hash does not depend on thread count, with a log that replays exactly. Detailed design: [phases/phase-01-deterministic-runtime.md](phases/phase-01-deterministic-runtime.md). Each later phase gets the same kind of document before its first commit.
 
 | # | Commit | New tests |
 |---|---|---|
