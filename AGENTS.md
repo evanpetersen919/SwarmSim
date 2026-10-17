@@ -19,7 +19,7 @@ C++17 simulation core in `core/` with no Unreal dependency. Unreal Engine 5.4 vi
 - Estimators must not read ground truth. Ground truth is for metrics only.
 - `core/` never includes Unreal headers. Unreal code never includes Eigen or yaml-cpp. Only `core/format` is compiled into the plugin, and it must stay free of Eigen and yaml-cpp.
 - Core headers must also compile as C++20, because Unreal builds them that way.
-- Any change to the binary log format needs a version bump and an update to the golden files.
+- Any change to the binary log format needs a version bump and an update to the byte-exact layout test in `tests/unit/test_log_format.cpp`. `core/format` is also compiled into Unreal, which has no exceptions, so it reports errors as status codes.
 - Models are selected through interfaces from the scenario file. Metrics are computed from logs, not inside the simulation.
 
 ## Style

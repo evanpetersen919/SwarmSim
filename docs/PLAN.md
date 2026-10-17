@@ -130,3 +130,4 @@ The project demonstrates multithreading, sockets and Linux tooling. It does not 
 
 - 2026-10-16: Initial approved plan. Multi-process mode, epoll, real-time tuning, tc netem, lock-free queue, checksums, Parquet and Slurm cut. Unreal Engine version fixed at 5.4. Timeline marked flexible.
 - 2026-10-16: Project renamed from SwarmResilience to SwarmSim. Unreal plugin and module are now SwarmSim.
+- 2026-10-17: Phase 1 (deterministic runtime) complete: delivery queue, deterministic channel with latency, loss, burst loss, jitter and rate limit, lockstep pool, simulation loop with state hash, binary log, record and replay verification. See docs/phases/phase-01-deterministic-runtime.md.

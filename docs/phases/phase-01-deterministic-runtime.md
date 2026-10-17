@@ -1,6 +1,6 @@
 # Phase 1: Deterministic runtime
 
-Status: in progress. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md).
+Status: complete (commits 1 to 9 below). Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md).
 
 ## Goal
 
@@ -73,8 +73,11 @@ Loss models:
 
 - Independent: each message dropped with probability `p`.
 - Burst: a two-state chain per directed link (sender, receiver). The bad state drops everything, the good state drops nothing. With mean loss `p` and mean burst length `L >= 1`: `P(bad to good) = 1/L`, `P(good to bad) = p * (1/L) / (1 - p)`. The stationary bad-state probability is `p`. This is the simple two-state special case of the Gilbert-Elliott model; the plan's cut of full Gilbert-Elliott refers to per-state loss probabilities.
+  - Feasibility: `P(good to bad)` must not exceed 1, so `L >= p / (1 - p)` is required when `p < 1`. For example `p = 0.6` needs `L >= 1.5`. Infeasible combinations are rejected at construction. `p = 1` drops everything.
+  - Every link starts in the stationary distribution, drawn at construction in link order, so early messages are not biased toward the good state.
+  - One uniform draw per message on the link advances the chain; the message is dropped if the new state is bad.
 
-Order of draws in `send`: rate limit check (no draw), loss draw (loss stream), jitter draw (jitter stream). A dropped message does not consume a jitter draw, so jitter stream position depends only on which messages survive. Both properties are tested.
+Order in `send`: assign `seq` (consumed even if the message is later dropped, so `seq` reflects send order and gaps show drops), rate limit check (no draw), loss draw (loss stream), jitter draw (jitter stream). A rate-limited message draws nothing, and a lost message draws no jitter, so each stream's position depends only on which messages reach that stage. Both properties are tested. Jitter uses `Rng::below`, an unbiased bounded integer (rejection sampling), not a modulo.
 
 `ChannelStats`: sent, delivered, dropped by loss, dropped by rate limit.
 
@@ -95,24 +98,27 @@ Order of draws in `send`: rate limit check (no draw), loss draw (loss stream), j
 
 ### Binary log (commit 8, in `core/format`)
 
-Little-endian, fixed-width, no struct memcpy.
+Little-endian, fixed-width, no struct memcpy. `core/format` is compiled into the Unreal plugin, which builds without C++ exceptions, so the API reports errors as status codes and works on in-memory buffers (no iostreams). The writer builds a byte vector; the reader parses a pointer and size. File I/O is done by the caller.
 
 ```
 header:  "SWRM" | u32 version | u64 seed | f64 dt | u32 agent_count | u32 config_len | config bytes
-record:  u64 tick | u64 hash | u32 blob_len | blob bytes      (repeated)
-trailer: "ENDS" | u64 record_count | u64 final_hash
+record:  u8 1 | u64 tick | u64 hash | u32 blob_len | blob bytes      (repeated)
+trailer: u8 2 | u64 record_count | u64 final_hash
 ```
+
+`final_hash` is the hash of the last record, or 0 for an empty log. Config is limited to 1 MiB and each blob to 64 MiB, checked before any allocation.
 
 - The blob is empty in this phase. It is reserved for state snapshots (positions) that the Unreal viewer reads in Phase 8, so the record layout will not change then.
 - `config_len` and the config bytes carry an opaque text blob. The format layer does not interpret it; the runner stores its run configuration there so a log is self-describing.
-- Readers reject: bad magic, unsupported version, truncation anywhere, trailer record count that does not match, and trailer final hash that does not match the last record.
+- Readers reject, each with its own status: bad magic, unsupported version, truncation anywhere, an unknown record kind, oversized lengths, a trailer record count that does not match, a trailer final hash that does not match the last record, and bytes after the trailer.
 - Version is 1. Any layout change bumps it, and the inline golden-bytes test must be updated deliberately.
 
 ### Replay and verify (commit 9)
 
-- `SimConfig` has a text form (`key=value` lines) stored in the log header. Unknown keys and malformed values are errors.
-- `record_run(config, ticks, threads, LogWriter&)` runs and writes the log.
-- `verify_log(LogReader&, threads)` rebuilds the simulation from the header config, re-executes, and compares every recorded hash. It reports the first mismatching tick.
+- `RunConfig` (simulation config, agent count, tick count) maps to the log header: seed, dt, and agent count go in the fixed fields, and the rest as `key=value` lines in the config text. Every key is required. Unknown, duplicate, missing, and malformed entries are errors. Doubles are written in shortest round-trip form.
+- `record_run(config, threads, bytes)` runs and writes the log, one record per tick.
+- `verify_log(data, size, threads)` rebuilds the simulation from the header, re-executes, and compares every recorded hash and tick number. It returns a status: ok, log error, bad configuration, tick mismatch, hash mismatch (with the tick), or length mismatch.
+- `swarm_sim --record FILE`, `swarm_sim --replay FILE --verify`. Exit status 0 ok, 1 verification failed, 2 usage or I/O error.
 - Thread count is not part of the recorded config. A log recorded with 1 thread must verify with 8.
 - Phase 1 "replay" is deterministic re-execution. Playback of recorded state for visualization arrives with the blobs in Phase 8.
 
@@ -214,7 +220,7 @@ Tests:
 - Corrupting one recorded hash makes verify fail and report that tick.
 - A log with an altered config text fails verification.
 - Truncated log fails with a read error, not a hash error.
-- CI determinism job records and verifies through the command line with different thread counts.
+- CI determinism job records and verifies through the command line with different thread counts. The same sequence runs locally as the `cli_roundtrip` ctest.
 
 ## Risks
 

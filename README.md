@@ -8,7 +8,7 @@ Deterministic C++17 simulation and benchmark for drone-swarm behavior under degr
      Caption: scenario, drone count, seed.
 ![N-drone formation under burst loss in fog, seed 42](docs/img/hero.gif) -->
 
-Status: early development. The repository currently contains the build system, CI, the simulation clock, a seeded random number generator, state hashing, and their tests. Everything else described here is planned; see [docs/PLAN.md](docs/PLAN.md) for scope and order of work.
+Status: early development. The deterministic runtime is in place: a fixed-step clock, seeded random streams, a message channel with latency, random and burst loss, jitter, and a rate limit, a lockstep thread pool, a simulation loop with a per-tick state hash, and a binary run log that can be verified by re-execution. It currently runs placeholder agents. Drones, sensors, estimation, control, and the Unreal viewer are planned; see [docs/PLAN.md](docs/PLAN.md) for scope and [docs/PHASES.md](docs/PHASES.md) for the order of work.
 
 ## Results
 
@@ -33,13 +33,20 @@ ctest --preset release
 
 Presets for sanitizer builds are `asan-ubsan` and `tsan` (GCC or Clang). See [CMakePresets.json](CMakePresets.json). Setup notes for Windows and Unreal are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-The runner is a placeholder that draws seeded random numbers and prints a state hash:
+The runner simulates placeholder agents that exchange messages over the lossy channel. Record a run on one thread, then verify it by re-execution on eight:
 
 ```sh
-./build/release/apps/swarm_sim --seed 42
+./build/release/apps/swarm_sim --record run.log --seed 42 --agents 16 --ticks 500 \
+  --loss-model burst --loss 0.2 --mean-burst 4 --latency 2 --jitter 2 --threads 1
+./build/release/apps/swarm_sim --replay run.log --verify --threads 8
 ```
 
-The same seed prints the same hash on the same platform. The scenario runner, recording, and replay are not implemented yet.
+```
+recorded 500 ticks to run.log
+verified run.log: all recorded hashes match
+```
+
+Without `--record` or `--replay` the runner prints the final state hash. The same seed gives the same hash for any thread count on the same platform. Run `swarm_sim --help` for all options. The scenario runner and playback of recorded state are not implemented yet.
 
 Docker: `docker build -t swarmsim . && docker run --rm swarmsim`.
 
