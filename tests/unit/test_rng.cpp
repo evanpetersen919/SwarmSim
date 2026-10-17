@@ -50,3 +50,31 @@ TEST(Rng, BernoulliMatchesProbability) {
   }
   EXPECT_NEAR(static_cast<double>(hits) / n, 0.3, 0.01);
 }
+
+TEST(Rng, BelowStaysInRangeAndCoversIt) {
+  swarm::Rng rng(5, 0);
+  std::uint32_t counts[7] = {};
+  for (int i = 0; i < 70000; ++i) {
+    const std::uint32_t v = rng.below(7);
+    ASSERT_LT(v, 7U);
+    ++counts[v];
+  }
+  for (std::uint32_t count : counts) {
+    EXPECT_NEAR(static_cast<double>(count), 10000.0, 400.0);
+  }
+}
+
+TEST(Rng, BelowOneAlwaysReturnsZero) {
+  swarm::Rng rng(5, 0);
+  for (int i = 0; i < 100; ++i) {
+    EXPECT_EQ(rng.below(1), 0U);
+  }
+}
+
+TEST(Rng, BelowIsDeterministic) {
+  swarm::Rng a(9, 3);
+  swarm::Rng b(9, 3);
+  for (int i = 0; i < 1000; ++i) {
+    EXPECT_EQ(a.below(1000), b.below(1000));
+  }
+}

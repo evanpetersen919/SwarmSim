@@ -1,5 +1,7 @@
 #include "swarm/deterministic_channel.hpp"
 
+#include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -11,10 +13,15 @@ DeterministicChannel::DeterministicChannel(std::uint32_t num_endpoints, ChannelC
     : num_endpoints_(num_endpoints),
       config_(config),
       loss_rng_(config.seed, kStreamChannelLoss),
+      jitter_rng_(config.seed, kStreamChannelJitter),
+      sent_this_tick_(num_endpoints, 0),
       next_seq_(num_endpoints, 0),
       inboxes_(num_endpoints) {
   if (config_.latency_ticks < 1) {
     throw std::invalid_argument("DeterministicChannel: latency_ticks must be at least 1");
+  }
+  if (config_.jitter_ticks == std::numeric_limits<std::uint32_t>::max()) {
+    throw std::invalid_argument("DeterministicChannel: jitter_ticks is too large");
   }
   if (config_.loss_model != LossModel::kNone && !(config_.loss >= 0.0 && config_.loss <= 1.0)) {
     throw std::invalid_argument("DeterministicChannel: loss must be in [0, 1]");
@@ -77,12 +84,33 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
   // seq is consumed even if the message is dropped, so it reflects send order.
   msg.seq = next_seq_[msg.sender]++;
 
+  // Rate limit first, and without any random draw, so limited messages never move the loss or
+  // jitter streams.
+  if (config_.max_msgs_per_sender_per_tick > 0) {
+    if (!rate_tick_valid_ || rate_tick_ != now_tick) {
+      std::fill(sent_this_tick_.begin(), sent_this_tick_.end(), 0U);
+      rate_tick_ = now_tick;
+      rate_tick_valid_ = true;
+    }
+    if (sent_this_tick_[msg.sender] >= config_.max_msgs_per_sender_per_tick) {
+      ++stats_.dropped_rate;
+      return;
+    }
+    ++sent_this_tick_[msg.sender];
+  }
+
   if (should_drop(msg.sender, msg.receiver)) {
     ++stats_.dropped_loss;
     return;
   }
 
-  msg.deliver_tick = now_tick + config_.latency_ticks;
+  // Jitter is drawn only for messages that survive, so its stream position depends on which
+  // messages were delivered and on nothing else.
+  std::uint64_t delay = config_.latency_ticks;
+  if (config_.jitter_ticks > 0) {
+    delay += jitter_rng_.below(config_.jitter_ticks + 1U);
+  }
+  msg.deliver_tick = now_tick + delay;
   queue_.push(std::move(msg));
 }
 

@@ -25,6 +25,17 @@ std::uint32_t Rng::next_u32() {
   return (xorshifted >> rot) | (xorshifted << ((~rot + 1U) & 31U));
 }
 
+std::uint32_t Rng::below(std::uint32_t bound) {
+  // Reject the first (2^32 mod bound) values so the remaining range is a multiple of bound.
+  const std::uint32_t threshold = (~bound + 1U) % bound;
+  for (;;) {
+    const std::uint32_t r = next_u32();
+    if (r >= threshold) {
+      return r % bound;
+    }
+  }
+}
+
 double Rng::uniform() { return static_cast<double>(next_u32() >> 8U) * (1.0 / 16777216.0); }
 
 double Rng::uniform(double lo, double hi) { return lo + (hi - lo) * uniform(); }

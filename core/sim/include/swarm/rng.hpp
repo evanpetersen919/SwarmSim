@@ -13,6 +13,8 @@ class Rng {
   Rng(std::uint64_t seed, std::uint64_t stream);
 
   std::uint32_t next_u32();
+  // Uniform integer in [0, bound) without modulo bias. `bound` must be at least 1.
+  std::uint32_t below(std::uint32_t bound);
   // Uniform in [0, 1) with 24 bits of resolution.
   double uniform();
   // Uniform in [lo, hi).
