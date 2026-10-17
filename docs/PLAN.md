@@ -90,7 +90,7 @@ Target about 100 tests, and report the real number. Unit, property (minimum sepa
 
 ## Timeline
 
-Flexible. Rough order of work:
+Flexible. The commit-by-commit breakdown with the test for each step is in [PHASES.md](PHASES.md). Rough order of work:
 
 1. Core scaffolding, SimClock, deterministic channel, lockstep pool, log and replay, CI
 2. Dynamics, IMU, LiDAR, weather, comms model
