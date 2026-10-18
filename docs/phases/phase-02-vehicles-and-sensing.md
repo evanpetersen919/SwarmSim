@@ -1,6 +1,6 @@
 # Phase 2: Vehicles and sensing
 
-Status: planned. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [phase 1](phase-01-deterministic-runtime.md).
+Status: complete (commits 10 to 20). Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [phase 1](phase-01-deterministic-runtime.md).
 
 ## Goal
 
@@ -294,3 +294,42 @@ Tests:
 - `docs/MODELS.md` covers every model added.
 - Sensors on the lockstep loop produce identical hashes for any thread count.
 - PLAN.md change log and README status updated; benchmark numbers recorded only if measured.
+
+## Outcome
+
+Eleven commits, each with its own tests (the suite grew from 119 to 279 tests):
+
+| # | Commit |
+|---|---|
+| 10 | `c932efb` Vec3 and point-mass drone dynamics |
+| 11 | `4119098` IMU model and agent stream limit |
+| 12 | `c9ad5cb` scene data, serialization, and hash |
+| 13 | `98722ef` seeded terrain generator and exact height queries |
+| 14 | `2a15534` seeded obstacle placement |
+| 15 | `6d1816b` terrain ray casting |
+| 16 | `676b41e` obstacle ray casting |
+| 17 | `072f2a7` LiDAR scan pattern, range noise, and dropouts |
+| 18 | `e884182` weather extinction and detection threshold |
+| 19 | `67ee350` jamming zones |
+| 20 | `c6a37da` sensors and dynamics on the lockstep loop |
+
+### Changes from the plan above
+
+- The box and cylinder intersection routines are a small public module (`swarm/geometry.hpp`) so the tests can check them analytically and use them as the reference for the accelerated traversal.
+- The brute-force reference used by the ray-casting tests lives in `tests/support/brute_force.hpp` and uses an independent triangle test.
+- `core/format` gained an internal `byte_io.hpp` shared by the log and scene code.
+- The benchmark program `swarm_bench` was added with the LiDAR in commit 17, not with the obstacle ray casting. No benchmark numbers are recorded in the docs yet: the first measurement predates the weather model, and re-measuring was postponed (see below).
+- LiDAR intensity and reflectivity arrived with the weather model in commit 18.
+- Jammers are configurable from the command line (`--jam`) and stored in the run log configuration.
+
+### Findings worth keeping
+
+- Crowded obstacle placement over-represents small obstacles, because large ones are rejected more often. Documented in MODELS.md.
+- With the placeholder rain constants, rain barely shortens LiDAR range for strong targets within 100 m; fog dominates. The rain constants remain unvalidated placeholders.
+- A pair of test failures during development were test-design mistakes (a fog level so dense nothing was left to compare, a metric that first differences could not show), not model bugs. The models and the tests that pin them were corrected where the test was wrong.
+
+### Open items
+
+- Benchmark numbers (rays per second, scans per second) are not yet recorded. Run `swarm_bench` in a Release build and record the hardware, compiler, and commit alongside.
+- The Unreal build of `core/format` with the new scene code has not been re-run since scene support was added.
+- Linux CI results for commits 10 to 20 are recorded in the repository's Actions history.

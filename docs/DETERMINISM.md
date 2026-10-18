@@ -26,3 +26,15 @@ Identical results across different compilers, optimization levels, or CPU archit
 - Tests in `tests/determinism` check that equal seeds reproduce and unequal seeds or streams diverge.
 - CI runs the runner twice with the same seed and diffs the output.
 - A thread-count invariance test is added with the thread pool.
+
+## Floating-point library calls
+
+Not everything is bit-identical across platforms.
+
+| Part | Uses | Guarantee |
+|---|---|---|
+| Terrain noise and scene content hash | Integer hashing and basic IEEE arithmetic | Identical on every compiler and platform; a golden hash in the tests enforces it |
+| Obstacle placement | The PCG stream, `sqrt`, and basic arithmetic | Identical on every compiler and platform; also pinned by a golden hash |
+| LiDAR beam directions, Gaussian noise (Box-Muller), weather attenuation | `sin`, `cos`, `log`, `exp`, `pow` | Same binary and platform. The last bit of these functions can differ between math libraries |
+
+CI compares a run against itself on one platform. It does not compare results between platforms for the second group.

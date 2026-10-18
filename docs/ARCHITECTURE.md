@@ -6,8 +6,8 @@ The scope and order of work are in [PLAN.md](PLAN.md). This document describes h
 
 | Path | Contents |
 |---|---|
-| `core/format` | Log schema, state hashing. No Eigen, no yaml-cpp. Also compiled into the Unreal plugin. |
-| `core/sim` | Simulation clock, RNG, and later drones, sensors, comms model, estimation, control, metrics. |
+| `core/format` | Run log, scene data (heightfield and obstacles) with serialization and hashing. No Eigen, no yaml-cpp, no exceptions. Also compiled into the Unreal plugin. |
+| `core/sim` | Clock, RNG, lockstep pool, channel with loss, jitter, rate limit, and jamming, drone dynamics, IMU, terrain and obstacle generation, ray casting, LiDAR, weather. Estimation, control, and metrics come in later phases. |
 | `net` | Wire protocol and the UDP/TCP channel. |
 | `apps` | `swarm_sim` runner. Batch driver and replay tool come later. |
 | `ue5-plugin/SwarmSim` | Unreal Engine 5.4 plugin: builds the scene from a scenario, replays logs. |
