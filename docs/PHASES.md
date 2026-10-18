@@ -53,15 +53,17 @@ Goal: drones that move and sense a generated scene, with weather affecting the s
 
 ## Phase 3: Estimation
 
-Goal: each drone knows its own pose and predicts neighbors when packets stop.
+Goal: each drone knows its own pose and predicts neighbors when packets stop. Detailed design: [phases/phase-03-estimation.md](phases/phase-03-estimation.md).
 
 | # | Commit | New tests |
 |---|---|---|
-| 21 | Linear Kalman filter (Eigen added here) | Converges on a known system; covariance behaves as expected |
-| 22 | Pose estimator from IMU and a LiDAR-derived position fix | Error bounded on a synthetic trajectory |
-| 23 | Neighbor state tracking with message age | Age increments each tick without a message and resets on one |
-| 24 | Neighbor prediction during dropout | Beats hold-last-state on a synthetic dropout |
-| 25 | Estimator interface that cannot see ground truth | Compile-time check, plus a property test that estimates are unchanged when ground truth is perturbed |
+| 21 | Eigen and a linear Kalman filter | Textbook case; Riccati steady state; covariance stays symmetric and PSD; gating rate matches the chi-square constant |
+| 22 | Sensor output types and the position fix model | No fix below the valid-return minimum; sigma scaling; fog removes the fix; fixed draws |
+| 23 | Pose estimator from IMU and position fix | Bias converges; drift without fixes; gate rejects outliers; 95% within three sigma |
+| 24 | Neighbor messages and tracking with age | Byte layout; malformed input; age resets on a message; reordered and duplicate reports ignored |
+| 25 | Neighbor predictors: hold-last, dead reckoning, Kalman | Error ordering over seeded trials; covariance growth; delay compensation |
+| 26 | Estimators cannot read ground truth, enforced | Invariants script fails on a fixture with a forbidden include, passes on the tree |
+| 27 | Estimation on the lockstep loop | Hashes identical for 1, 2, 4, 8 threads; error bounds; fog removes fixes |
 
 ## Phase 4: Control
 
@@ -69,11 +71,11 @@ Goal: the swarm holds formation, stays separated, and degrades in defined steps.
 
 | # | Commit | New tests |
 |---|---|---|
-| 26 | Formation offsets (virtual structure) | Targets match the geometry for each formation |
-| 27 | Separation rule with an age-widened margin | Minimum separation holds over many seeds |
-| 28 | Fallback state machine with hysteresis | Each transition fires at its threshold; no flapping near a threshold |
-| 29 | Mission waypoints and path following | Reaches waypoints within tolerance |
-| 30 | Drone agent tick loop wiring all of the above | Two drones with no loss reach formation |
+| 28 | Formation offsets (virtual structure) | Targets match the geometry for each formation |
+| 29 | Separation rule with an age-widened margin | Minimum separation holds over many seeds |
+| 30 | Fallback state machine with hysteresis | Each transition fires at its threshold; no flapping near a threshold |
+| 31 | Mission waypoints and path following | Reaches waypoints within tolerance |
+| 32 | Drone agent tick loop wiring all of the above | Two drones with no loss reach formation |
 
 ## Phase 5: Scenarios, faults, metrics, baselines
 
@@ -81,14 +83,14 @@ Goal: scenario-driven runs that produce the numbers in the plan.
 
 | # | Commit | New tests |
 |---|---|---|
-| 31 | YAML scenario loader (yaml-cpp added here) | Valid files load; missing and invalid fields rejected with a clear error |
-| 32 | Fault injection: drone failure at a given time | Failed drone stops sending and moving |
-| 33 | Metrics from logs: formation RMSE, minimum separation, collisions | Hand-built logs give known values |
-| 34 | Recovery time metric | Known recovery on a synthetic error trace; censored case handled |
-| 35 | Latency and delivery-ratio metrics | Known values on a synthetic message log |
-| 36 | CSV export | Header and row format; round trip through a parser |
-| 37 | Baselines: hold-last-state, dead reckoning, oracle | Oracle error is zero; baselines differ from the predictor on a dropout |
-| 38 | Scenario runner end to end | Zero loss and clear weather reproduce the oracle result |
+| 33 | YAML scenario loader (yaml-cpp added here) | Valid files load; missing and invalid fields rejected with a clear error |
+| 34 | Fault injection: drone failure at a given time | Failed drone stops sending and moving |
+| 35 | Metrics from logs: formation RMSE, minimum separation, collisions | Hand-built logs give known values |
+| 36 | Recovery time metric | Known recovery on a synthetic error trace; censored case handled |
+| 37 | Latency and delivery-ratio metrics | Known values on a synthetic message log |
+| 38 | CSV export | Header and row format; round trip through a parser |
+| 39 | Baselines: hold-last-state, dead reckoning, oracle | Oracle error is zero; baselines differ from the predictor on a dropout |
+| 40 | Scenario runner end to end | Zero loss and clear weather reproduce the oracle result |
 
 ## Phase 6: Real network backend
 
@@ -96,12 +98,12 @@ Goal: the same drone code runs over real UDP and TCP sockets.
 
 | # | Commit | New tests |
 |---|---|---|
-| 39 | Wire protocol serialization | Round trip; malformed and truncated input rejected |
-| 40 | Portable socket wrapper (Windows and Linux) | Open, bind, send, receive on loopback |
-| 41 | `UdpChannel` for state beacons | Loopback delivery between two endpoints |
-| 42 | `TcpChannel` for commands | Ordered, acknowledged delivery on loopback |
-| 43 | Loss shim in front of the real channel | Observed loss matches the shim setting |
-| 44 | Real versus simulated channel comparison tool | Runs and emits latency and loss statistics |
+| 41 | Wire protocol serialization | Round trip; malformed and truncated input rejected |
+| 42 | Portable socket wrapper (Windows and Linux) | Open, bind, send, receive on loopback |
+| 43 | `UdpChannel` for state beacons | Loopback delivery between two endpoints |
+| 44 | `TcpChannel` for commands | Ordered, acknowledged delivery on loopback |
+| 45 | Loss shim in front of the real channel | Observed loss matches the shim setting |
+| 46 | Real versus simulated channel comparison tool | Runs and emits latency and loss statistics |
 
 ## Phase 7: Batch runs and analysis
 
@@ -109,12 +111,12 @@ Goal: reproducible result tables and figures.
 
 | # | Commit | New tests |
 |---|---|---|
-| 45 | Experiment matrix expansion from a config | Cell count is 432 for the planned matrix; seeds enumerated |
-| 46 | Batch driver running cells in parallel | Output identical regardless of how many cells run at once |
-| 47 | Ablation configurations | Each ablation disables exactly one component |
-| 48 | Python analysis: aggregation and confidence intervals (pytest) | Known inputs give known intervals |
-| 49 | Figure scripts | Run on a small fixture and produce the expected files |
-| 50 | Fog visibility fit against published numbers | Model output within tolerance of the cited curve |
+| 47 | Experiment matrix expansion from a config | Cell count is 432 for the planned matrix; seeds enumerated |
+| 48 | Batch driver running cells in parallel | Output identical regardless of how many cells run at once |
+| 49 | Ablation configurations | Each ablation disables exactly one component |
+| 50 | Python analysis: aggregation and confidence intervals (pytest) | Known inputs give known intervals |
+| 51 | Figure scripts | Run on a small fixture and produce the expected files |
+| 52 | Fog visibility fit against published numbers | Model output within tolerance of the cited curve |
 
 ## Phase 8: Unreal viewer
 
@@ -122,17 +124,17 @@ Goal: replay a recorded run in Unreal 5.4. CI cannot build Unreal, so each row h
 
 | # | Commit | New tests or checks |
 |---|---|---|
-| 51 | Log reader used from the plugin | Same reader sources pass a core test; plugin builds |
-| 52 | Terrain mesh from the scenario heightfield | Manual: matches core geometry at sampled points |
-| 53 | Obstacles and drones spawned from code | Manual: counts match the log |
-| 54 | Replay playback and camera | Manual: playback state hash matches the log at the final tick |
-| 55 | Weather and jamming visuals (optional) | Manual |
+| 53 | Log reader used from the plugin | Same reader sources pass a core test; plugin builds |
+| 54 | Terrain mesh from the scenario heightfield | Manual: matches core geometry at sampled points |
+| 55 | Obstacles and drones spawned from code | Manual: counts match the log |
+| 56 | Replay playback and camera | Manual: playback state hash matches the log at the final tick |
+| 57 | Weather and jamming visuals (optional) | Manual |
 
 ## Phase 9: Release
 
 | # | Commit | Check |
 |---|---|---|
-| 56 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
-| 57 | 30-seed run if time allows | Same command, config change only |
-| 58 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
-| 59 | Tag `v0.1.0` | CI green on the tagged commit |
+| 58 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
+| 59 | 30-seed run if time allows | Same command, config change only |
+| 60 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
+| 61 | Tag `v0.1.0` | CI green on the tagged commit |
