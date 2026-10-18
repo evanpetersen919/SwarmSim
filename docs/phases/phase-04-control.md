@@ -1,6 +1,6 @@
 # Phase 4: Control
 
-Status: planned. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 3](phase-03-estimation.md).
+Status: complete (commits 28 to 34). Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 3](phase-03-estimation.md).
 
 ## Goal
 
@@ -207,3 +207,36 @@ Tests:
 - All seven commits made, each green locally and in CI (GCC, Clang, sanitizers, C++20).
 - A swarm of eight drones flies a mission in formation with the fallback machine active, deterministically for any thread count.
 - MODELS.md and the decision record written; PLAN.md change log and README status updated.
+
+## Outcome
+
+### Results
+
+Numbers come from `tests/integration/test_formation_swarm.cpp` and `tests/unit/test_separation.cpp`; the scenario is described in the Drone agent section of [MODELS.md](../MODELS.md).
+
+- **Formation.** Eight drones starting scattered converge to their slots on the mission reference. Over 10 seeds with 5 percent burst loss, the largest final slot error is 0.43 m.
+- **Separation is a soft margin.** The smallest true separation over 10 seeds is 1.89 m, reached while the formation assembles, inside the 8 m margin. A jam of all links overlapping assembly gives 1.92 m. Two drones on head-on courses at 5 m/s each stay at least 3.67 m apart over 500 seeds; at 15 m/s each they come within 0.13 m, because the closing speed exceeds what the acceleration limit can stop inside the margin.
+- **Fallback.** A 6 s jam during assembly takes the machine into degraded comms on every seed, every drone ends nominal, and the formation still forms. Determinism holds: hashes are identical for 1, 2, 4, and 8 threads.
+
+### Problems found by the tests and fixed in the phase
+
+- A clamped sum of formation pull and repulsion let the pull cancel the repulsion; head-on drones at 5 m/s reached 0.03 m. The separation term now has priority and the formation term gets only the remaining headroom (`combine_accel`).
+- The margin widened with a neighbor's sigma without bound. After reports stopped, a drone in safe hold was pushed away at the acceleration limit up to its speed limit. The margin is now capped (`max_margin`), and the brain rejects formations whose slots are not farther apart than the cap.
+- A speed limiter at the cruise speed stopped a lone drone from closing its gap to the reference. The limit is now a multiple of the cruise speed (`speed_limit_factor`), which also bounds the closing speed during assembly: in one run the closest approach rose from 0.86 m to 2.64 m.
+- With no packet loss, drones started in degraded comms because no report had arrived at tick 0. Comms is not judged for the first staleness window.
+
+### Changes from the plan above
+
+- The controller include whitelist also allows `swarm/format/hash.hpp`, so the fallback machine and the brain can fold their state into the run hash. This is a hashing utility and carries no vehicle state.
+- `FallbackFsm` gained `hash_state`, and `separation_accel` gained `max_margin` and `combine_accel`. `BrainConfig` gained `speed_limit_factor`.
+- The fallback margin scales are 1.25 for all degraded states and safe hold, not 1.5 and 2.0, because the cap makes larger values meaningless.
+- The jam in the swarm test overlaps assembly. A jam in steady flight leaves error and separation unchanged because the formation is already in place.
+
+### Open items
+
+- The brain's speed-aware margin: the margin does not depend on closing speed, so safety relies on the speed limit.
+- All thresholds, gains, and scales are starting values and have not been tuned or ablated (Phase 7).
+- Terrain and obstacle avoidance, and yaw control, are not implemented. Scenarios must keep the corridor clear.
+- Linux CI for commits 33 and 34 appears in the Actions history after the push.
+- Benchmark numbers are still not recorded.
+
