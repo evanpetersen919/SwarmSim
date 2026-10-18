@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace swarm {
 
@@ -50,6 +51,19 @@ void DroneAgent::step(AgentContext& ctx) {
   in.inbox.reserve(ctx.inbox.size());
   for (Message& m : ctx.inbox) {
     in.inbox.push_back({m.sender, std::move(m.payload)});
+  }
+
+  if (config_.oracle) {
+    // The previous tick's true state of every other drone, with zero uncertainty and zero age.
+    std::vector<NeighborEstimate> truth(config_.brain.num_drones);
+    for (std::uint32_t j = 0; j < config_.brain.num_drones; ++j) {
+      if (j != config_.brain.id) {
+        truth[j].valid = true;
+        truth[j].position = ctx.peers[j].position;
+        truth[j].velocity = ctx.peers[j].velocity;
+      }
+    }
+    in.neighbor_override = std::move(truth);
   }
 
   const BrainOutput out = brain_.step(in, ctx.tick);

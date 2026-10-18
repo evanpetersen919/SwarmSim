@@ -520,3 +520,29 @@ Rules: lines end with a line feed. Whole numbers are written in decimal, exactly
 Validation: the exact text of the header and of the row for a known result, empty cells for a result with nothing in it, the same number of cells in every row as in the header, a round trip through a small reader, and the command run on a recorded scenario log.
 
 Limitations: one row per run and no per-tick output. The scenario name and seed identify a run only if each combination is unique, which the batch phase has to ensure.
+
+## Oracle baseline and selectable predictors
+
+Source: `core/sim/include/swarm/agent.hpp`, `drone_agent.hpp`, `control/drone_brain.hpp`. Status: integration-tested.
+
+`control.predictor` in a scenario selects how each drone estimates its neighbors: `kalman`, `dead_reckoning`, `hold_last`, or `oracle`. The first three are the predictors of Phase 3. The oracle is an evaluation baseline: each drone is told every other drone's true position and velocity as of the end of the previous tick, with zero uncertainty and zero age. It is an upper bound on what any predictor could achieve, not a realistic drone.
+
+Where the truth lives. A brain must never read the truth, so the oracle is on the vehicle side. The simulation publishes the true position and velocity of every agent to all agents in `AgentContext::peers`, updated between ticks and never during one, so reading it from the parallel section is safe. Only a `DroneAgent` with `oracle` set reads it; it passes the values to the brain in `BrainInput::neighbor_override`, plain `NeighborEstimate` values the brain cannot trace to a source. With an override the brain uses it in place of its predictors, counts every neighbor as fresh (so the comms condition never triggers), and skips the last-known-position rule, so the channel plays no part in what it does. The brain's include whitelist is unchanged.
+
+Validation:
+
+- Under the oracle the true trajectories are bit-identical for a channel that drops nothing and for one with 50 percent burst loss, a rate limit of two, and a jam of every link. Without the oracle the same two channels give different trajectories, so the comparison is able to see a difference.
+- A brain under the oracle holds exactly the previous tick's truth for every neighbor, with sigma zero and age zero, and never leaves the nominal state because of the channel.
+- An agent that is not the oracle is bit-identical, in state and hash, whether the published truth is accurate or nonsense; an oracle agent does use it.
+- The simulation publishes the previous tick's state: at tick 0 the initial state, at tick t the state after t steps.
+
+Estimate error during a 3 s jam of every link, averaged over the last second, every ordered pair, against the previous tick's truth (six drones, no other loss):
+
+| Case | Oracle | Hold last | Dead reckoning | Kalman |
+|---|---|---|---|---|
+| Jam at 30 s, formation settled | 0 m | 9.51 m | 0.274 m | 0.264 m |
+| Jam at 2 s, formation assembling | 0 m | 13.4 m | 5.92 m | 6.33 m |
+
+Holding the last state is much worse than extrapolating it in both cases. Kalman is a little better than dead reckoning in steady flight and a little worse during assembly, where the drones are converging fast and slowing, so a constant-velocity extrapolation overshoots. The test asserts the oracle's zero error and the wide gap to hold-last in steady flight, and records the rest.
+
+Limitations: the oracle sees every drone regardless of range. It reports a failed drone's frozen position, as truth. The published truth is one tick old, so the oracle's own estimate is one tick behind the present, which matches the one-tick latency of the shortest channel.

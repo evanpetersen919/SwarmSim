@@ -89,9 +89,19 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
       predictors_[in.sender]->on_report(table_.get(in.sender)->report, tick);
     }
   }
+  const bool supplied = input.neighbor_override.has_value();
+  if (supplied && input.neighbor_override->size() != config_.num_drones) {
+    throw std::invalid_argument("DroneBrain::step: one neighbor estimate per drone is required");
+  }
   fresh_ = 0;
   for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
     if (j == config_.id) {
+      continue;
+    }
+    if (supplied) {
+      // Estimates from outside replace the predictors, and every neighbor counts as fresh.
+      estimates_[j] = (*input.neighbor_override)[j];
+      ++fresh_;
       continue;
     }
     estimates_[j] = predictors_[j]->predict(tick);
@@ -166,7 +176,7 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     }
     // A neighbor silent for long enough may have stopped where it was last heard. The prediction
     // carries it onward, so keep its last reported position as a second point to stay clear of.
-    if (j != config_.id && config_.last_known_after_ticks > 0) {
+    if (j != config_.id && !supplied && config_.last_known_after_ticks > 0) {
       const NeighborRecord* record = table_.get(j);
       if (record != nullptr && tick - record->receipt_tick >= config_.last_known_after_ticks) {
         others.push_back({j, record->report.position, record->report.position_sigma + own_sigma});

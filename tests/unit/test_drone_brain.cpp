@@ -437,3 +437,70 @@ TEST(DroneBrain, TheLastKnownPositionAppliesOnlyAfterTheConfiguredSilence) {
   EXPECT_EQ(command_at(149, 150), command_at(149, 0));
   EXPECT_NE(command_at(150, 150), command_at(150, 0));
 }
+
+TEST(DroneBrain, SuppliedNeighborEstimatesReplaceThePredictorsAndMakeEveryNeighborFresh) {
+  const BrainConfig c = config(1, 3, {0, 0, 20}, false);
+  DroneBrain with(c);
+  DroneBrain without(c);
+  std::vector<swarm::NeighborEstimate> truth(3);
+  truth[0].valid = true;
+  truth[0].position = {0, -15, 20};
+  truth[2].valid = true;
+  truth[2].position = {0, 15, 20};
+  for (std::uint64_t t = 0; t < 400; ++t) {  // no report ever arrives
+    swarm::BrainInput in;
+    in.imu.accel = {0.0, 0.0, 9.81};
+    if (t % 5 == 0) {  // position fixes keep navigation good
+      in.fix.available = true;
+      in.fix.position = {0, 0, 20};
+      in.fix.sigma = 0.2;
+    }
+    swarm::BrainInput plain = in;
+    in.neighbor_override = truth;
+    with.step(in, t);
+    without.step(plain, t);
+  }
+  EXPECT_EQ(with.state(), FallbackState::kNominal);
+  EXPECT_EQ(with.fresh_neighbors(), 2U);
+  EXPECT_EQ(with.neighbor(0).position, truth[0].position);
+  EXPECT_EQ(with.neighbor(2).position, truth[2].position);
+  EXPECT_EQ(with.target().neighbors_used, 2U);
+  // The same silence without the supplied estimates drives the usual fallback.
+  EXPECT_EQ(without.state(), FallbackState::kDegradedComms);
+  EXPECT_EQ(without.fresh_neighbors(), 0U);
+}
+
+TEST(DroneBrain, ASuppliedEstimateListOfTheWrongSizeIsRejected) {
+  DroneBrain brain(config(0, 3, {0, 0, 20}, false));
+  swarm::BrainInput in;
+  in.neighbor_override = std::vector<swarm::NeighborEstimate>(2);
+  EXPECT_THROW(brain.step(in, 0), std::invalid_argument);
+}
+
+TEST(DroneBrain, SuppliedEstimatesAlsoTurnOffTheLastKnownPositionRule) {
+  // With reports that stop and estimates supplied, the silent neighbor's last reported position
+  // plays no part, because the channel is not allowed to matter.
+  const auto command = [](bool supplied) {
+    BrainConfig c = config(1, 3, {0, 0, 20}, false);
+    c.last_known_after_ticks = 150;
+    DroneBrain brain(c);
+    std::vector<swarm::NeighborEstimate> far(3);
+    far[0].valid = true;
+    far[0].position = {80, 0, 20};
+    Vec3 command;
+    for (std::uint64_t t = 0; t <= 200; ++t) {
+      swarm::BrainInput in;
+      in.imu.accel = {0.0, 0.0, 9.81};
+      if (t == 0) {
+        in.inbox.push_back(report_from(0, 0, {4, 0, 20}, {}));
+      }
+      if (supplied) {
+        in.neighbor_override = far;
+      }
+      command = brain.step(in, t).command.accel;
+    }
+    return command;
+  };
+  EXPECT_LT(command(false).x, command(true).x - 8.0);  // without: pushed away from the 4 m ghost
+  EXPECT_GT(command(true).x, -3.0);
+}

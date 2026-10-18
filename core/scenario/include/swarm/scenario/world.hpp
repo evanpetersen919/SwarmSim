@@ -33,8 +33,7 @@ std::vector<Vec3> start_positions(const Scenario& scenario);
 
 // Generates the scene (terrain, then obstacles, both from the scenario seed) and configures the
 // simulation and the drones. Throws std::invalid_argument for a combination the loader cannot see
-// on its own: formation slots not farther apart than the separation margin, or a predictor the
-// build does not support yet.
+// on its own: formation slots not farther apart than the separation margin.
 ScenarioWorld build_world(const Scenario& scenario);
 
 }  // namespace swarm

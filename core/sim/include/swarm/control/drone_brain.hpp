@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "swarm/control/fallback.hpp"
@@ -67,6 +68,10 @@ struct BrainInput {
   ImuSample imu;
   PositionFix fix;
   std::vector<InboundReport> inbox;
+  // Neighbor estimates supplied from outside, indexed by drone id (the entry for this drone is
+  // ignored). When present they replace the predictors, every neighbor counts as fresh, and the
+  // channel plays no part in what the brain does. The brain cannot tell where they came from.
+  std::optional<std::vector<NeighborEstimate>> neighbor_override;
 };
 
 struct BrainOutput {

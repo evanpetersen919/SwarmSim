@@ -55,6 +55,7 @@ class Simulation {
   std::vector<Rng> rngs_;
   std::vector<std::vector<Message>> outboxes_;
   std::vector<Vec3> positions_;
+  std::vector<PeerTruth> peers_;
   std::uint64_t hash_ = 0;
 };
 

@@ -41,6 +41,11 @@ Simulation::Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAge
     rngs_.emplace_back(config_.seed, kStreamAgentBase + i);
   }
 
+  peers_.resize(agents_.size());
+  for (std::size_t i = 0; i < agents_.size(); ++i) {
+    peers_[i] = {agents_[i]->position(), agents_[i]->velocity()};
+  }
+
   Fnv1a64 initial;
   initial.update_u64(config_.seed);
   initial.update_u64(agents_.size());
@@ -56,13 +61,14 @@ void Simulation::step() {
   pool_.for_each(agents_.size(), [&](std::size_t i) {
     const auto id = static_cast<std::uint32_t>(i);
     outboxes_[i].clear();
-    AgentContext ctx{tick, time, id, rngs_[i], channel_.take_inbox(id), outboxes_[i]};
+    AgentContext ctx{tick, time, id, rngs_[i], channel_.take_inbox(id), outboxes_[i], peers_};
     agents_[i]->step(ctx);
   });
 
   positions_.resize(agents_.size());
   for (std::size_t i = 0; i < agents_.size(); ++i) {
     positions_[i] = agents_[i]->position();
+    peers_[i] = {positions_[i], agents_[i]->velocity()};
   }
   channel_.set_positions(positions_);
 

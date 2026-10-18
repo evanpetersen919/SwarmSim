@@ -174,10 +174,15 @@ TEST(ScenarioWorld, FormationsTighterThanTheSeparationMarginAreRejected) {
   EXPECT_NO_THROW(swarm::build_world(s));
 }
 
-TEST(ScenarioWorld, TheOraclePredictorIsNotSupportedYet) {
+TEST(ScenarioWorld, TheOraclePredictorSetsTheOracleFlagOnEveryDrone) {
   Scenario s = load("formation_jam.yaml");
+  for (const auto& a : swarm::build_world(s).agents) {
+    EXPECT_FALSE(a.oracle);
+  }
   s.predictor = swarm::PredictorChoice::kOracle;
-  EXPECT_THROW(swarm::build_world(s), std::invalid_argument);
+  for (const auto& a : swarm::build_world(s).agents) {
+    EXPECT_TRUE(a.oracle);
+  }
 }
 
 TEST(ScenarioWorld, ASingleDroneBuilds) {

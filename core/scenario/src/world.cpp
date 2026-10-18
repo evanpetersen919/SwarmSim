@@ -34,10 +34,6 @@ std::vector<Vec3> start_positions(const Scenario& s) {
 }
 
 ScenarioWorld build_world(const Scenario& s) {
-  if (s.predictor == PredictorChoice::kOracle) {
-    throw std::invalid_argument("build_world: the oracle predictor is not supported yet");
-  }
-
   ScenarioWorld world;
   world.scenario = s;
 
@@ -85,6 +81,7 @@ ScenarioWorld build_world(const Scenario& s) {
     c.weather = s.weather;
     c.seed = s.seed;
     c.fix_period_ticks = s.fix_period_ticks;
+    c.oracle = s.predictor == PredictorChoice::kOracle;
     for (const Fault& fault : s.faults) {
       if (fault.drone == i) {
         c.fail_tick = fault.tick;

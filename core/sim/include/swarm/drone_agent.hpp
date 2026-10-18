@@ -29,6 +29,11 @@ struct DroneAgentConfig {
   std::uint64_t seed = 0;
   std::uint64_t fix_period_ticks = 5;  // a scan, and so a fix attempt, every this many ticks
 
+  // The oracle baseline: instead of predicting its neighbors from their reports, the drone is told
+  // their true position and velocity (from the previous tick), with no uncertainty. It ignores the
+  // channel entirely. This is an evaluation baseline, an upper bound, and not a realistic drone.
+  bool oracle = false;
+
   // From this tick on the drone has failed. The default never fails.
   std::uint64_t fail_tick = std::numeric_limits<std::uint64_t>::max();
 };
@@ -52,6 +57,7 @@ class DroneAgent : public IAgent {
 
   void step(AgentContext& ctx) override;
   Vec3 position() const override { return truth_.pos; }
+  Vec3 velocity() const override { return truth_.vel; }
   // Folds the true state, the IMU bias, and the brain's hash. The sensors' random generators are
   // not hashed directly: their draws reach the hash through the brain's estimates.
   void hash_state(Fnv1a64& hash) const override;
