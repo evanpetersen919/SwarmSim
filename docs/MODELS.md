@@ -210,3 +210,25 @@ The project does not implement scan-matching localization. The LiDAR contributes
 The defaults are placeholders chosen so a clear-air scan at 10 m altitude gives a fix of about half a meter. They are not derived from a localization algorithm.
 
 Limitations: the fix is unbiased and independent from call to call, which real scan matching is not. It has no failure mode other than too few returns, and no dependence on scene geometry beyond which rays return.
+
+## Pose estimator
+
+Source: `core/sim/include/swarm/estimation/pose_estimator.hpp`. Status: unit-tested, including a consistency check over 40 seeded runs.
+
+A nine-state Kalman filter over position, velocity, and accelerometer bias in the world frame.
+
+```
+a_meas = specific_force + gravity                 (world-frame acceleration reading)
+p' = p + v dt + 0.5 (a_meas - b) dt^2
+v' = v + (a_meas - b) dt
+b' = b
+```
+
+- Prediction takes one `ImuSample` per call, so the filter advances by `dt` each time. Process noise comes from the accelerometer's noise density and bias random walk, which are sensor-specification constants supplied as configuration, not read from the simulated truth.
+- A `PositionFix` is fused with `H = [I 0 0]` and `R = sigma^2 I`. A fix whose normalized innovation squared exceeds `fix_nis_gate` (default 16.27, the 0.999 chi-square quantile for three degrees of freedom) is rejected and counted. Unavailable fixes are counted and ignored.
+- The launch state (position, velocity, and their uncertainty) is a one-time input that models a drone that knows where it was deployed.
+- Output: position, velocity, accelerometer bias, and per-axis standard deviations, plus counters for fixes applied, gated, singular, and unavailable.
+
+What the tests show: with regular fixes the bias of a hovering drone is learned to within 0.01 m/s^2 and position error stays under a meter; without fixes both the error and the reported uncertainty grow roughly quadratically, as expected from an uncorrected bias; a grossly wrong fix is rejected without changing the estimate; and across 40 seeded runs of a maneuvering drone the position error lies within three reported standard deviations in at least 95% of samples.
+
+Limitations: yaw and attitude are not estimated, which is acceptable because the IMU reports in the world frame. The filter assumes the process noise it is told about. A fix is treated as independent of earlier fixes.
