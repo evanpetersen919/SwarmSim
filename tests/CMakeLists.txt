@@ -5,6 +5,7 @@ file(GLOB_RECURSE SWARM_TEST_SOURCES CONFIGURE_DEPENDS
 
 add_executable(swarm_tests ${SWARM_TEST_SOURCES})
 target_link_libraries(swarm_tests PRIVATE swarm::core swarm::format GTest::gtest_main)
+target_include_directories(swarm_tests PRIVATE support)
 swarm_configure_target(swarm_tests)
 gtest_discover_tests(swarm_tests)
 

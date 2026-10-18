@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "swarm/geometry.hpp"
 #include "swarm/terrain.hpp"
 
 namespace swarm {
@@ -48,6 +49,30 @@ Scene::Scene(SceneData data) : data_(std::move(data)) {
   std::string reason;
   if (!validate(data_, &reason)) {
     throw std::invalid_argument("Scene: invalid scene data: " + reason);
+  }
+
+  // Register every obstacle in each terrain cell its footprint overlaps.
+  const Heightfield& t = data_.terrain;
+  const auto last_i = static_cast<long long>(t.cells_x) - 1;
+  const auto last_j = static_cast<long long>(t.cells_y) - 1;
+  const auto cell_of = [&](double v, double origin, long long last) {
+    return std::clamp(static_cast<long long>(std::floor((v - origin) / t.cell_size)), 0LL, last);
+  };
+  cell_obstacles_.resize(static_cast<std::size_t>(t.cells_x) * t.cells_y);
+  for (std::size_t n = 0; n < data_.obstacles.size(); ++n) {
+    const Obstacle& o = data_.obstacles[n];
+    const double ex = o.half_x;
+    const double ey = o.kind == ObstacleKind::kCylinder ? o.half_x : o.half_y;
+    const long long i0 = cell_of(o.cx - ex, t.origin_x, last_i);
+    const long long i1 = cell_of(o.cx + ex, t.origin_x, last_i);
+    const long long j0 = cell_of(o.cy - ey, t.origin_y, last_j);
+    const long long j1 = cell_of(o.cy + ey, t.origin_y, last_j);
+    for (long long j = j0; j <= j1; ++j) {
+      for (long long i = i0; i <= i1; ++i) {
+        cell_obstacles_[static_cast<std::size_t>(j) * t.cells_x + static_cast<std::size_t>(i)]
+            .push_back(static_cast<std::uint32_t>(n));
+      }
+    }
   }
 }
 
@@ -119,6 +144,8 @@ bool Scene::raycast(const Vec3& origin, const Vec3& direction, double max_range,
   const double parallel_epsilon = 1e-12 * cs * cs;
   double best_t = kInf;
   Vec3 best_normal;
+  HitKind best_kind = HitKind::kNone;
+  int best_obstacle = -1;
 
   for (;;) {
     // Terrain triangles of cell (i, j): (a, b, c) and (a, c, d).
@@ -135,11 +162,32 @@ bool Scene::raycast(const Vec3& origin, const Vec3& direction, double max_range,
     if (t1 >= 0.0 && t1 <= max_range && t1 < best_t) {
       best_t = t1;
       best_normal = normalized(cross(b - a, c - a));
+      best_kind = HitKind::kTerrain;
+      best_obstacle = -1;
     }
     const double t2 = intersect_triangle(origin, direction, a, c, d, parallel_epsilon);
     if (t2 >= 0.0 && t2 <= max_range && t2 < best_t) {
       best_t = t2;
       best_normal = normalized(cross(c - a, d - a));
+      best_kind = HitKind::kTerrain;
+      best_obstacle = -1;
+    }
+
+    // Obstacles overlapping this cell. A hit may lie beyond the cell, which is fine: the stopping
+    // rule below only accepts a hit that is no farther than the end of the cells already walked.
+    for (std::uint32_t index : cell_obstacles_[cj * terrain.cells_x + ci]) {
+      const Obstacle& obstacle = data_.obstacles[index];
+      PrimitiveHit primitive;
+      const bool hit_obstacle =
+          obstacle.kind == ObstacleKind::kCylinder
+              ? intersect_cylinder(obstacle, origin, direction, max_range, primitive)
+              : intersect_box(obstacle, origin, direction, max_range, primitive);
+      if (hit_obstacle && primitive.t < best_t) {
+        best_t = primitive.t;
+        best_normal = primitive.normal;
+        best_kind = obstacle.kind == ObstacleKind::kCylinder ? HitKind::kCylinder : HitKind::kBox;
+        best_obstacle = static_cast<int>(index);
+      }
     }
 
     const double t_exit = std::min(t_max_x, t_max_y);
@@ -166,8 +214,8 @@ bool Scene::raycast(const Vec3& origin, const Vec3& direction, double max_range,
   hit.distance = best_t;
   hit.point = origin + direction * best_t;
   hit.normal = dot(best_normal, direction) > 0.0 ? -best_normal : best_normal;
-  hit.kind = HitKind::kTerrain;
-  hit.obstacle_index = -1;
+  hit.kind = best_kind;
+  hit.obstacle_index = best_obstacle;
   return true;
 }
 
