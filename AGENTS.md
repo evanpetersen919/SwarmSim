@@ -16,7 +16,7 @@ C++17 simulation core in `core/` with no Unreal dependency. Unreal Engine 5.4 vi
 - Results must not depend on thread scheduling or thread count. Messages are delivered in (sim time, sender id) order.
 - Do not iterate `unordered_*` containers in any code path that affects results. Sorts need a total order.
 - Never use `-ffast-math`. Keep `-ffp-contract=off` (`/fp:precise` on MSVC).
-- Estimators must not read ground truth. Ground truth is for metrics only.
+- Estimators must not read ground truth. Ground truth is for metrics only. Estimator sources (`core/sim/**/estimation/`) may include only `swarm/estimation/*`, `swarm/sensor_data.hpp`, `swarm/vec3.hpp`, and `swarm/format/byte_io.hpp` among project headers; `scripts/check_core_invariants.sh` fails otherwise. Sensors, not estimators, may read the truth.
 - `core/` never includes Unreal headers. Unreal code never includes Eigen or yaml-cpp. Only `core/format` is compiled into the plugin, and it must stay free of Eigen and yaml-cpp.
 - Core headers must also compile as C++20, because Unreal builds them that way.
 - Any change to the binary log format needs a version bump and an update to the byte-exact layout test in `tests/unit/test_log_format.cpp`. `core/format` is also compiled into Unreal, which has no exceptions, so it reports errors as status codes.

@@ -45,3 +45,9 @@ Models sit behind interfaces chosen from the scenario file: channel, LiDAR model
 ## Unreal integration
 
 See [decisions/0002-unreal-integration.md](decisions/0002-unreal-integration.md).
+
+## Estimators and ground truth
+
+Sensors may read the simulated truth, because a sensor model generates a measurement from it. Estimators may not: they receive only sensor outputs (`ImuSample`, `PositionFix`) and neighbor reports. This is enforced, not just agreed: estimator sources under `core/sim/include/swarm/estimation/` and `core/sim/src/estimation/` may include only estimation headers, `sensor_data.hpp`, `vec3.hpp`, and the byte helpers, and `scripts/check_core_invariants.sh` fails the build otherwise. Tests run the script against the real tree and against fixtures with a deliberate violation, so the check itself cannot silently stop working.
+
+The one-time launch pose handed to a pose estimator is configuration, not a per-tick leak.
