@@ -338,3 +338,15 @@ The control law is proportional-derivative, `a = kp * (target_position - positio
 - `alpha = 1` ignores neighbors and `alpha = 0` ignores the reference.
 
 Limitations: the consensus is a single-round weighted mean, not an iterated protocol, so drones with different neighbor sets can disagree transiently. The estimate used for the drone's own position is whatever the pose estimator provides; a biased estimate shifts the drone's slot. There is no separation term here; that is a separate rule.
+
+## Separation
+
+Source: `core/sim/include/swarm/control/separation.hpp`. Status: unit-tested.
+
+Each neighbor with a position estimate and uncertainty sigma has the margin `d_safe + kappa * sigma`. A neighbor outside its margin contributes nothing. Inside it, the contribution points away from the neighbor with magnitude `gain * (margin - distance)`, capped at `max_accel` per neighbor; the sum is capped at `max_accel`. Stale predictions carry a larger sigma, so the margin widens as information ages. When two positions coincide, the higher slot is pushed along +x and the lower along -x, so the pair is still pushed apart in opposite directions.
+
+`combine_accel` adds the formation command to the separation command with the separation term taking priority: the separation term is kept whole and the formation term is limited to the headroom left under `max_accel`. A plain clamped sum does not work. With the default parameters, two drones flying head-on at 5 m/s each reached 0.03 m apart under a clamped sum, because the formation pull cancelled most of the repulsion at the point where it was needed.
+
+Validation: 500 seeded pairs on head-on courses with perfect information, each sent to the other's start point, run in `tests/unit/test_separation.cpp`. With the priority combination and a 5 m/s speed limit the smallest separation across all runs is 3.67 m, and the test requires more than 3.0 m.
+
+Limitations: the margin does not depend on closing speed. At a 15 m/s speed limit, a closing speed of 30 m/s exceeds what 12 m/s^2 can stop within the 8 m margin, and the same test measures 0.13 m; a test records this. The rule uses estimates, so it is a margin and not a guarantee. It acts along the line between the pair only, so two drones on an exact head-on course are held apart but do not pass each other.
