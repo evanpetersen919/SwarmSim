@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "swarm/run.hpp"
+#include "swarm/scenario/metrics.hpp"
+#include "swarm/scenario/metrics_csv.hpp"
 #include "swarm/scenario/run.hpp"
 #include "swarm/scenario/scenario.hpp"
 
@@ -38,7 +40,10 @@ void print_usage() {
       << "usage:\n"
          "  swarm_sim run SCENARIO --out FILE          run a scenario file and write its log\n"
          "                                             (--threads N is allowed)\n"
-         "  swarm_sim [config options]                 run and print the final state hash\n"
+         "  swarm_sim metrics LOG [--csv FILE]         compute metrics from a scenario log and\n"
+         "                                             write a CSV header and row (stdout if\n"
+         "                                             no file is given)\n"
+         "  swarm_sim [config options]               run and print the final state hash\n"
          "  swarm_sim --record FILE [config options]   run and write a log\n"
          "  swarm_sim --replay FILE --verify           re-execute a log and compare hashes\n"
          "\n"
@@ -286,9 +291,70 @@ int run_scenario_command(int argc, char** argv) {
   return kExitOk;
 }
 
+// swarm_sim metrics LOG [--csv FILE]
+int run_metrics_command(int argc, char** argv) {
+  std::string log_path;
+  std::string csv_path;
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--csv") {
+      if (i + 1 >= argc) {
+        std::cerr << "swarm_sim: missing value for --csv\n";
+        return kExitUsage;
+      }
+      csv_path = argv[++i];
+    } else if (log_path.empty() && arg.rfind("--", 0) != 0) {
+      log_path = arg;
+    } else {
+      std::cerr << "swarm_sim: unexpected argument " << arg << "\n";
+      return kExitUsage;
+    }
+  }
+  if (log_path.empty()) {
+    std::cerr << "swarm_sim: metrics needs a log file\n";
+    return kExitUsage;
+  }
+
+  std::vector<std::uint8_t> bytes;
+  if (!read_file(log_path, bytes)) {
+    std::cerr << "cannot read " << log_path << "\n";
+    return kExitUsage;
+  }
+  const swarm::MetricsOutcome outcome = swarm::analyze_log(bytes.data(), bytes.size());
+  if (!outcome.ok()) {
+    std::cerr << log_path << ": " << swarm::to_string(outcome.status);
+    if (!outcome.message.empty()) {
+      std::cerr << ": " << outcome.message;
+    }
+    std::cerr << "\n";
+    return kExitUsage;
+  }
+
+  const std::string csv = swarm::metrics_csv_header() + swarm::metrics_csv_row(outcome.result);
+  if (csv_path.empty()) {
+    std::cout << csv;
+    return kExitOk;
+  }
+  const std::vector<std::uint8_t> out(csv.begin(), csv.end());
+  if (!write_file(csv_path, out)) {
+    std::cerr << "cannot write " << csv_path << "\n";
+    return kExitUsage;
+  }
+  std::cout << "wrote metrics for " << outcome.result.scenario_name << " to " << csv_path << "\n";
+  return kExitOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (argc >= 2 && std::string(argv[1]) == "metrics") {
+    try {
+      return run_metrics_command(argc, argv);
+    } catch (const std::exception& e) {
+      std::cerr << "swarm_sim: " << e.what() << "\n";
+      return kExitUsage;
+    }
+  }
   if (argc >= 2 && std::string(argv[1]) == "run") {
     try {
       return run_scenario_command(argc, argv);

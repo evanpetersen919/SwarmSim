@@ -80,3 +80,42 @@ colour: red
 run_sim(2 run "${WORKDIR}/bad_scenario.yaml" --out "${SLOG}")
 run_sim(2 run "${SCENARIOS}/minimal.yaml")
 run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${SLOG}" --bogus)
+
+# Metrics: a CSV of one header row and one data row for a recorded scenario log.
+set(EXPECTED_HEADER "scenario,seed,drones,dt_s,ticks,duration_s,formation_rmse_m,formation_rmse_settled_m,alive_at_end,min_separation_m,collision_episodes,recovery_count,recovery_longest_s,recovery_censored,messages_sent,messages_delivered,messages_in_flight,dropped_loss,dropped_rate,dropped_jam,delivery_ratio,latency_p50_s,latency_p95_s")
+set(CSV "${WORKDIR}/cli_metrics.csv")
+file(REMOVE "${CSV}")
+run_sim(0 metrics "${SLOG}" --csv "${CSV}")
+if(NOT EXISTS "${CSV}")
+  message(FATAL_ERROR "no metrics CSV was written")
+endif()
+file(STRINGS "${CSV}" csv_lines)
+list(LENGTH csv_lines csv_line_count)
+if(NOT csv_line_count EQUAL 2)
+  message(FATAL_ERROR "expected a header and one row, got ${csv_line_count} lines")
+endif()
+list(GET csv_lines 0 csv_header)
+list(GET csv_lines 1 csv_row)
+if(NOT csv_header STREQUAL EXPECTED_HEADER)
+  message(FATAL_ERROR "unexpected CSV header:
+${csv_header}")
+endif()
+if(NOT csv_row MATCHES "^formation_jam,7,8,0\.02,3000,60,")
+  message(FATAL_ERROR "unexpected CSV row:
+${csv_row}")
+endif()
+
+# Without --csv the same two lines go to standard output.
+run_sim(0 metrics "${SLOG}")
+if(NOT last_out MATCHES "^scenario,seed,drones,")
+  message(FATAL_ERROR "metrics did not print the CSV header:
+${last_out}")
+endif()
+
+# Metrics failures: a missing file, a file that is not a log, a demo log, and bad arguments.
+run_sim(2 metrics "${WORKDIR}/does_not_exist.log")
+run_sim(2 metrics "${WORKDIR}/not_a_log.bin")
+run_sim(2 metrics "${LOG}")
+run_sim(2 metrics)
+run_sim(2 metrics "${SLOG}" --csv)
+run_sim(2 metrics "${SLOG}" --bogus)

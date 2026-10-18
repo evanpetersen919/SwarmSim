@@ -40,7 +40,9 @@ struct Recovery {
 // Everything computed from a log. A value that cannot be computed from the log (no drone alive, no
 // record at or after the settle time) is empty, never zero.
 struct MetricsResult {
-  std::uint64_t ticks = 0;  // records in the log
+  std::uint64_t ticks = 0;    // records in the log
+  std::string scenario_name;  // from the scenario in the log header
+  std::uint64_t seed = 0;
   std::uint32_t drones = 0;
   double dt = 0.0;
 

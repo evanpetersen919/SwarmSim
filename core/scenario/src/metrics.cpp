@@ -77,6 +77,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
 
   MetricsOutcome outcome;
   MetricsResult& out = outcome.result;
+  out.scenario_name = scenario.name;
+  out.seed = scenario.seed;
   out.drones = n;
   out.dt = scenario.dt;
 
