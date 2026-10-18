@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "swarm/run.hpp"
+#include "swarm/scenario/run.hpp"
+#include "swarm/scenario/scenario.hpp"
 
 namespace {
 
@@ -32,22 +34,25 @@ struct Options {
 };
 
 void print_usage() {
-  std::cout << "usage:\n"
-               "  swarm_sim [config options]                 run and print the final state hash\n"
-               "  swarm_sim --record FILE [config options]   run and write a log\n"
-               "  swarm_sim --replay FILE --verify           re-execute a log and compare hashes\n"
-               "\n"
-               "config options (defaults in parentheses):\n"
-               "  --seed N (42)  --agents N (8)  --ticks N (1000)  --dt SECONDS (0.01)\n"
-               "  --latency TICKS (1)  --jitter TICKS (0)  --rate-limit MSGS (0 = none)\n"
-               "  --loss-model none|independent|burst (none)  --loss P (0)  --mean-burst L (1)\n"
-               "  --jam cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects\n"
-               "      add a jammer (repeatable); radius may be inf, mode constant|pulsed,\n"
-               "      affects receiver|either; e.g. 40,0,0,25,pulsed,50,400,20,0.5,0,1,receiver\n"
-               "\n"
-               "other options:\n"
-               "  --threads N (1)   thread count; never changes results\n"
-               "exit status: 0 ok, 1 verification failed, 2 usage or I/O error\n";
+  std::cout
+      << "usage:\n"
+         "  swarm_sim run SCENARIO --out FILE          run a scenario file and write its log\n"
+         "                                             (--threads N is allowed)\n"
+         "  swarm_sim [config options]                 run and print the final state hash\n"
+         "  swarm_sim --record FILE [config options]   run and write a log\n"
+         "  swarm_sim --replay FILE --verify           re-execute a log and compare hashes\n"
+         "\n"
+         "config options (defaults in parentheses):\n"
+         "  --seed N (42)  --agents N (8)  --ticks N (1000)  --dt SECONDS (0.01)\n"
+         "  --latency TICKS (1)  --jitter TICKS (0)  --rate-limit MSGS (0 = none)\n"
+         "  --loss-model none|independent|burst (none)  --loss P (0)  --mean-burst L (1)\n"
+         "  --jam cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects\n"
+         "      add a jammer (repeatable); radius may be inf, mode constant|pulsed,\n"
+         "      affects receiver|either; e.g. 40,0,0,25,pulsed,50,400,20,0.5,0,1,receiver\n"
+         "\n"
+         "other options:\n"
+         "  --threads N (1)   thread count; never changes results\n"
+         "exit status: 0 ok, 1 verification failed, 2 usage or I/O error\n";
 }
 
 template <typename T>
@@ -185,7 +190,8 @@ int run_verify(const Options& options) {
     std::cerr << "cannot read " << options.replay_path << "\n";
     return kExitUsage;
   }
-  const swarm::VerifyResult result = swarm::verify_log(bytes.data(), bytes.size(), options.threads);
+  const swarm::VerifyResult result =
+      swarm::verify_run_log(bytes.data(), bytes.size(), options.threads);
   if (result.status == swarm::VerifyStatus::kOk) {
     std::cout << "verified " << options.replay_path << ": all recorded hashes match\n";
     return kExitOk;
@@ -218,9 +224,80 @@ int run_plain(const Options& options) {
   return kExitOk;
 }
 
+// swarm_sim run SCENARIO --out FILE [--threads N]
+int run_scenario_command(int argc, char** argv) {
+  std::string scenario_path;
+  std::string out_path;
+  std::size_t threads = 1;
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--out" || arg == "--threads") {
+      if (i + 1 >= argc) {
+        std::cerr << "swarm_sim: missing value for " << arg << "\n";
+        return kExitUsage;
+      }
+      const char* value = argv[++i];
+      if (arg == "--out") {
+        out_path = value;
+      } else if (!parse_number(value, threads) || threads < 1) {
+        std::cerr << "swarm_sim: invalid value '" << value << "' for --threads\n";
+        return kExitUsage;
+      }
+    } else if (scenario_path.empty() && arg.rfind("--", 0) != 0) {
+      scenario_path = arg;
+    } else {
+      std::cerr << "swarm_sim: unexpected argument " << arg << "\n";
+      return kExitUsage;
+    }
+  }
+  if (scenario_path.empty() || out_path.empty()) {
+    std::cerr << "swarm_sim: run needs a scenario file and --out FILE\n";
+    return kExitUsage;
+  }
+
+  std::vector<std::uint8_t> bytes;
+  if (!read_file(scenario_path, bytes)) {
+    std::cerr << "cannot read " << scenario_path << "\n";
+    return kExitUsage;
+  }
+  const swarm::LoadResult loaded =
+      swarm::load_scenario(std::string(bytes.begin(), bytes.end()), scenario_path);
+  if (!loaded.ok()) {
+    for (const swarm::ScenarioError& e : loaded.errors) {
+      std::cerr << scenario_path << ": " << swarm::to_string(e) << "\n";
+    }
+    return kExitUsage;
+  }
+
+  std::vector<std::uint8_t> log;
+  std::uint64_t hash = 0;
+  const swarm::LogStatus status = swarm::run_scenario(loaded.scenario, threads, log, &hash);
+  if (status != swarm::LogStatus::kOk) {
+    std::cerr << "cannot record: " << swarm::to_string(status) << "\n";
+    return kExitUsage;
+  }
+  if (!write_file(out_path, log)) {
+    std::cerr << "cannot write " << out_path << "\n";
+    return kExitUsage;
+  }
+  std::cout << "ran " << loaded.scenario.name << ": " << loaded.scenario.duration_ticks
+            << " ticks, " << loaded.scenario.drones << " drones, hash=" << hex16(hash) << ", log "
+            << out_path << "\n";
+  return kExitOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (argc >= 2 && std::string(argv[1]) == "run") {
+    try {
+      return run_scenario_command(argc, argv);
+    } catch (const std::exception& e) {
+      std::cerr << "swarm_sim: " << e.what() << "\n";
+      return kExitUsage;
+    }
+  }
+
   Options options;
   std::string error;
   if (!parse_options(argc, argv, options, error)) {

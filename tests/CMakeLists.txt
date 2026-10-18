@@ -16,6 +16,7 @@ if(TARGET swarm_sim)
     COMMAND ${CMAKE_COMMAND}
       -DSIM=$<TARGET_FILE:swarm_sim>
       -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}
+      -DSCENARIOS=${CMAKE_SOURCE_DIR}/scenarios
       -P ${CMAKE_CURRENT_SOURCE_DIR}/integration/cli_roundtrip.cmake)
 endif()
 

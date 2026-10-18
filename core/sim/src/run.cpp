@@ -374,6 +374,8 @@ const char* to_string(VerifyStatus status) {
       return "hash mismatch";
     case VerifyStatus::kLengthMismatch:
       return "length mismatch";
+    case VerifyStatus::kSnapshotMismatch:
+      return "snapshot mismatch";
   }
   return "unknown";
 }

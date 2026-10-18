@@ -40,11 +40,12 @@ std::uint64_t final_hash(const RunConfig& config, std::size_t threads);
 
 enum class VerifyStatus {
   kOk,
-  kLogError,        // the log could not be read; see log_status
-  kBadConfig,       // the header configuration is missing, malformed, or invalid
-  kTickMismatch,    // a record's tick is not the expected tick
-  kHashMismatch,    // re-execution produced a different hash at `tick`
-  kLengthMismatch,  // the log has a different number of records than its configuration says
+  kLogError,          // the log could not be read; see log_status
+  kBadConfig,         // the header configuration is missing, malformed, or invalid
+  kTickMismatch,      // a record's tick is not the expected tick
+  kHashMismatch,      // re-execution produced a different hash at `tick`
+  kLengthMismatch,    // the log has a different number of records than its configuration says
+  kSnapshotMismatch,  // re-execution produced different record contents at `tick`
 };
 
 struct VerifyResult {

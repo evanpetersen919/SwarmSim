@@ -457,3 +457,17 @@ The content of a log record's blob. Little-endian, fixed width: a version byte, 
 The encoder rejects a fallback state above 3, an unknown event kind, a non-finite number, and more than 4096 agents or 2^20 events. The decoder rejects the same, plus an unsupported version, a buffer that ends early, and extra bytes, and it checks the counts against the remaining length before allocating. A test cuts the sample at every length and decodes each prefix. On any error the output is empty.
 
 Limitations: positions and velocities are written as 64-bit floats for exactness, which is larger than a viewer needs. The format has no per-agent estimate fields; metrics about estimation error would need a new version.
+
+## Scenario run and log verification
+
+Source: `core/scenario/include/swarm/scenario/run.hpp`. Status: integration-tested.
+
+`run_scenario` builds the world, steps the simulation for the scenario's duration, and writes a log with one record per tick. The header holds the seed, `dt`, and the drone count, and its config text is the line `swarmsim-scenario 1` followed by the scenario in canonical form (not the original file text, so comments and layout are not kept; the content is). Each record holds the tick, the state hash, and a snapshot blob ([run snapshot](#run-snapshot)). The blob always lists the messages sent in that tick. It lists every drone's true state on ticks divisible by `log.snapshot_every_ticks` and on the last tick, so a stride saves space without losing any message.
+
+`verify_scenario_log` reads the scenario back out of the header, checks that the header's seed, `dt`, and drone count agree with it, re-runs it, and compares for every record the tick, the hash, and the blob bytes. A divergence reports the tick and whether it was the hash or the snapshot. The thread count is free. `verify_run_log` is the single entry point: it dispatches on the first line of the config, so demo logs (the `key=value` form) still verify as before. The runner and the verifier build each record with the same function, so they cannot disagree about the bytes.
+
+The command line has a `run` subcommand, `swarm_sim run SCENARIO --out FILE [--threads N]`, which prints the scenario name, tick and drone counts, and the final hash, and exits 2 with every loader error if the file is invalid. `--replay FILE --verify` accepts both kinds of log.
+
+Validation: a recorded log decodes at every tick, its snapshots equal the true state of an independent run bit for bit, the log bytes and final hash are identical for 1, 2, 4, and 8 threads, a flipped snapshot byte is found at its tick, a flipped hash is found, and the message events in the log add up to the channel's own statistics with every jam drop inside the jam window.
+
+Limitations: the log holds the whole run in memory before it is written. The runner needs the drones to be `DroneAgent`s, which is the only agent a scenario builds. The failure flag in the snapshot is always set to alive until fault injection is added.

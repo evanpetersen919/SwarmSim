@@ -1,5 +1,5 @@
 # Runs the swarm_sim command line end to end. Invoked by ctest with:
-#   -DSIM=<path to swarm_sim> -DWORKDIR=<scratch directory>
+#   -DSIM=<path to swarm_sim> -DWORKDIR=<scratch directory> -DSCENARIOS=<scenarios directory>
 
 set(LOG "${WORKDIR}/cli_roundtrip.log")
 file(REMOVE "${LOG}")
@@ -52,3 +52,31 @@ run_sim(2 --threads 0)
 # A log that is not a log fails verification with status 1.
 file(WRITE "${WORKDIR}/not_a_log.bin" "this is not a swarm log")
 run_sim(1 --replay "${WORKDIR}/not_a_log.bin" --verify)
+
+# Scenario runs: record on one thread, verify on eight; the printed hash is thread-invariant.
+set(SLOG "${WORKDIR}/cli_scenario.log")
+file(REMOVE "${SLOG}")
+run_sim(0 run "${SCENARIOS}/formation_jam.yaml" --out "${SLOG}" --threads 1)
+if(NOT EXISTS "${SLOG}")
+  message(FATAL_ERROR "no scenario log was written")
+endif()
+set(scenario_one "${last_out}")
+run_sim(0 --replay "${SLOG}" --verify --threads 8)
+run_sim(0 run "${SCENARIOS}/formation_jam.yaml" --out "${WORKDIR}/cli_scenario8.log" --threads 8)
+string(REPLACE "cli_scenario8.log" "cli_scenario.log" scenario_eight "${last_out}")
+if(NOT scenario_one STREQUAL scenario_eight)
+  message(FATAL_ERROR "scenario output differs between 1 and 8 threads:
+${scenario_one}
+${scenario_eight}")
+endif()
+
+# Scenario failures: missing file, an invalid scenario, no --out, an unknown option.
+run_sim(2 run "${WORKDIR}/no_such_scenario.yaml" --out "${SLOG}")
+file(WRITE "${WORKDIR}/bad_scenario.yaml" "version: 1
+seed: 1
+duration_s: 5
+colour: red
+")
+run_sim(2 run "${WORKDIR}/bad_scenario.yaml" --out "${SLOG}")
+run_sim(2 run "${SCENARIOS}/minimal.yaml")
+run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${SLOG}" --bogus)
