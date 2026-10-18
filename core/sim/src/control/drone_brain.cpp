@@ -35,6 +35,9 @@ void validate(const BrainConfig& c) {
       }
     }
   }
+  if (!(std::isfinite(c.speed_limit_factor) && c.speed_limit_factor >= 1.0)) {
+    throw std::invalid_argument("BrainConfig: speed_limit_factor must be at least 1");
+  }
   if (c.report_period_ticks == 0 || c.staleness_ticks == 0) {
     throw std::invalid_argument("BrainConfig: report period and staleness must be positive");
   }
@@ -101,7 +104,9 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   // Fallback state.
   const FallbackState before = fsm_.state();
   FallbackInputs fb;
-  fb.fresh_neighbors = fresh_;
+  // Before the first staleness window has passed there has been no time to hear from anyone, so
+  // comms is not judged yet.
+  fb.fresh_neighbors = tick < config_.staleness_ticks ? config_.num_drones - 1 : fresh_;
   fb.total_neighbors = config_.num_drones - 1;
   fb.ticks_since_fix = tick - last_fix_tick_;
   fb.pose_sigma = own_sigma;
@@ -137,12 +142,11 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     formation.kd *= behavior.gain_scale;
     pull = formation_accel(target_, pose.position, pose.velocity, formation);
 
-    // Speed limiter, active only in states that reduce the speed: above the state's cruise speed,
-    // drop the forward acceleration and brake. Nominal flight needs to exceed the cruise speed
-    // briefly to close a gap, so it is bounded by the vehicle alone.
-    const double limit = config_.mission.speed * behavior.speed_scale;
+    // Speed limiter: above the state's limit, drop the forward acceleration and brake. The nominal
+    // limit is a multiple of the cruise speed, because closing a gap needs a brief excess over it.
+    const double limit = config_.mission.speed * config_.speed_limit_factor * behavior.speed_scale;
     const double speed = norm(pose.velocity);
-    if (behavior.speed_scale < 1.0 && speed > limit && speed > 0.0) {
+    if (speed > limit && speed > 0.0) {
       const Vec3 heading = pose.velocity / speed;
       const double forward = dot(pull, heading);
       if (forward > 0.0) {

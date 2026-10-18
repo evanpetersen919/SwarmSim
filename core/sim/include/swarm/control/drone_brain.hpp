@@ -41,8 +41,15 @@ struct BrainConfig {
   SeparationParams separation;  // separation.max_accel is also the airframe limit of the command
   FallbackParams fallback;
 
+  // The speed limit in the nominal state, as a multiple of the mission's cruise speed. It bounds
+  // the speed at which a drone closes a gap and so the closing speed that separation has to stop.
+  // Must be at least 1.
+  double speed_limit_factor = 2.0;
+
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
-  std::uint64_t staleness_ticks = 100;     // a neighbor report older than this is not fresh
+  // A neighbor report older than this is not fresh. Comms is not judged during the first this many
+  // ticks, so a drone is not degraded merely because the first reports are still in flight.
+  std::uint64_t staleness_ticks = 100;
 };
 
 // A message payload delivered to this drone and who sent it.
@@ -73,7 +80,7 @@ struct BrainOutput {
 //   current fallback state) plus separation, with separation taking priority within the limit.
 //
 // In safe hold the target is the position held at the moment the state was entered, at zero
-// velocity. Otherwise the fallback state scales the cruise speed (a speed limiter removes forward
+// velocity. Otherwise the fallback state scales the speed limit (a speed limiter removes forward
 // acceleration above the limit and brakes the excess), the separation margin, the formation gains,
 // and the weight on the mission reference. The separation margin also widens by the drone's own
 // position uncertainty.

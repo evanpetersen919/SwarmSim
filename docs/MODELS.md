@@ -383,14 +383,35 @@ The decision-making half of a drone (ADR 0005). Its inputs each tick are the IMU
 
 1. Advances the pose estimator with the IMU sample and fuses the fix if there is one.
 2. Files the delivered neighbor reports in the neighbor table and passes accepted ones to that neighbor's predictor. The predictor kind comes from the configuration. Malformed, stale, duplicate, and unknown-sender payloads are counted and ignored.
-3. Counts neighbors whose latest report is no older than `staleness_ticks` and updates the fallback machine with that count, the ticks since the last fix, and the pose sigma.
+3. Counts neighbors whose latest report is no older than `staleness_ticks` and updates the fallback machine with that count, the ticks since the last fix, and the pose sigma. Comms is not judged during the first `staleness_ticks` ticks, because the first reports are still in flight; without this grace a drone with no packet loss started in degraded comms.
 4. Computes the command. The formation pull comes from the formation target (the mission reference at `tick * dt` blended with the neighbor consensus, with the reference weight raised by the state's `reference_boost`) and the PD law with the gains scaled by the state's `gain_scale`. The separation term uses neighbor sigma plus the drone's own sigma and the margin scaled by the state. The two are combined with separation taking priority under the acceleration limit.
 5. Every `report_period_ticks`, encodes its own estimate (not truth) as a neighbor report for broadcast.
 
-In safe hold the target is the position held when the state was entered, at zero velocity. In states with a speed scale below 1 a speed limiter removes forward acceleration above the limit and brakes the excess; nominal flight is bounded only by the vehicle, because closing a gap needs a brief excess over the cruise speed. `separation.max_accel` is also the acceleration limit of the command and should equal the airframe limit.
+In safe hold the target is the position held when the state was entered, at zero velocity. A speed limiter removes forward acceleration above the limit and brakes the excess. The limit is the mission's cruise speed times `speed_limit_factor` (default 2, so a drone can close a gap) times the state's speed scale. Without a limit below the vehicle's maximum, drones assembling from a scattered start closed on each other fast enough that the true separation fell to 0.86 m in one run; with the limit the closest approach in the same run is 2.64 m. `separation.max_accel` is also the acceleration limit of the command and should equal the airframe limit.
 
 `hash_state` folds in the fallback machine, the pose estimate and counters, the neighbor table counters and receipt ticks, each neighbor's current estimate, the hold position, the last target, and the last command. The pose estimator's covariance and the predictors' internal state enter only through the sigmas they report, so two brains whose hidden covariances differ but whose reported values agree would hash equal.
 
 Validation: driven by synthetic sensor data with a point-mass stand-in for the vehicle. A lone drone follows the mission; a drone in place among consistent neighbors commands under 0.1 m/s^2; silence moves it to degraded comms after the staleness limit and back; losing both fixes and reports passes through degraded navigation to safe hold, where it stops, and recovers to nominal when both return; identical inputs give bit-identical commands and hashes, and interleaved brains do not interfere.
 
 Limitations: the thresholds, scales, and gains are starting values. The brain does not avoid terrain or obstacles and does not control yaw. Position fixes are the only correction to the pose estimate, so a long fix outage lets the estimate drift as the accelerometer bias allows.
+
+## Drone agent
+
+Source: `core/sim/include/swarm/drone_agent.hpp`. Status: integration-tested.
+
+The vehicle half of a drone (ADR 0005). It owns the true state and the sensor models and implements `IAgent`. Each tick it samples the IMU from the truth; on the fix period it takes a LiDAR scan through the configured weather and derives a position fix; it passes those and the delivered payloads to the brain; applies the brain's command through the dynamics; and sends the brain's report, if any, to every other drone. The brain's launch state is set from the start state, and the pose estimator's noise constants are copied from the IMU parameters, which are sensor specification values.
+
+`hash_state` folds in the true state, the IMU bias, and the brain's hash. The sensors' random generators are not hashed directly: their draws reach the hash through the brain's estimates.
+
+Validation (`tests/integration/test_formation_swarm.cpp`): wedge formation, 20 m spacing, mission of 300 m east at 4 m/s, flat terrain with 4 m of relief, 50 Hz, burst loss of 5 percent with latency 2 ticks and jitter 1 tick, starts scattered on a 35 m grid with up to 8 m of offset. Measured by the test run:
+
+| Case | Result |
+|---|---|
+| 2 drones, no loss, 60 s | largest slot error 0.23 m, closest approach above 10 m, only the nominal state visited |
+| 8 drones, seed 7, 60 s | mean slot error 0.14 m, largest 0.25 m, closest approach 2.64 m |
+| 8 drones, 10 seeds | largest final slot error 0.43 m, smallest closest approach 1.89 m |
+| 8 drones, 10 seeds, 6 s jam of all links starting at 2 s | largest final slot error 0.43 m, smallest closest approach 1.92 m; every seed visits degraded comms and every drone ends nominal |
+
+Slot error is the distance from a drone's true position to its slot on the mission reference at the end of the run. The closest approaches happen while the formation is assembled, and they are well inside the 8 m separation margin, so the margin is a soft preference and not a clearance guarantee. The jam in this scenario overlaps assembly and not steady flight; a jam during steady flight leaves the error and separation unchanged because the formation is already in place. Hashes are identical for 1, 2, 4, and 8 threads.
+
+Limitations: one scenario family, one formation shape, flat terrain with no obstacles on the path, and no terrain or obstacle avoidance. Yaw is not controlled, so the LiDAR always faces +x.

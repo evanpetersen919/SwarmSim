@@ -384,3 +384,18 @@ TEST(DroneBrain, InvalidConfigurationAndTicksAreRejected) {
   in.imu.accel.x = std::numeric_limits<double>::quiet_NaN();
   EXPECT_THROW(brain.step(in, 11), std::invalid_argument);
 }
+
+TEST(DroneBrain, CommsIsNotJudgedBeforeTheFirstStalenessWindowHasPassed) {
+  BrainConfig c = config(0, 3, {0, 0, 20}, false);
+  c.staleness_ticks = 100;
+  Rig rig(c);
+  for (std::uint64_t t = 0; t < 99; ++t) {  // no report ever arrives
+    rig.step();
+    ASSERT_EQ(rig.brain.state(), FallbackState::kNominal) << "tick " << t;
+  }
+  EXPECT_EQ(rig.brain.fresh_neighbors(), 0U);
+  for (std::uint64_t t = 99; t < 300; ++t) {
+    rig.step();
+  }
+  EXPECT_EQ(rig.brain.state(), FallbackState::kDegradedComms);
+}
