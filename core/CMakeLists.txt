@@ -27,7 +27,8 @@ add_library(swarm_core STATIC
   sim/src/position_fix.cpp
   sim/src/estimation/pose_estimator.cpp
   sim/src/estimation/neighbor_message.cpp
-  sim/src/estimation/neighbor_table.cpp)
+  sim/src/estimation/neighbor_table.cpp
+  sim/src/estimation/neighbor_predictor.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)

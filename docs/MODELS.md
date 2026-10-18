@@ -246,3 +246,38 @@ A receiving drone keeps a `NeighborTable`: the latest accepted report from each 
 - A payload of the wrong size or version, or with a non-finite value or negative sigma, is counted as malformed and dropped. A sender outside the table is counted and ignored.
 
 Limitations: a report carries only position, velocity, and a scalar position sigma, not a full covariance, and nothing authenticates the sender.
+
+## Neighbor predictors
+
+Source: `core/sim/include/swarm/estimation/neighbor_predictor.hpp`. Status: unit-tested. The comparison below is the project's central question in miniature.
+
+Three predictors share one interface (`on_report`, `predict`) and can be chosen from configuration:
+
+- **Hold last state:** reports the last received position and velocity unchanged.
+- **Dead reckoning:** `p = p_report + v_report * (now - send_tick) * dt`, extrapolating from the time the report was made. Its uncertainty grows with the assumed velocity sigma.
+- **Kalman:** a six-state constant-velocity filter. Each report is carried forward by its delivery delay (the extrapolation adds the process noise of the delay to the measurement noise) and fused as a measurement. Between reports the filter predicts, so its uncertainty grows during a dropout. Reports are trusted; there is no gating, since a neighbor's report is its own filtered estimate.
+
+All three ignore a report whose send tick is not newer than the one held, so reordered and duplicate messages cannot corrupt them.
+
+What the tests measure: a target flying straight at 3.7 m/s, reports every 0.5 s carrying 0.5 m position noise and 0.3 m/s velocity noise, delivered 0.1 s late, then a 3 s dropout. Mean position error at the end of the dropout (seeded trials; reproduce with `swarm_tests --gtest_filter='NeighborPredictors.*' --gtest_output=json:out.json` and read the recorded properties):
+
+| Predictor | Mean error |
+|---|---|
+| Hold last state | 11.4 m |
+| Dead reckoning | 1.66 m |
+| Kalman, process noise 1 m^2/s^3 (the default) | 1.32 m |
+
+The Kalman advantage depends on the process noise matching the neighbor. For the same straight-flying target:
+
+| Process noise q (m^2/s^3) | Kalman mean error |
+|---|---|
+| 0.01 | 0.71 m |
+| 0.1 | 1.05 m |
+| 1 (default) | 1.35 m |
+| 10 | 1.86 m |
+
+So a badly chosen `q` makes the Kalman predictor worse than dead reckoning. The default of 1 is chosen for a swarm that maneuvers at a few m/s^2, which is why it is only modestly better on a straight-flying target. When the target accelerates during the dropout, every predictor's error rises and none can anticipate it. The right `q` is a tuning question for the ablation phase, not something the Kalman filter settles by itself.
+
+Further checks in the tests: the Kalman uncertainty grows monotonically during a dropout and covers the true error within three sigma in at least 95% of trials; delay compensation at least halves the error when reports are 0.5 s late; and a straggler report delivered out of order leaves the state bit-identical.
+
+Limitations: the constant-velocity model, no gating or outlier handling, the report treated as independent of the filter's prior (slightly overconfident), and a single scalar position sigma in each report.
