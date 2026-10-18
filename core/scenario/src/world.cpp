@@ -85,6 +85,11 @@ ScenarioWorld build_world(const Scenario& s) {
     c.weather = s.weather;
     c.seed = s.seed;
     c.fix_period_ticks = s.fix_period_ticks;
+    for (const Fault& fault : s.faults) {
+      if (fault.drone == i) {
+        c.fail_tick = fault.tick;
+      }
+    }
     world.agents.push_back(std::move(c));
   }
 

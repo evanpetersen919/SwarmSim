@@ -46,6 +46,11 @@ struct BrainConfig {
   // Must be at least 1.
   double speed_limit_factor = 2.0;
 
+  // A neighbor not heard from for this many ticks may have stopped where it was last heard, while
+  // its prediction carries it on. From then on separation also keeps clear of its last reported
+  // position. 0 turns this off.
+  std::uint64_t last_known_after_ticks = 150;
+
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.

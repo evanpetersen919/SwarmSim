@@ -30,6 +30,16 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
 }
 
 void DroneAgent::step(AgentContext& ctx) {
+  if (failed_ || ctx.tick >= config_.fail_tick) {
+    if (!failed_) {
+      failed_ = true;
+      truth_.vel = Vec3{};
+      truth_.accel = Vec3{};
+      truth_.yaw_rate = 0.0;
+    }
+    return;
+  }
+
   // Sensors read the truth; the brain gets only what they report.
   BrainInput in;
   in.imu = imu_.sample(truth_);
@@ -69,6 +79,7 @@ void DroneAgent::hash_state(Fnv1a64& hash) const {
   hash.update_f64(truth_.accel.z);
   hash.update_f64(truth_.yaw);
   hash.update_f64(truth_.yaw_rate);
+  hash.update_u64(failed_ ? 1 : 0);
   const Vec3 bias = imu_.accel_bias();
   hash.update_f64(bias.x);
   hash.update_f64(bias.y);

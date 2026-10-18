@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 #include "swarm/agent.hpp"
 #include "swarm/control/drone_brain.hpp"
@@ -27,6 +28,9 @@ struct DroneAgentConfig {
   Weather weather;
   std::uint64_t seed = 0;
   std::uint64_t fix_period_ticks = 5;  // a scan, and so a fix attempt, every this many ticks
+
+  // From this tick on the drone has failed. The default never fails.
+  std::uint64_t fail_tick = std::numeric_limits<std::uint64_t>::max();
 };
 
 // The vehicle half of a drone (ADR 0005). It owns the true state and the sensor models, runs the
@@ -36,6 +40,11 @@ struct DroneAgentConfig {
 // Every tick: IMU sample and, on the fix period, a LiDAR scan and position fix; the delivered
 // messages; one brain step; the dynamics step; and, when the brain asks, a broadcast of its report
 // to every other drone.
+//
+// A failed drone is frozen and silent. From `fail_tick` on it does not step: it stops where it is
+// with zero velocity and acceleration, samples nothing, ignores its inbox, and sends nothing. It
+// stays in the world as a physical object, so its position still counts for jamming zones and for
+// the separation metric. It does not fall or hover; this is a stated, simple failure model.
 class DroneAgent : public IAgent {
  public:
   // `scene` must outlive the agent. Throws std::invalid_argument for an invalid configuration.
@@ -50,6 +59,8 @@ class DroneAgent : public IAgent {
   // For metrics and tests, read from one thread after the barrier. Controllers never see these.
   const DroneState& truth() const { return truth_; }
   const DroneBrain& brain() const { return brain_; }
+  // False from the tick the drone fails; true before.
+  bool alive() const { return !failed_; }
 
  private:
   static DroneAgentConfig prepared(DroneAgentConfig config);
@@ -61,6 +72,7 @@ class DroneAgent : public IAgent {
   PositionFixSensor fixer_;
   DroneBrain brain_;
   DroneState truth_;
+  bool failed_ = false;
 };
 
 }  // namespace swarm

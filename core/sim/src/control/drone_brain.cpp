@@ -164,6 +164,14 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     if (j != config_.id && estimates_[j].valid) {
       others.push_back({j, estimates_[j].position, estimates_[j].position_sigma + own_sigma});
     }
+    // A neighbor silent for long enough may have stopped where it was last heard. The prediction
+    // carries it onward, so keep its last reported position as a second point to stay clear of.
+    if (j != config_.id && config_.last_known_after_ticks > 0) {
+      const NeighborRecord* record = table_.get(j);
+      if (record != nullptr && tick - record->receipt_tick >= config_.last_known_after_ticks) {
+        others.push_back({j, record->report.position, record->report.position_sigma + own_sigma});
+      }
+    }
   }
   const Vec3 push = separation_accel(config_.id, pose.position, others, separation);
 

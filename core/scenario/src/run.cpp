@@ -36,7 +36,7 @@ LogRecord make_record(const Simulation& sim, std::vector<ChannelEvent>& events, 
     for (std::size_t i = 0; i < sim.agent_count(); ++i) {
       const DroneAgent& drone = dynamic_cast<const DroneAgent&>(sim.agent(i));
       AgentSnapshot a;
-      a.alive = true;
+      a.alive = drone.alive();
       a.fallback_state = static_cast<std::uint8_t>(drone.brain().state());
       const DroneState& truth = drone.truth();
       a.position = {truth.pos.x, truth.pos.y, truth.pos.z};

@@ -399,3 +399,41 @@ TEST(DroneBrain, CommsIsNotJudgedBeforeTheFirstStalenessWindowHasPassed) {
   }
   EXPECT_EQ(rig.brain.state(), FallbackState::kDegradedComms);
 }
+
+namespace {
+
+// The brain driven directly with a hovering IMU and no fixes, so its pose stays at the launch
+// position and only the neighbor handling changes between runs. Neighbor 0 reports once, at tick 0,
+// a position 4 m away moving away at 20 m/s, and is then silent. Returns the command at `at_tick`.
+Vec3 command_at(std::uint64_t at_tick, std::uint64_t last_known_after_ticks) {
+  BrainConfig c = config(1, 3, {0, 0, 20}, false);
+  c.last_known_after_ticks = last_known_after_ticks;
+  DroneBrain brain(c);
+  Vec3 command;
+  for (std::uint64_t t = 0; t <= at_tick; ++t) {
+    swarm::BrainInput in;
+    in.imu.accel = {0.0, 0.0, 9.81};
+    if (t == 0) {
+      in.inbox.push_back(report_from(0, 0, {4, 0, 20}, {20, 0, 0}));
+    }
+    command = brain.step(in, t).command.accel;
+  }
+  return command;
+}
+
+}  // namespace
+
+TEST(DroneBrain, ASilentNeighborsLastReportedPositionStaysAPointToKeepClearOf) {
+  // By tick 200 the prediction is 80 m away, so without the rule nothing pushes; the last reported
+  // position is still 4 m away, on the +x side, so the rule pushes toward -x.
+  const Vec3 off = command_at(200, 0);
+  const Vec3 on = command_at(200, 150);
+  EXPECT_GT(off.x, -3.0);
+  EXPECT_LT(on.x, off.x - 8.0);
+}
+
+TEST(DroneBrain, TheLastKnownPositionAppliesOnlyAfterTheConfiguredSilence) {
+  // Before the threshold the two configurations are bit-identical; at it they differ.
+  EXPECT_EQ(command_at(149, 150), command_at(149, 0));
+  EXPECT_NE(command_at(150, 150), command_at(150, 0));
+}
