@@ -17,7 +17,8 @@ add_library(swarm_core STATIC
   sim/src/run.cpp
   sim/src/dynamics.cpp
   sim/src/imu.cpp
-  sim/src/terrain.cpp)
+  sim/src/terrain.cpp
+  sim/src/obstacles.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)
