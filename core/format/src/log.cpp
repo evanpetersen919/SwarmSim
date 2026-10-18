@@ -1,12 +1,10 @@
 #include "swarm/format/log.hpp"
 
 #include <cstring>
-#include <limits>
+
+#include "byte_io.hpp"
 
 namespace swarm {
-
-static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559,
-              "the log format stores doubles as IEEE 754 binary64");
 
 namespace {
 
@@ -14,48 +12,13 @@ constexpr std::uint8_t kMagic[4] = {'S', 'W', 'R', 'M'};
 constexpr std::uint8_t kRecordKind = 1;
 constexpr std::uint8_t kTrailerKind = 2;
 
-void put_u8(std::vector<std::uint8_t>& out, std::uint8_t v) { out.push_back(v); }
-
-void put_u32(std::vector<std::uint8_t>& out, std::uint32_t v) {
-  for (int i = 0; i < 4; ++i) {
-    out.push_back(static_cast<std::uint8_t>((v >> (8 * i)) & 0xFFU));
-  }
-}
-
-void put_u64(std::vector<std::uint8_t>& out, std::uint64_t v) {
-  for (int i = 0; i < 8; ++i) {
-    out.push_back(static_cast<std::uint8_t>((v >> (8 * i)) & 0xFFU));
-  }
-}
-
-void put_f64(std::vector<std::uint8_t>& out, double v) {
-  std::uint64_t bits = 0;
-  std::memcpy(&bits, &v, sizeof(bits));
-  put_u64(out, bits);
-}
-
-std::uint32_t get_u32(const std::uint8_t* p) {
-  std::uint32_t v = 0;
-  for (int i = 0; i < 4; ++i) {
-    v |= static_cast<std::uint32_t>(p[i]) << (8 * i);
-  }
-  return v;
-}
-
-std::uint64_t get_u64(const std::uint8_t* p) {
-  std::uint64_t v = 0;
-  for (int i = 0; i < 8; ++i) {
-    v |= static_cast<std::uint64_t>(p[i]) << (8 * i);
-  }
-  return v;
-}
-
-double get_f64(const std::uint8_t* p) {
-  const std::uint64_t bits = get_u64(p);
-  double v = 0.0;
-  std::memcpy(&v, &bits, sizeof(v));
-  return v;
-}
+using detail::get_f64;
+using detail::get_u32;
+using detail::get_u64;
+using detail::put_f64;
+using detail::put_u32;
+using detail::put_u64;
+using detail::put_u8;
 
 }  // namespace
 
