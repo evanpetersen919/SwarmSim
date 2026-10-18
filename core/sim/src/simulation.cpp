@@ -1,5 +1,7 @@
 #include "swarm/simulation.hpp"
 
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 #include "swarm/format/hash.hpp"
@@ -8,6 +10,15 @@
 namespace swarm {
 
 namespace {
+
+// Checked before anything is built, so an oversized swarm fails fast with a clear message.
+std::uint32_t checked_agent_count(std::size_t count) {
+  if (count > kMaxAgents) {
+    throw std::invalid_argument("Simulation: at most " + std::to_string(kMaxAgents) +
+                                " agents are supported");
+  }
+  return static_cast<std::uint32_t>(count);
+}
 
 ChannelConfig channel_config_for(const SimConfig& config) {
   ChannelConfig channel = config.channel;
@@ -21,7 +32,7 @@ Simulation::Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAge
                        std::size_t threads)
     : config_(config),
       clock_(config.dt),
-      channel_(static_cast<std::uint32_t>(agents.size()), channel_config_for(config)),
+      channel_(checked_agent_count(agents.size()), channel_config_for(config)),
       pool_(threads),
       agents_(std::move(agents)),
       outboxes_(agents_.size()) {

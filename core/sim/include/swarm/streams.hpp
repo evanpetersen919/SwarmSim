@@ -8,6 +8,14 @@ namespace swarm {
 // or off does not shift the draws of another. Add new ids here, never inline.
 inline constexpr std::uint64_t kStreamChannelLoss = 0x100;
 inline constexpr std::uint64_t kStreamChannelJitter = 0x101;
-inline constexpr std::uint64_t kStreamAgentBase = 0x1000;  // agent i uses kStreamAgentBase + i
+inline constexpr std::uint64_t kStreamChannelJam = 0x103;
+inline constexpr std::uint64_t kStreamScene = 0x104;
+
+// Per-agent streams: agent i uses base + i. Each base has room for kMaxAgents ids, which keeps
+// the ranges from colliding; Simulation rejects more agents than that.
+inline constexpr std::uint64_t kStreamAgentBase = 0x1000;
+inline constexpr std::uint64_t kStreamImuBase = 0x2000;
+inline constexpr std::uint64_t kStreamLidarBase = 0x3000;
+inline constexpr std::uint32_t kMaxAgents = 4096;
 
 }  // namespace swarm
