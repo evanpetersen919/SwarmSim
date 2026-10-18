@@ -14,11 +14,15 @@ DeterministicChannel::DeterministicChannel(std::uint32_t num_endpoints, ChannelC
       config_(config),
       loss_rng_(config.seed, kStreamChannelLoss),
       jitter_rng_(config.seed, kStreamChannelJitter),
+      jam_rng_(config.seed, kStreamChannelJam),
       sent_this_tick_(num_endpoints, 0),
       next_seq_(num_endpoints, 0),
       inboxes_(num_endpoints) {
   if (config_.latency_ticks < 1) {
     throw std::invalid_argument("DeterministicChannel: latency_ticks must be at least 1");
+  }
+  for (const Jammer& jammer : config_.jammers) {
+    validate(jammer);
   }
   if (config_.jitter_ticks == std::numeric_limits<std::uint32_t>::max()) {
     throw std::invalid_argument("DeterministicChannel: jitter_ticks is too large");
@@ -76,6 +80,32 @@ bool DeterministicChannel::should_drop(std::uint32_t sender, std::uint32_t recei
   return false;
 }
 
+bool DeterministicChannel::jammed(const Message& msg, std::uint64_t now_tick) {
+  if (config_.jammers.empty()) {
+    return false;
+  }
+  if (positions_.size() != num_endpoints_) {
+    throw std::logic_error("DeterministicChannel: jammers need set_positions() every tick");
+  }
+  for (const Jammer& jammer : config_.jammers) {
+    if (!jammer_active(jammer, now_tick)) {
+      continue;
+    }
+    bool covered = jammer_covers(jammer, positions_[msg.receiver]);
+    if (!covered && jammer.affects == JamAffects::kEither) {
+      covered = jammer_covers(jammer, positions_[msg.sender]);
+    }
+    if (!covered) {
+      continue;
+    }
+    // A jammer with loss 1 draws nothing, so it never moves the jamming stream.
+    if (jammer.loss_inside >= 1.0 || jam_rng_.uniform() < jammer.loss_inside) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
   if (msg.sender >= num_endpoints_ || msg.receiver >= num_endpoints_) {
     throw std::out_of_range("DeterministicChannel: endpoint id out of range");
@@ -101,6 +131,11 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
 
   if (should_drop(msg.sender, msg.receiver)) {
     ++stats_.dropped_loss;
+    return;
+  }
+
+  if (jammed(msg, now_tick)) {
+    ++stats_.dropped_jam;
     return;
   }
 

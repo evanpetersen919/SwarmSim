@@ -16,6 +16,8 @@ class DemoAgent : public IAgent {
 
   void step(AgentContext& ctx) override;
   void hash_state(Fnv1a64& hash) const override;
+  // Agents sit on a line, 10 m apart, so jamming zones can cover some of them.
+  Vec3 position() const override { return Vec3{10.0 * static_cast<double>(id_), 0.0, 0.0}; }
 
   std::uint64_t received() const { return received_; }
   std::uint64_t malformed() const { return malformed_; }

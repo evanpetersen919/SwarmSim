@@ -60,6 +60,12 @@ void Simulation::step() {
     agents_[i]->step(ctx);
   });
 
+  positions_.resize(agents_.size());
+  for (std::size_t i = 0; i < agents_.size(); ++i) {
+    positions_[i] = agents_[i]->position();
+  }
+  channel_.set_positions(positions_);
+
   for (std::size_t sender = 0; sender < agents_.size(); ++sender) {
     for (auto& msg : outboxes_[sender]) {
       msg.sender = static_cast<std::uint32_t>(sender);
@@ -78,6 +84,7 @@ void Simulation::step() {
   hash.update_u64(stats.delivered);
   hash.update_u64(stats.dropped_loss);
   hash.update_u64(stats.dropped_rate);
+  hash.update_u64(stats.dropped_jam);
   hash_ = hash.digest();
 
   clock_.advance();

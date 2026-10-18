@@ -52,6 +52,7 @@ class Simulation {
   std::vector<std::unique_ptr<IAgent>> agents_;
   std::vector<Rng> rngs_;
   std::vector<std::vector<Message>> outboxes_;
+  std::vector<Vec3> positions_;
   std::uint64_t hash_ = 0;
 };
 

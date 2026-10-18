@@ -6,6 +6,7 @@
 #include "swarm/format/hash.hpp"
 #include "swarm/message.hpp"
 #include "swarm/rng.hpp"
+#include "swarm/vec3.hpp"
 
 namespace swarm {
 
@@ -26,6 +27,10 @@ class IAgent {
   virtual ~IAgent() = default;
 
   virtual void step(AgentContext& ctx) = 0;
+
+  // Ground-truth position after the most recent step, used by the channel to decide which links
+  // a jammer covers. Agents without a position can leave this at the origin.
+  virtual Vec3 position() const { return Vec3{}; }
 
   // Folds everything that defines this agent's state into `hash`. Anything left out is not
   // covered by the determinism checks.

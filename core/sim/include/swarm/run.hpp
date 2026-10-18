@@ -18,8 +18,16 @@ struct RunConfig {
 };
 
 // The log header holds seed, dt, and agent count directly, and the remaining fields as
-// `key=value` lines in `config`. Every key is required; unknown or repeated keys are errors.
+// `key=value` lines in `config`. Every key is required; unknown or repeated keys are errors,
+// except `jammer`, which appears once per jammer (zero or more times, in order).
 LogHeader to_log_header(const RunConfig& config);
+
+// One jammer as twelve comma-separated fields:
+//   cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects
+// with mode `constant` or `pulsed`, affects `receiver` or `either`, and radius `inf` for a
+// jammer that covers everything. parse_jammer also validates the result.
+std::string format_jammer(const Jammer& jammer);
+bool parse_jammer(const std::string& text, Jammer& out, std::string& error);
 bool from_log_header(const LogHeader& header, RunConfig& out, std::string& error);
 
 // Runs the demo simulation for `config.ticks` ticks and writes one log record per tick.

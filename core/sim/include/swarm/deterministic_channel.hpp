@@ -5,6 +5,7 @@
 
 #include "swarm/channel.hpp"
 #include "swarm/delivery_queue.hpp"
+#include "swarm/jammer.hpp"
 #include "swarm/rng.hpp"
 
 namespace swarm {
@@ -34,6 +35,9 @@ struct ChannelConfig {
   std::uint32_t jitter_ticks = 0;
   // Most messages one sender may send in a single tick; the rest are dropped. 0 means no limit.
   std::uint32_t max_msgs_per_sender_per_tick = 0;
+  // Jammers, checked in order after the base loss model. A message dropped by one jammer is not
+  // offered to later ones. Evaluated at send time with the endpoints' positions at that tick.
+  std::vector<Jammer> jammers;
 };
 
 // In-process channel whose behavior depends only on its configuration, its seed, and the order
@@ -43,17 +47,21 @@ class DeterministicChannel : public IChannel {
   DeterministicChannel(std::uint32_t num_endpoints, ChannelConfig config);
 
   void send(std::uint64_t now_tick, Message msg) override;
+  void set_positions(const std::vector<Vec3>& positions) override { positions_ = positions; }
   void deliver(std::uint64_t tick) override;
   std::vector<Message> take_inbox(std::uint32_t receiver) override;
   const ChannelStats& stats() const override { return stats_; }
 
  private:
   bool should_drop(std::uint32_t sender, std::uint32_t receiver);
+  bool jammed(const Message& msg, std::uint64_t now_tick);
 
   std::uint32_t num_endpoints_;
   ChannelConfig config_;
   Rng loss_rng_;
   Rng jitter_rng_;
+  Rng jam_rng_;
+  std::vector<Vec3> positions_;
   std::uint64_t rate_tick_ = 0;
   bool rate_tick_valid_ = false;
   std::vector<std::uint32_t> sent_this_tick_;  // per sender, for the rate limit

@@ -41,6 +41,9 @@ void print_usage() {
                "  --seed N (42)  --agents N (8)  --ticks N (1000)  --dt SECONDS (0.01)\n"
                "  --latency TICKS (1)  --jitter TICKS (0)  --rate-limit MSGS (0 = none)\n"
                "  --loss-model none|independent|burst (none)  --loss P (0)  --mean-burst L (1)\n"
+               "  --jam cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects\n"
+               "      add a jammer (repeatable); radius may be inf, mode constant|pulsed,\n"
+               "      affects receiver|either; e.g. 40,0,0,25,pulsed,50,400,20,0.5,0,1,receiver\n"
                "\n"
                "other options:\n"
                "  --threads N (1)   thread count; never changes results\n"
@@ -101,6 +104,14 @@ bool parse_options(int argc, char** argv, Options& options, std::string& error) 
         ok = parse_number(value, channel.loss);
       } else if (flag == "--mean-burst") {
         ok = parse_number(value, channel.mean_burst);
+      } else if (flag == "--jam") {
+        swarm::Jammer jammer;
+        std::string why;
+        if (!swarm::parse_jammer(value, jammer, why)) {
+          error = "invalid --jam '" + std::string(value) + "': " + why;
+          return false;
+        }
+        channel.jammers.push_back(jammer);
       } else if (flag == "--loss-model") {
         const std::string name = value;
         if (name == "none") {

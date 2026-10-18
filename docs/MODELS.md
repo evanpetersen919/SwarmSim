@@ -152,3 +152,19 @@ A return is detected when its intensity reaches `intensity_threshold`, so the ma
 The rain constants (`rain_coefficient = 4e-4`, `rain_exponent = 0.6`) are placeholders chosen to give an extinction of a few per kilometer in moderate rain. They are not from a cited source and have not been checked against data. With them, rain has a modest effect on strong targets within 100 m (100 mm/h pushes the detection limit of a 0.6-reflectivity target to roughly 190 m), while fog is the dominant effect. Do not draw conclusions about rain until the constants are replaced with sourced values.
 
 Limitations: weather is uniform in space and time, there is no backscatter clutter or false returns from rain or fog, and it does not affect the IMU or communications.
+
+## Jamming
+
+Source: `core/sim/include/swarm/jammer.hpp`, `core/sim/src/deterministic_channel.cpp`. Status: unit-tested.
+
+A jammer is a zone in space and a schedule in time. While it is active, messages whose link it covers are dropped with probability `loss_inside` (default 1).
+
+- Zone: a sphere of `radius` meters around `center`. A point at exactly the radius is inside. An infinite radius covers everything.
+- Schedule: active from `start_tick` up to but not including `end_tick`. A constant jammer is on for the whole window. A pulsed jammer is on when `(tick - start + offset) % period < on_ticks`, with `on_ticks = round(duty * period)`; both the period and `on_ticks` must be at least 1.
+- Which links: by default a message is affected when its receiver is inside the zone, which models jamming raising the noise floor at the receiver. With `affects = either`, a sender inside the zone also counts.
+- Order within the channel: rate limit, base loss model, jammers (in configuration order, stopping at the first that drops the message), then jitter. Jamming draws from its own random stream, and a jammer with `loss_inside = 1` draws nothing. Adding a jammer therefore does not change which messages outside its zone are lost.
+- Positions: the channel is given ground-truth positions each tick, after the agents have stepped and before their messages are sent. Jamming is evaluated at send time, so a receiver that moves into or out of the zone while a message is in flight is judged by where it was when the message was sent. For latencies of a few ticks this is a small approximation.
+
+Command line: `--jam cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects`, repeatable. A recorded log stores each jammer as a `jammer=` line in its configuration.
+
+Limitations: a jammer is a hard-edged sphere with no distance falloff, no signal-to-noise model, and no effect on the sender's own reception beyond what `either` gives. Jamming does not depend on terrain or obstacles blocking the signal.

@@ -25,6 +25,14 @@ if(NOT EXISTS "${LOG}")
 endif()
 run_sim(0 --replay "${LOG}" --verify --threads 8)
 
+# Jammers: pulsed local zone and a global one that affects senders too.
+run_sim(0 --record "${LOG}" --seed 11 --agents 10 --ticks 200 --threads 2
+        --jam 40,0,0,25,pulsed,50,150,20,0.5,0,1,receiver
+        --jam 0,0,0,inf,constant,100,120,0,0.5,0,0.5,either)
+run_sim(0 --replay "${LOG}" --verify --threads 6)
+run_sim(2 --jam 1,2,3 --ticks 10)
+run_sim(2 --jam 0,0,0,10,loud,0,100,0,0.5,0,1,receiver --ticks 10)
+
 # A plain run prints the same line for any thread count.
 run_sim(0 --seed 5 --agents 10 --ticks 200 --loss-model independent --loss 0.3 --threads 1)
 set(one_thread "${last_out}")

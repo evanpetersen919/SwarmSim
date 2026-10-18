@@ -68,6 +68,20 @@ std::unique_ptr<Simulation> make_simulation(const RunConfig& config, std::size_t
   return std::make_unique<Simulation>(config.sim, std::move(agents), threads);
 }
 
+std::vector<std::string> split(const std::string& text, char separator) {
+  std::vector<std::string> parts;
+  std::size_t start = 0;
+  for (;;) {
+    const std::size_t at = text.find(separator, start);
+    if (at == std::string::npos) {
+      parts.push_back(text.substr(start));
+      return parts;
+    }
+    parts.push_back(text.substr(start, at - start));
+    start = at + 1;
+  }
+}
+
 VerifyResult verify_failure(VerifyStatus status, std::string message) {
   VerifyResult result;
   result.status = status;
@@ -76,6 +90,61 @@ VerifyResult verify_failure(VerifyStatus status, std::string message) {
 }
 
 }  // namespace
+
+std::string format_jammer(const Jammer& j) {
+  std::string s;
+  s +=
+      format_double(j.center.x) + "," + format_double(j.center.y) + "," + format_double(j.center.z);
+  s += "," + format_double(j.radius);
+  s += j.mode == JamMode::kPulsed ? ",pulsed" : ",constant";
+  s += "," + std::to_string(j.start_tick) + "," + std::to_string(j.end_tick);
+  s += "," + std::to_string(j.pulse_period_ticks) + "," + format_double(j.pulse_duty);
+  s += "," + std::to_string(j.pulse_offset_ticks) + "," + format_double(j.loss_inside);
+  s += j.affects == JamAffects::kEither ? ",either" : ",receiver";
+  return s;
+}
+
+bool parse_jammer(const std::string& text, Jammer& out, std::string& error) {
+  const std::vector<std::string> f = split(text, ',');
+  if (f.size() != 12) {
+    error = "expected 12 comma-separated fields, got " + std::to_string(f.size());
+    return false;
+  }
+  Jammer j;
+  bool ok = parse_double(f[0], j.center.x) && parse_double(f[1], j.center.y) &&
+            parse_double(f[2], j.center.z) && parse_double(f[3], j.radius) &&
+            parse_integer(f[5], j.start_tick) && parse_integer(f[6], j.end_tick) &&
+            parse_integer(f[7], j.pulse_period_ticks) && parse_double(f[8], j.pulse_duty) &&
+            parse_integer(f[9], j.pulse_offset_ticks) && parse_double(f[10], j.loss_inside);
+  if (!ok) {
+    error = "a numeric field is malformed";
+    return false;
+  }
+  if (f[4] == "constant") {
+    j.mode = JamMode::kConstant;
+  } else if (f[4] == "pulsed") {
+    j.mode = JamMode::kPulsed;
+  } else {
+    error = "mode must be constant or pulsed";
+    return false;
+  }
+  if (f[11] == "receiver") {
+    j.affects = JamAffects::kReceiver;
+  } else if (f[11] == "either") {
+    j.affects = JamAffects::kEither;
+  } else {
+    error = "affects must be receiver or either";
+    return false;
+  }
+  try {
+    validate(j);
+  } catch (const std::exception& e) {
+    error = e.what();
+    return false;
+  }
+  out = j;
+  return true;
+}
 
 LogHeader to_log_header(const RunConfig& config) {
   LogHeader header;
@@ -91,6 +160,9 @@ LogHeader to_log_header(const RunConfig& config) {
   header.config += "jitter_ticks=" + std::to_string(c.jitter_ticks) + "\n";
   header.config +=
       "max_msgs_per_sender_per_tick=" + std::to_string(c.max_msgs_per_sender_per_tick) + "\n";
+  for (const Jammer& jammer : c.jammers) {
+    header.config += "jammer=" + format_jammer(jammer) + "\n";
+  }
   return header;
 }
 
@@ -129,6 +201,16 @@ bool from_log_header(const LogHeader& header, RunConfig& out, std::string& error
     }
     const std::string key = line.substr(0, eq);
     const std::string value = line.substr(eq + 1);
+    if (key == "jammer") {
+      Jammer jammer;
+      std::string why;
+      if (!parse_jammer(value, jammer, why)) {
+        error = "invalid value for 'jammer': " + why;
+        return false;
+      }
+      config.sim.channel.jammers.push_back(jammer);
+      continue;
+    }
     if (required.count(key) == 0) {
       error = "unknown key '" + key + "'";
       return false;
