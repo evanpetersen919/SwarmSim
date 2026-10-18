@@ -63,8 +63,8 @@ SnapshotStatus encode_snapshot(const Snapshot& snapshot, std::vector<std::uint8_
   detail::put_u8(out, kSnapshotVersion);
   detail::put_u32(out, static_cast<std::uint32_t>(snapshot.agents.size()));
   for (const AgentSnapshot& a : snapshot.agents) {
-    detail::put_u8(out, static_cast<std::uint8_t>((a.alive ? kAliveBit : 0U) |
-                                                  (a.fallback_state << kStateShift)));
+    const unsigned state = static_cast<unsigned>(a.fallback_state) << kStateShift;
+    detail::put_u8(out, static_cast<std::uint8_t>((a.alive ? kAliveBit : 0U) | state));
     for (double v : a.position) {
       detail::put_f64(out, v);
     }
