@@ -447,3 +447,13 @@ Source: `core/sim/include/swarm/channel.hpp`, `deterministic_channel.hpp`. Statu
 Latency of a delivered message is `deliver_tick - send_tick`. Every scheduled message arrives at its scheduled tick, so the scheduled tick is the delivery tick; a test matches the scheduled ticks against the ticks at which messages actually arrive. A message scheduled for a tick after the end of a run is still in flight at the end; metrics exclude those.
 
 The sink is on the concrete class and not on `IChannel`: the real-socket backend will report what it can observe in its own way.
+
+## Run snapshot
+
+Source: `core/format/include/swarm/format/snapshot.hpp`. Status: unit-tested. Decision record: [0006](decisions/0006-run-snapshots-in-the-log.md).
+
+The content of a log record's blob. Little-endian, fixed width: a version byte, the agent count, one 49-byte entry per agent (flags, position, velocity), the event count, and one 25-byte entry per message event (kind, sender, receiver, send tick, delivery tick). The flags hold the alive bit and the two-bit fallback state; the other bits are reserved and must be zero. The exact layout is in the header and in `tests/unit/test_snapshot.cpp`, which checks the encoder and decoder against hand-written bytes.
+
+The encoder rejects a fallback state above 3, an unknown event kind, a non-finite number, and more than 4096 agents or 2^20 events. The decoder rejects the same, plus an unsupported version, a buffer that ends early, and extra bytes, and it checks the counts against the remaining length before allocating. A test cuts the sample at every length and decodes each prefix. On any error the output is empty.
+
+Limitations: positions and velocities are written as 64-bit floats for exactness, which is larger than a viewer needs. The format has no per-agent estimate fields; metrics about estimation error would need a new version.

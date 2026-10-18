@@ -116,7 +116,7 @@ event_count x { u8 kind | u32 sender | u32 receiver | u64 send_tick | u64 delive
 
 The snapshot codec lives in `core/format`, because the Unreal viewer will read the same bytes. It follows the format library's rules: no exceptions, status codes, no Eigen, no yaml-cpp. Decoding checks the version, the counts against the remaining bytes, and the kind values, and rejects anything else.
 
-Size, for planning only: eight drones is about 400 bytes of snapshot per tick plus 17 bytes per message event, so a 60 s run at 50 Hz is a little over a megabyte. The runner builds the log in memory; the batch phase will compute metrics from the in-memory bytes and discard them instead of writing every run to disk.
+Size, for planning only: eight drones is about 400 bytes of snapshot per tick plus 25 bytes per message event, so a 60 s run at 50 Hz is a little over a megabyte. The runner builds the log in memory; the batch phase will compute metrics from the in-memory bytes and discard them instead of writing every run to disk.
 
 ### Message events come from the channel, not from the agents
 
