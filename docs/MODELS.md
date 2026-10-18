@@ -320,3 +320,21 @@ A mission is a list of waypoints, a cruise speed, and an optional loop flag. The
 - Times before zero are treated as zero.
 
 Limitations: the reference has no acceleration limit, so its velocity jumps at corners and a drone following it has to smooth that itself. There is no terrain or obstacle awareness: the corridor must be kept clear by the scenario.
+
+## Formation target and control law
+
+Source: `core/sim/include/swarm/control/formation_control.hpp`. Status: unit-tested.
+
+Each drone occupies a slot and estimates the formation center as its own position minus its slot offset. The formation center it steers toward is
+
+    alpha * reference + (1 - alpha) * consensus
+
+where the consensus is the inverse-variance weighted mean of the center estimates of this drone and of every usable neighbor. A neighbor's weight is `1 / (sigma^2 + sigma_floor^2)`, so an old prediction, which carries a larger sigma, counts for less. The floor keeps a very confident estimate from taking all of the weight. The target position is that center plus the drone's own offset; the target velocity is blended the same way.
+
+The control law is proportional-derivative, `a = kp * (target_position - position) + kd * (target_velocity - velocity)`, clamped in norm to `max_accel`. The default gains give a damping ratio of 0.9.
+
+- With no usable neighbor the weight on the reference becomes 1 whatever `alpha` is, so a drone that has lost all communication still holds its slot against the shared mission.
+- A neighbor is unusable if its estimate is not valid, not finite, has a negative sigma, or names this drone's own slot or one outside the formation.
+- `alpha = 1` ignores neighbors and `alpha = 0` ignores the reference.
+
+Limitations: the consensus is a single-round weighted mean, not an iterated protocol, so drones with different neighbor sets can disagree transiently. The estimate used for the drone's own position is whatever the pose estimator provides; a biased estimate shifts the drone's slot. There is no separation term here; that is a separate rule.
