@@ -280,4 +280,16 @@ So a badly chosen `q` makes the Kalman predictor worse than dead reckoning. The 
 
 Further checks in the tests: the Kalman uncertainty grows monotonically during a dropout and covers the true error within three sigma in at least 95% of trials; delay compensation at least halves the error when reports are 0.5 s late; and a straggler report delivered out of order leaves the state bit-identical.
 
+### Result in the integrated swarm test
+
+The integration test runs eight drones that maneuver (a new random horizontal acceleration of about 0.7 m/s^2 every second), exchange reports at 5 Hz, and lose all messages for 3 seconds. Mean position error of what each drone believes about each neighbor, over the last second of the jam (reproduce with `swarm_tests --gtest_filter='EstimatingSwarm.*' --gtest_output=json:out.json`):
+
+| Predictor | Mean error |
+|---|---|
+| Hold last state | 12.4 m |
+| Dead reckoning | 1.57 m |
+| Kalman, default process noise | 1.61 m |
+
+Both extrapolating predictors are far better than holding the last state. The Kalman predictor is **not** better than dead reckoning here: with maneuvering neighbors and the default process noise it is about 3% worse. The advantage in the straight-flight table above does not carry over to this scenario. This is a finding, not something tuned away: whether prediction beats dead reckoning, and by how much, depends on how well the process noise matches the neighbors' maneuvering, and it is left to the ablation phase to map that out.
+
 Limitations: the constant-velocity model, no gating or outlier handling, the report treated as independent of the filter's prior (slightly overconfident), and a single scalar position sigma in each report.
