@@ -307,3 +307,16 @@ A formation is a list of slot offsets, one per drone, in the world frame and cen
 | Grid | Rows of `c` columns, where `c` is the smallest integer with `c * c >= count`; the last row may be partial |
 
 Offsets do not rotate with the direction of travel. A circle needs trigonometry and is left for later.
+
+## Mission reference
+
+Source: `core/sim/include/swarm/control/mission.hpp`. Status: unit-tested.
+
+A mission is a list of waypoints, a cruise speed, and an optional loop flag. The reference is a point that starts at the first waypoint at time 0 and travels along the polyline through the waypoints at constant speed. It is a pure function of time, so every drone that has the same mission computes the same reference with no messages, which keeps the formation anchored when communication fails.
+
+- Position is continuous everywhere. Velocity is the direction of the current segment times the speed, so it changes at corners.
+- A non-looping mission stops at the last waypoint with zero velocity and reports `finished`. A looping mission includes the closing segment from the last waypoint back to the first and repeats; it is never finished.
+- Repeated waypoints take no time. A single waypoint, or a loop whose waypoints are all identical, holds in place with zero velocity.
+- Times before zero are treated as zero.
+
+Limitations: the reference has no acceleration limit, so its velocity jumps at corners and a drone following it has to smooth that itself. There is no terrain or obstacle awareness: the corridor must be kept clear by the scenario.

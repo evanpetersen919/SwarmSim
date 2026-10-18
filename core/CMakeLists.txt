@@ -29,7 +29,8 @@ add_library(swarm_core STATIC
   sim/src/estimation/neighbor_message.cpp
   sim/src/estimation/neighbor_table.cpp
   sim/src/estimation/neighbor_predictor.cpp
-  sim/src/control/formation.cpp)
+  sim/src/control/formation.cpp
+  sim/src/control/mission.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)
