@@ -1,6 +1,6 @@
 # Phase 3: Estimation
 
-Status: planned. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 2](phase-02-vehicles-and-sensing.md).
+Status: complete (commits 21 to 27). Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 2](phase-02-vehicles-and-sensing.md).
 
 ## Goal
 
@@ -225,3 +225,42 @@ Tests:
 - All seven commits made, each green locally and in CI.
 - The three neighbor predictors can be compared by tests and by the integration run.
 - MODELS.md and the Eigen decision record written; PLAN.md change log and README status updated.
+
+## Outcome
+
+Seven commits, each with its own tests (the suite grew from 279 to 343 tests):
+
+| # | Commit |
+|---|---|
+| 21 | `2fa158d` Eigen and a linear Kalman filter |
+| 22 | `150f67b` sensor output types and the position fix model |
+| 23 | `23585fb` pose estimator |
+| 24 | `3f4ba3c` neighbor messages and tracking with age |
+| 25 | `ba1830d` neighbor predictors |
+| 26 | `37bdf07` estimators cannot read ground truth, enforced |
+| 27 | `3732b5c` estimation on the lockstep loop |
+
+### Results
+
+- **Pose estimation works as designed.** In the integration run (8 drones, 60 s) the position error is 0.16 m RMS with fixes. In fog dense enough to hide the ground, only 97 of 4,800 fixes survive and the error grows to 31.7 m. The consistency check over 40 seeded runs keeps the error within three reported standard deviations in at least 95% of samples.
+- **Neighbor prediction: the expected ordering holds for straight flight and not for maneuvering neighbors.**
+  - Straight-flying neighbor, 3 s dropout, default tuning: hold-last 11.4 m, dead reckoning 1.66 m, Kalman 1.32 m.
+  - Kalman error depends strongly on the process noise `q`: 0.71 m at `q = 0.01`, 1.35 m at `q = 1`, 1.86 m at `q = 10`, against 1.66 m for dead reckoning.
+  - Maneuvering neighbors in the integrated swarm, 3 s jam, default tuning: hold-last 12.4 m, dead reckoning 1.57 m, Kalman 1.61 m. Kalman is not better than dead reckoning there.
+  - The research question (does prediction beat hold-last-state?) is answered yes by a wide margin for either extrapolating predictor. Whether the Kalman filter adds anything over dead reckoning is open and depends on tuning, for the ablation phase.
+- **The ground-truth boundary is enforced.** Four tests run the invariants script against the real tree and fixtures with deliberate leaks.
+
+### Changes from the plan above
+
+- The byte helpers moved from a private to a public header (`swarm/format/byte_io.hpp`) so the neighbor message codec could reuse them, and the estimator include whitelist allows that one header.
+- The integration test uses a smaller LiDAR (8 beams by 36 samples), a 50 Hz tick, and eight drones, to keep four thread-count runs cheap.
+- The invariants script gained an optional root argument and fixture directories under `tests/fixtures/invariants/`, so the check is itself tested.
+- Dead reckoning guards against a report that claims a send tick in the future.
+- Decision record `0004-eigen-fixed-size.md` was added for the Eigen choice.
+- Dependencies are now pinned with a SHA-256 of the archive (Eigen and GoogleTest).
+
+### Open items
+
+- Process-noise tuning for the Kalman predictor against neighbor maneuverability (Phase 7 ablations).
+- Linux CI results for commits 21 to 27 appear in the repository's Actions history after the push.
+- Benchmark numbers are still not recorded.
