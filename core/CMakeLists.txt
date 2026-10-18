@@ -23,7 +23,8 @@ add_library(swarm_core STATIC
   sim/src/geometry.cpp
   sim/src/lidar.cpp
   sim/src/weather.cpp
-  sim/src/jammer.cpp)
+  sim/src/jammer.cpp
+  sim/src/position_fix.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)

@@ -4,6 +4,7 @@
 
 #include "swarm/dynamics.hpp"
 #include "swarm/rng.hpp"
+#include "swarm/sensor_data.hpp"
 #include "swarm/vec3.hpp"
 
 namespace swarm {
@@ -19,12 +20,6 @@ struct ImuParams {
 
   // Order-of-magnitude values for a consumer MEMS part. Placeholders, not taken from a datasheet.
   static ImuParams typical_mems();
-};
-
-// What the sensor reports: specific force in the world frame and yaw rate.
-struct ImuSample {
-  Vec3 accel;
-  double gyro_z = 0.0;
 };
 
 // Orientation-free IMU: a world-frame accelerometer and a yaw-rate gyro, each with a random-walk

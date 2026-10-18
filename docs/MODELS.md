@@ -188,3 +188,25 @@ update:   y = z - H x,  S = H P H' + R,  K = P H' S^-1
 - Gate constant: for three measurement dimensions, the 0.999 quantile of chi-square is about 16.27. A test checks that about one in a thousand consistent measurements exceeds it.
 
 Limitations: linear models only, no process noise adaptation, no smoothing, and no consistency statistic over time (NEES) beyond the checks in the tests.
+
+## Position fix
+
+Source: `core/sim/include/swarm/position_fix.hpp`, `core/sim/include/swarm/sensor_data.hpp`. Status: unit-tested. This is a sensor model, not localization.
+
+The project does not implement scan-matching localization. The LiDAR contributes a simulated position fix whose availability and accuracy depend on what the real scan saw.
+
+- The fix sensor sits on the sensor side of the boundary, like the IMU, so it may read the true position and reports `true + noise`.
+- From the scan it takes only how informative the scan was. With `f` the fraction of rays that returned: there is no fix if `f < min_fraction`; otherwise `sigma = min(max_sigma, base_sigma * sqrt(reference_fraction / f))`. Variance is inversely proportional to the number of valid returns, so fog, rain, and open sky degrade or remove the fix.
+- The estimator receives only a `PositionFix { available, position, sigma }`. It never sees the scan or the true position.
+- Each call draws three normals whether or not a fix results, on stream `kStreamFixBase + drone id`, so one call's noise does not depend on earlier outcomes.
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `base_sigma` | 0.5 m | Per-axis sigma when the valid fraction equals the reference |
+| `reference_fraction` | 0.5 | Valid-return fraction at which sigma equals `base_sigma` |
+| `min_fraction` | 0.05 | Below this fraction there is no fix |
+| `max_sigma` | 20 m | Ceiling on the reported sigma; also reported when there is no fix |
+
+The defaults are placeholders chosen so a clear-air scan at 10 m altitude gives a fix of about half a meter. They are not derived from a localization algorithm.
+
+Limitations: the fix is unbiased and independent from call to call, which real scan matching is not. It has no failure mode other than too few returns, and no dependence on scene geometry beyond which rays return.
