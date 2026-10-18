@@ -168,3 +168,23 @@ A jammer is a zone in space and a schedule in time. While it is active, messages
 Command line: `--jam cx,cy,cz,radius,mode,start,end,period,duty,offset,loss,affects`, repeatable. A recorded log stores each jammer as a `jammer=` line in its configuration.
 
 Limitations: a jammer is a hard-edged sphere with no distance falloff, no signal-to-noise model, and no effect on the sender's own reception beyond what `either` gives. Jamming does not depend on terrain or obstacles blocking the signal.
+
+## Kalman filter conventions
+
+Source: `core/sim/include/swarm/estimation/kalman.hpp`. Status: unit-tested.
+
+A linear Kalman filter on fixed-size Eigen types, used by the pose estimator and the neighbor predictor.
+
+```
+predict:  x' = F x (+ B u),   P' = F P F' + Q
+update:   y = z - H x,  S = H P H' + R,  K = P H' S^-1
+          x' = x + K y,  P' = (I - K H) P (I - K H)' + K R K'        (Joseph form)
+```
+
+- The covariance is symmetrized after every prediction and update. S is factored with LDLT and no matrix is inverted explicitly.
+- `update` returns the innovation, its covariance, and the normalized innovation squared (NIS, `y' S^-1 y`). A measurement whose NIS exceeds an optional gate is rejected and the filter is left unchanged. A positive-definite check on S failing is reported as `kSingular`, also leaving the filter unchanged.
+- Invalid arguments (non-finite values, asymmetric or negative covariances) throw `std::invalid_argument`. They are programming errors, unlike an implausible measurement.
+- Constant-velocity model for a state `[position (3), velocity (3)]`: `F = [I dt I; 0 I]` and `Q = q [dt^3/3 I, dt^2/2 I; dt^2/2 I, dt I]`, where `q` (m^2/s^3) is the spectral density of white acceleration noise. After `t` seconds without information the velocity uncertainty is about `sqrt(q t)`.
+- Gate constant: for three measurement dimensions, the 0.999 quantile of chi-square is about 16.27. A test checks that about one in a thousand consistent measurements exceeds it.
+
+Limitations: linear models only, no process noise adaptation, no smoothing, and no consistency statistic over time (NEES) beyond the checks in the tests.

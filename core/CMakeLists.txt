@@ -27,5 +27,5 @@ add_library(swarm_core STATIC
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)
-target_link_libraries(swarm_core PUBLIC swarm_format Threads::Threads)
+target_link_libraries(swarm_core PUBLIC swarm_format swarm::eigen Threads::Threads)
 swarm_configure_target(swarm_core)

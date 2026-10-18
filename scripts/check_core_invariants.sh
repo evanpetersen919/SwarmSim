@@ -23,5 +23,13 @@ if [ -n "$fast" ]; then
   status=1
 fi
 
+# core/format is compiled into the Unreal plugin, which must not see Eigen or yaml-cpp.
+third_party=$(grep -rEn --include='*.cpp' --include='*.hpp' --include='*.h' '#include *[<"](Eigen/|yaml-cpp/)' core/format)
+if [ -n "$third_party" ]; then
+  echo "Eigen or yaml-cpp included from core/format:"
+  echo "$third_party"
+  status=1
+fi
+
 [ "$status" -eq 0 ] && echo "core invariants: ok"
 exit "$status"
