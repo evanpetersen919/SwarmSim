@@ -415,3 +415,13 @@ Validation (`tests/integration/test_formation_swarm.cpp`): wedge formation, 20 m
 Slot error is the distance from a drone's true position to its slot on the mission reference at the end of the run. The closest approaches happen while the formation is assembled, and they are well inside the 8 m separation margin, so the margin is a soft preference and not a clearance guarantee. The jam in this scenario overlaps assembly and not steady flight; a jam during steady flight leaves the error and separation unchanged because the formation is already in place. Hashes are identical for 1, 2, 4, and 8 threads.
 
 Limitations: one scenario family, one formation shape, flat terrain with no obstacles on the path, and no terrain or obstacle avoidance. Yaw is not controlled, so the LiDAR always faces +x.
+
+## Scenario format
+
+Source: `core/scenario/include/swarm/scenario/scenario.hpp`. Status: unit-tested.
+
+A scenario is a YAML file with `version: 1` and a seed. It holds the scene (field or hills, size, cell size, relief, obstacle density), the swarm (drone count, formation shape and spacing, start layout), the mission, the weather, the sensor settings, the channel (latency, jitter, loss model, rate limit, jammers), the control settings (predictor, report period, staleness), faults, metric settings, and the log stride. Required keys are `version`, `seed`, `duration_s`, `swarm.drones`, and `mission.waypoints`; every other key has a default, listed in [the phase 5 design](phases/phase-05-scenarios-and-metrics.md) and shown by `scenarios/minimal.yaml`. Examples are in `scenarios/`.
+
+Rules, from [ADR 0007](decisions/0007-strict-versioned-scenario-files.md): unknown keys are errors; all problems are reported with a path and line; scalars are parsed by the project, decimal only; times are in seconds and must be a whole number of ticks; the existing model validators run on the result. `canonical_text` writes a scenario back out with enough digits to round-trip, and the loader reads that text to an identical scenario.
+
+Limitations: the schema covers what Phase 5 needs. Terrain relief (`amplitude_m`) applies to hills only; a field is flat. Obstacle size ranges, the separation and fallback parameters, and the sensor noise parameters are not in the file and use the defaults of their structs. Ablation switches are not in version 1.

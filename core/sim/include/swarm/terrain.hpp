@@ -22,6 +22,9 @@ struct TerrainConfig {
   double persistence = 0.5;      // amplitude ratio between successive octaves, in (0, 1]
 };
 
+// Throws std::invalid_argument if the configuration is invalid; generate_terrain checks the same.
+void validate(const TerrainConfig& config);
+
 // Builds a terrain-only scene centered on the origin. Throws std::invalid_argument for an invalid
 // configuration. Deterministic from (config, seed), and independent of the platform: it uses
 // integer hashing and basic arithmetic only, never libm.

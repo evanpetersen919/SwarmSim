@@ -30,6 +30,9 @@ struct ObstacleConfig {
   std::uint32_t attempts_per_obstacle = 30;
 };
 
+// Throws std::invalid_argument if the configuration is invalid; place_obstacles checks the same.
+void validate(const ObstacleConfig& config);
+
 // Appends obstacles to `scene` by seeded rejection sampling and returns how many were placed.
 //
 // The target count is round(density * terrain area). Each attempt draws the same six random

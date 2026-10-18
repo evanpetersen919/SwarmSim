@@ -1,0 +1,51 @@
+# Six drones in a grid over hills in fog, with a pulsed local jammer, independent packet loss, and
+# one drone failing partway through.
+version: 1
+name: hills_fog_fault
+seed: 21
+dt: 0.02
+duration_s: 90
+
+scene:
+  type: hills
+  size_m: [1200, 1200]
+  cell_m: 8
+  amplitude_m: 12
+  obstacles:
+    density_per_m2: 0.0002
+    spawn_clear_radius_m: 60
+
+swarm:
+  drones: 6
+  formation: {shape: grid, spacing_m: 25}
+  start: {columns: 3, spacing_m: 40, jitter_m: 6, altitude_m: 45, altitude_jitter_m: 4}
+
+mission:
+  waypoints:
+    - [-200, -100, 45]
+    - [200, -100, 45]
+    - [200, 100, 45]
+  speed_mps: 4
+
+weather: {visibility_m: 400, rain_mm_h: 4}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.1
+  jammers:
+    - center: [50, 0, 45]
+      radius_m: 120
+      mode: pulsed
+      from_s: 20
+      to_s: 60
+      period_ticks: 100
+      duty: 0.5
+      loss: 0.9
+      affects: receiver
+
+control:
+  predictor: dead_reckoning
+
+faults:
+  - {drone: 2, at_s: 45}

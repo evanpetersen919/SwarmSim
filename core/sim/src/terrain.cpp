@@ -117,6 +117,8 @@ double height_at(const Heightfield& t, double x, double y) {
   return h00 + u * (h11 - h01) + v * (h01 - h00);  // triangle (a, c, d)
 }
 
+void validate(const TerrainConfig& config) { validate_config(config); }
+
 SceneData generate_terrain(const TerrainConfig& config, std::uint64_t seed) {
   validate_config(config);
 

@@ -1,0 +1,10 @@
+# The smallest valid scenario: only the required keys. Everything else takes its documented
+# default.
+version: 1
+seed: 1
+duration_s: 20
+swarm:
+  drones: 4
+mission:
+  waypoints:
+    - [0, 0, 20]

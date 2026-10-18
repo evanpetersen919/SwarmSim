@@ -1,0 +1,50 @@
+# Eight drones assemble into a wedge from a scattered start and fly a straight mission over open
+# field, with burst packet loss and a six second jam of every link that overlaps the assembly.
+version: 1
+name: formation_jam
+seed: 7
+dt: 0.02
+duration_s: 60
+
+scene:
+  type: field
+  size_m: [1000, 1000]
+  cell_m: 8
+
+swarm:
+  drones: 8
+  formation: {shape: wedge, spacing_m: 20}
+  start: {columns: 4, spacing_m: 35, jitter_m: 8, altitude_m: 20, altitude_jitter_m: 3}
+
+mission:
+  waypoints:
+    - [-150, 0, 20]
+    - [150, 0, 20]
+  speed_mps: 4
+  loop: false
+
+weather: {visibility_m: 20000, rain_mm_h: 0}
+
+sensors:
+  lidar: {beams: 8, azimuth_samples: 36}
+  fix_period_ticks: 5
+
+comms:
+  latency_ticks: 2
+  jitter_ticks: 1
+  loss_model: burst
+  loss: 0.05
+  mean_burst: 2.0
+  jammers:
+    - {center: [0, 0, 0], radius_m: inf, mode: constant, from_s: 2, to_s: 8, loss: 1.0, affects: either}
+
+control:
+  predictor: kalman
+  report_period_ticks: 5
+  staleness_ticks: 50
+
+metrics:
+  settle_s: 20
+  collision_radius_m: 1.0
+  recovery_threshold_m: 1.0
+  recovery_hold_s: 2.0

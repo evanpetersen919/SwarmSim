@@ -174,6 +174,8 @@ class SpatialGrid {
 
 }  // namespace
 
+void validate(const ObstacleConfig& config) { validate_config(config); }
+
 std::size_t place_obstacles(SceneData& scene, const ObstacleConfig& config, std::uint64_t seed) {
   validate_config(config);
   std::string reason;
