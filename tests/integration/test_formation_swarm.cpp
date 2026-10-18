@@ -16,6 +16,7 @@
 #include "swarm/scene.hpp"
 #include "swarm/simulation.hpp"
 #include "swarm/terrain.hpp"
+#include "test_scale.hpp"
 
 using swarm::DroneAgent;
 using swarm::FallbackState;
@@ -181,7 +182,8 @@ TEST(FormationSwarm, TenSeedsAllConvergeAndKeepTheirSeparation) {
   const Scene scene(make_scene());
   double worst_separation = std::numeric_limits<double>::infinity();
   double worst_error = 0.0;
-  for (std::uint64_t seed = 0; seed < 10; ++seed) {
+  for (std::uint64_t seed = 0; seed < static_cast<std::uint64_t>(swarm::testing::scaled(10, 3));
+       ++seed) {
     Options o;
     o.seed = seed;
     const Result r = run(scene, o);
@@ -199,7 +201,8 @@ TEST(FormationSwarm,
   const Scene scene(make_scene());
   double worst_separation = std::numeric_limits<double>::infinity();
   double worst_error = 0.0;
-  for (std::uint64_t seed = 0; seed < 10; ++seed) {
+  for (std::uint64_t seed = 0; seed < static_cast<std::uint64_t>(swarm::testing::scaled(10, 3));
+       ++seed) {
     Options o;
     o.seed = seed;
     o.jam = true;
@@ -226,7 +229,7 @@ TEST(FormationSwarm, HashesAreIdenticalForEveryThreadCount) {
   o.jam = true;
   o.jam_start = 100;
   o.jam_end = 400;
-  o.ticks = 2000;
+  o.ticks = static_cast<std::uint64_t>(swarm::testing::scaled(2000, 700));
   o.threads = 1;
   const Result reference = run(scene, o);
   for (std::size_t threads : {2U, 4U, 8U}) {

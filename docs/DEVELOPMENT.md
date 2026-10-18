@@ -14,6 +14,8 @@ ctest --preset debug
 
 Other presets: `release`, `asan-ubsan`, `tsan`. Build output goes to `build/<preset>/`.
 
+The sanitizer presets build in Debug and run tens of times slower than release. They define `SWARM_SANITIZED`, and the few heaviest tests (the formation swarm tests) use a smaller size there through `tests/support/test_scale.hpp`. The assertions are the same; the full sizes run in the release jobs.
+
 ## Checks before pushing
 
 ```sh
