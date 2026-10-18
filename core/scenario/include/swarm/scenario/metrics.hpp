@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace swarm {
 
@@ -17,6 +18,24 @@ enum class MetricsStatus {
 };
 
 const char* to_string(MetricsStatus status);
+
+enum class DisturbanceKind {
+  kJamEnd,  // the end of a finite jammer window
+  kFault,   // a drone failing
+};
+
+// How the formation recovered from one disturbance. With E(k) the formation RMSE over alive drones
+// at tick k, and t_d the disturbance tick, recovery is the first tick t_r >= t_d from which E stays
+// at or below `metrics.recovery_threshold_m` for `metrics.recovery_hold_s`. Then `seconds` is
+// (t_r - t_d) * dt and `censored` is false. If E never does that before the log ends, `censored` is
+// true and `seconds` is the time from t_d to the end of the log: a lower bound on the recovery
+// time, not a recovery time. Records without drone state are skipped.
+struct Recovery {
+  DisturbanceKind kind = DisturbanceKind::kJamEnd;
+  std::uint64_t tick = 0;  // t_d
+  double seconds = 0.0;
+  bool censored = false;
+};
 
 // Everything computed from a log. A value that cannot be computed from the log (no drone alive, no
 // record at or after the settle time) is empty, never zero.
@@ -43,6 +62,13 @@ struct MetricsResult {
   // the distance is back at or above the radius. A pair already inside in the first record starts
   // an episode there. The count is over all pairs.
   std::uint64_t collision_episodes = 0;
+
+  // Recovery after each disturbance seen in the log, in tick order (a jam end before a fault at
+  // the same tick). Empty when the scenario has none that the log covers.
+  std::vector<Recovery> recoveries;
+  // The longest `seconds` among `recoveries`, censored ones included; empty if there are none.
+  std::optional<double> recovery_longest;
+  bool any_recovery_censored = false;
 };
 
 struct MetricsOutcome {

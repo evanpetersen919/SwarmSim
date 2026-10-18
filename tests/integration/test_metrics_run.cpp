@@ -14,6 +14,7 @@
 #include "swarm/scenario/metrics.hpp"
 #include "swarm/scenario/run.hpp"
 #include "swarm/scenario/world.hpp"
+#include "test_scale.hpp"
 
 using swarm::Scenario;
 using swarm::Vec3;
@@ -116,4 +117,65 @@ TEST(MetricsRun, ASnapshotStrideSeesFewerStatesSoItCanOnlyMissTheClosestApproach
   EXPECT_EQ(some.result.ticks, kTicks);  // every tick still has a record
   EXPECT_GE(*some.result.min_separation, *full.result.min_separation);
   EXPECT_EQ(some.result.alive_at_end, 5U);
+}
+
+TEST(MetricsRun, RecoveryTimesOnARecordedRunMatchAnIndependentScan) {
+  const std::uint64_t kLong = swarm::testing::scaled(1800, 1500);
+  // formation_jam.yaml jams every link from tick 100 to tick 400, and scenario() fails drone 3 at
+  // tick 400, so there are two disturbances at the same tick.
+  Scenario s = scenario();
+  s.duration_ticks = kLong;
+  s.metrics.recovery_threshold_m = 1.5;
+  s.metrics.recovery_hold_s = 1.0;
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(s, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome out = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(out.ok()) << out.message;
+  ASSERT_EQ(out.result.recoveries.size(), 2U);
+  EXPECT_EQ(out.result.recoveries[0].kind, swarm::DisturbanceKind::kJamEnd);
+  EXPECT_EQ(out.result.recoveries[1].kind, swarm::DisturbanceKind::kFault);
+  EXPECT_EQ(out.result.recoveries[0].tick, 400U);
+  EXPECT_EQ(out.result.recoveries[1].tick, 400U);
+
+  // The error trace over alive drones, from the simulation's own state.
+  const swarm::ScenarioWorld world = swarm::build_world(s);
+  const auto sim = world.make_simulation(1);
+  const swarm::MissionPath path(s.mission);
+  std::vector<double> error;
+  for (std::uint64_t tick = 0; tick < kLong; ++tick) {
+    sim->step();
+    const Vec3 center = path.at(static_cast<double>(tick + 1) * s.dt).position;
+    double sum = 0.0;
+    int alive = 0;
+    for (std::size_t i = 0; i < 6; ++i) {
+      const auto& a = dynamic_cast<const swarm::DroneAgent&>(sim->agent(i));
+      if (a.alive()) {
+        const double e = swarm::distance(a.truth().pos, center + world.offsets[i]);
+        sum += e * e;
+        ++alive;
+      }
+    }
+    error.push_back(std::sqrt(sum / alive));
+  }
+  const std::uint64_t hold = 50;  // one second at 50 Hz
+  bool found = false;
+  std::uint64_t start = 0;
+  for (std::uint64_t t = 400; t + hold <= kLong && !found; ++t) {
+    bool all = true;
+    for (std::uint64_t k = t; k < t + hold; ++k) {
+      all = all && error[k] <= 1.5;
+    }
+    if (all) {
+      found = true;
+      start = t;
+    }
+  }
+  for (const swarm::Recovery& r : out.result.recoveries) {
+    EXPECT_EQ(r.censored, !found);
+    if (found) {
+      EXPECT_NEAR(r.seconds, static_cast<double>(start - 400) * s.dt, 1e-9);
+    }
+  }
+  RecordProperty("recovery_after_jam_and_fault_s",
+                 std::to_string(found ? static_cast<double>(start - 400) * s.dt : -1.0));
 }

@@ -1,7 +1,9 @@
 #include "swarm/scenario/metrics.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -82,6 +84,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   std::uint64_t count_all = 0;
   double sum_settled = 0.0;
   std::uint64_t count_settled = 0;
+  std::vector<std::pair<std::uint64_t, double>> trace;  // (tick, formation RMSE), where defined
   std::vector<char> inside(static_cast<std::size_t>(n) * (n > 0 ? n - 1 : 0) / 2, 0);
 
   LogRecord record;
@@ -133,6 +136,15 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
       }
     }
     out.alive_at_end = alive;
+    if (alive > 0) {
+      double sum = 0.0;
+      for (std::uint32_t i = 0; i < n; ++i) {
+        if (snapshot.agents[i].alive) {
+          sum += norm_squared(to_vec(snapshot.agents[i].position) - (center + offsets[i]));
+        }
+      }
+      trace.emplace_back(record.tick, std::sqrt(sum / static_cast<double>(alive)));
+    }
 
     // Separation and collisions, over every pair, alive or not.
     std::size_t pair = 0;
@@ -160,6 +172,63 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   if (count_settled > 0) {
     out.formation_rmse_settled = std::sqrt(sum_settled / static_cast<double>(count_settled));
+  }
+
+  // Recovery after each disturbance the log covers.
+  std::vector<Recovery> disturbances;
+  for (const Jammer& j : scenario.channel.jammers) {
+    if (j.end_tick != std::numeric_limits<std::uint64_t>::max()) {
+      disturbances.push_back({DisturbanceKind::kJamEnd, j.end_tick, 0.0, false});
+    }
+  }
+  for (const Fault& f : scenario.faults) {
+    disturbances.push_back({DisturbanceKind::kFault, f.tick, 0.0, false});
+  }
+  std::stable_sort(disturbances.begin(), disturbances.end(),
+                   [](const Recovery& a, const Recovery& b) {
+                     return a.tick != b.tick ? a.tick < b.tick : a.kind < b.kind;
+                   });
+
+  const double threshold = scenario.metrics.recovery_threshold_m;
+  const std::uint64_t hold_ticks = static_cast<std::uint64_t>(
+      std::max(1.0, std::ceil(scenario.metrics.recovery_hold_s / scenario.dt - 1e-9)));
+  for (Recovery r : disturbances) {
+    if (r.tick >= out.ticks) {
+      continue;  // after the end of the log: not observed
+    }
+    bool recovered = false;
+    bool in_run = false;
+    std::uint64_t run_start = 0;
+    for (const auto& point : trace) {
+      if (point.first < r.tick) {
+        continue;
+      }
+      if (point.second <= threshold) {
+        if (!in_run) {
+          in_run = true;
+          run_start = point.first;
+        }
+        if (point.first - run_start + 1 >= hold_ticks) {
+          recovered = true;
+          break;
+        }
+      } else {
+        in_run = false;
+      }
+    }
+    if (recovered) {
+      r.seconds = static_cast<double>(run_start - r.tick) * scenario.dt;
+    } else {
+      r.censored = true;
+      r.seconds = static_cast<double>(out.ticks - r.tick) * scenario.dt;
+    }
+    out.recoveries.push_back(r);
+  }
+  for (const Recovery& r : out.recoveries) {
+    if (!out.recovery_longest || r.seconds > *out.recovery_longest) {
+      out.recovery_longest = r.seconds;
+    }
+    out.any_recovery_censored = out.any_recovery_censored || r.censored;
   }
   return outcome;
 }
