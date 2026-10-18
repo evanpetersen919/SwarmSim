@@ -4,7 +4,7 @@
 #include <cstring>
 #include <utility>
 
-#include "byte_io.hpp"
+#include "swarm/format/byte_io.hpp"
 #include "swarm/format/hash.hpp"
 
 namespace swarm {

@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "byte_io.hpp"
+#include "swarm/format/byte_io.hpp"
 
 namespace swarm {
 

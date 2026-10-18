@@ -232,3 +232,17 @@ b' = b
 What the tests show: with regular fixes the bias of a hovering drone is learned to within 0.01 m/s^2 and position error stays under a meter; without fixes both the error and the reported uncertainty grow roughly quadratically, as expected from an uncorrected bias; a grossly wrong fix is rejected without changing the estimate; and across 40 seeded runs of a maneuvering drone the position error lies within three reported standard deviations in at least 95% of samples.
 
 Limitations: yaw and attitude are not estimated, which is acceptable because the IMU reports in the world frame. The filter assumes the process noise it is told about. A fix is treated as independent of earlier fixes.
+
+## Neighbor messages and tracking
+
+Source: `core/sim/include/swarm/estimation/neighbor_message.hpp`, `neighbor_table.hpp`. Status: unit-tested.
+
+Drones broadcast their own estimate, never ground truth. A report is a fixed 65-byte layout: `u8 version | u64 send_tick | f64 position[3] | f64 velocity[3] | f64 position_sigma`, little-endian, with explicit encoding and no struct copying (the shared helpers in `swarm/format/byte_io.hpp`). The sender's identity comes from the message envelope.
+
+A receiving drone keeps a `NeighborTable`: the latest accepted report from each neighbor and the tick it was delivered.
+
+- Age is `now - receipt_tick`, in ticks: it grows by one each tick without a message and resets when a newer report arrives.
+- A report is accepted only if its send tick is newer than the one held. An older one is counted as stale and an equal one as a duplicate, and neither changes the table, so channel jitter cannot make a neighbor's state go backwards or reset its age.
+- A payload of the wrong size or version, or with a non-finite value or negative sigma, is counted as malformed and dropped. A sender outside the table is counted and ignored.
+
+Limitations: a report carries only position, velocity, and a scalar position sigma, not a full covariance, and nothing authenticates the sender.

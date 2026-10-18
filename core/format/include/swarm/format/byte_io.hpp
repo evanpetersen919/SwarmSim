@@ -1,7 +1,7 @@
 #pragma once
 
-// Little-endian byte helpers shared by the binary formats in core/format. Internal: not installed
-// and not part of the public headers.
+// Little-endian byte helpers shared by the project's binary formats: the run log, scene data, and
+// neighbor messages. Fixed byte order regardless of the host, no struct copying, no exceptions.
 
 #include <cstdint>
 #include <cstring>
