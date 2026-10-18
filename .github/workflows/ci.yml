@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build clang
       - run: cmake --preset ${{ matrix.preset }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
-      - run: bash scripts/ci_run.sh cmake --build --preset ${{ matrix.preset }}
+      - run: bash scripts/ci_run.sh cmake --build --preset ${{ matrix.preset }} -- -k 0
       - run: bash scripts/ci_run.sh ctest --preset ${{ matrix.preset }}
 
   tsan:
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
       - run: cmake --preset tsan
-      - run: bash scripts/ci_run.sh cmake --build --preset tsan
+      - run: bash scripts/ci_run.sh cmake --build --preset tsan -- -k 0
       - run: bash scripts/ci_run.sh ctest --preset tsan
 
   cxx20:
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
       - run: cmake --preset release -DCMAKE_CXX_STANDARD=20
-      - run: bash scripts/ci_run.sh cmake --build --preset release
+      - run: bash scripts/ci_run.sh cmake --build --preset release -- -k 0
 
   determinism:
     runs-on: ubuntu-24.04
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
       - run: cmake --preset release
-      - run: bash scripts/ci_run.sh cmake --build --preset release
+      - run: bash scripts/ci_run.sh cmake --build --preset release -- -k 0
       - name: Record on one thread, verify on eight
         run: |
           sim=./build/release/apps/swarm_sim

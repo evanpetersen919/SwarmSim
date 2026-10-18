@@ -118,23 +118,41 @@ class LinearKalmanFilter {
     s = 0.5 * (s + s.transpose());
     result.innovation_covariance = s;
 
-    const Eigen::LDLT<SquareMatrix<M>> ldlt(s);
-    const double scale = s.cwiseAbs().maxCoeff();
-    if (ldlt.info() != Eigen::Success || !(scale > 0.0) ||
-        !(ldlt.vectorD().minCoeff() > 1e-12 * scale)) {
-      result.status = UpdateStatus::kSingular;
-      return result;
-    }
+    Eigen::Matrix<double, N, M> k;
+    if constexpr (M == 1) {
+      // A scalar innovation covariance is divided directly. Factoring a 1x1 matrix with LDLT is
+      // correct, but GCC 13 at -O3 reports a false array-bounds warning from the unreachable
+      // pivot-swap path, and the direct form is simpler anyway.
+      const double s_value = s(0, 0);
+      if (!(s_value > 0.0)) {
+        result.status = UpdateStatus::kSingular;
+        return result;
+      }
+      result.nis = result.innovation(0) * result.innovation(0) / s_value;
+      if (result.nis > nis_gate) {
+        result.status = UpdateStatus::kGated;
+        return result;
+      }
+      k = p_ * h.transpose() / s_value;
+    } else {
+      const Eigen::LDLT<SquareMatrix<M>> ldlt(s);
+      const double scale = s.cwiseAbs().maxCoeff();
+      if (ldlt.info() != Eigen::Success || !(scale > 0.0) ||
+          !(ldlt.vectorD().minCoeff() > 1e-12 * scale)) {
+        result.status = UpdateStatus::kSingular;
+        return result;
+      }
 
-    result.nis = result.innovation.dot(ldlt.solve(result.innovation));
-    if (result.nis > nis_gate) {
-      result.status = UpdateStatus::kGated;
-      return result;
-    }
+      result.nis = result.innovation.dot(ldlt.solve(result.innovation));
+      if (result.nis > nis_gate) {
+        result.status = UpdateStatus::kGated;
+        return result;
+      }
 
-    // K' = S^-1 H P, so K = (S^-1 H P)'. S and P are symmetric.
-    const Eigen::Matrix<double, M, N> k_transpose = ldlt.solve(h * p_);
-    const Eigen::Matrix<double, N, M> k = k_transpose.transpose();
+      // K' = S^-1 H P, so K = (S^-1 H P)'. S and P are symmetric.
+      const Eigen::Matrix<double, M, N> k_transpose = ldlt.solve(h * p_);
+      k = k_transpose.transpose();
+    }
     x_ += k * result.innovation;
     const SquareMatrix<N> i_kh = SquareMatrix<N>::Identity() - k * h;
     p_ = i_kh * p_ * i_kh.transpose() + k * r * k.transpose();
