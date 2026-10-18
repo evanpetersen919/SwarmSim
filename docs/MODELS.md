@@ -343,11 +343,13 @@ Limitations: the consensus is a single-round weighted mean, not an iterated prot
 
 Source: `core/sim/include/swarm/control/separation.hpp`. Status: unit-tested.
 
-Each neighbor with a position estimate and uncertainty sigma has the margin `d_safe + kappa * sigma`. A neighbor outside its margin contributes nothing. Inside it, the contribution points away from the neighbor with magnitude `gain * (margin - distance)`, capped at `max_accel` per neighbor; the sum is capped at `max_accel`. Stale predictions carry a larger sigma, so the margin widens as information ages. When two positions coincide, the higher slot is pushed along +x and the lower along -x, so the pair is still pushed apart in opposite directions.
+Each neighbor with a position estimate and uncertainty sigma has the margin `min(d_safe + kappa * sigma, max_margin)`. A neighbor outside its margin contributes nothing. Inside it, the contribution points away from the neighbor with magnitude `gain * (margin - distance)`, capped at `max_accel` per neighbor; the sum is capped at `max_accel`. Stale predictions carry a larger sigma, so the margin widens as information ages. When two positions coincide, the higher slot is pushed along +x and the lower along -x, so the pair is still pushed apart in opposite directions.
 
 `combine_accel` adds the formation command to the separation command with the separation term taking priority: the separation term is kept whole and the formation term is limited to the headroom left under `max_accel`. A plain clamped sum does not work. With the default parameters, two drones flying head-on at 5 m/s each reached 0.03 m apart under a clamped sum, because the formation pull cancelled most of the repulsion at the point where it was needed.
 
 Validation: 500 seeded pairs on head-on courses with perfect information, each sent to the other's start point, run in `tests/unit/test_separation.cpp`. With the priority combination and a 5 m/s speed limit the smallest separation across all runs is 3.67 m, and the test requires more than 3.0 m.
+
+The cap exists because of a failure found while testing the brain: after reports stopped, the neighbors' predicted sigma grew without bound, the margin grew with it, and a drone in safe hold was pushed away at the acceleration limit until it reached its speed limit. Formation slots must therefore be farther apart than `max_margin` (default 12 m); the drone brain rejects a formation that is not.
 
 Limitations: the margin does not depend on closing speed. At a 15 m/s speed limit, a closing speed of 30 m/s exceeds what 12 m/s^2 can stop within the 8 m margin, and the same test measures 0.13 m; a test records this. The rule uses estimates, so it is a margin and not a guarantee. It acts along the line between the pair only, so two drones on an exact head-on course are held apart but do not pass each other.
 
@@ -363,12 +365,32 @@ Two conditions are tracked, each as a latch with separate enter and exit thresho
 | State | Entered when | reference_boost | speed | margin | gain | hold |
 |---|---|---|---|---|---|---|
 | Nominal | both good | 0 | 1.0 | 1.0 | 1.0 | no |
-| Degraded comms | comms bad only | 0.5 | 0.6 | 1.5 | 1.0 | no |
-| Degraded navigation | navigation bad (alone, or with comms bad before the hold time) | 0 | 0.5 | 1.5 | 0.5 | no |
-| Safe hold | both bad for `hold_ticks` (150), or pose sigma above `sigma_abort` (15 m) | 0 | 0 | 2.0 | 0 | yes |
+| Degraded comms | comms bad only | 0.5 | 0.6 | 1.25 | 1.0 | no |
+| Degraded navigation | navigation bad (alone, or with comms bad before the hold time) | 0 | 0.5 | 1.25 | 0.5 | no |
+| Safe hold | both bad for `hold_ticks` (150), or pose sigma above `sigma_abort` (15 m) | 0 | 0 | 1.25 | 0 | yes |
 
 `reference_boost` is the fraction of `(1 - alpha)` moved onto the mission reference. The scales are starting values, not tuned.
 
 Every transition other than into safe hold waits for `min_dwell_ticks` (50) in the current state, except the first transition from the initial state. Safe hold is left only after both conditions have stayed good for `recovery_ticks` (150); a relapse restarts that window. A property test over random inputs checks that no transition other than into safe hold comes sooner than the dwell after the previous one.
 
 Limitations: the thresholds are expressed in ticks and fractions and are not derived from the channel or sensor models. The machine does not distinguish a jammed link from a failed neighbor. Navigation is judged from fix age and pose sigma only; it does not compare against neighbor-reported positions.
+
+## Drone brain
+
+Source: `core/sim/include/swarm/control/drone_brain.hpp`. Status: unit-tested.
+
+The decision-making half of a drone (ADR 0005). Its inputs each tick are the IMU sample, the position fix, and the payloads delivered to it; it never sees the vehicle's true state. In order, each step:
+
+1. Advances the pose estimator with the IMU sample and fuses the fix if there is one.
+2. Files the delivered neighbor reports in the neighbor table and passes accepted ones to that neighbor's predictor. The predictor kind comes from the configuration. Malformed, stale, duplicate, and unknown-sender payloads are counted and ignored.
+3. Counts neighbors whose latest report is no older than `staleness_ticks` and updates the fallback machine with that count, the ticks since the last fix, and the pose sigma.
+4. Computes the command. The formation pull comes from the formation target (the mission reference at `tick * dt` blended with the neighbor consensus, with the reference weight raised by the state's `reference_boost`) and the PD law with the gains scaled by the state's `gain_scale`. The separation term uses neighbor sigma plus the drone's own sigma and the margin scaled by the state. The two are combined with separation taking priority under the acceleration limit.
+5. Every `report_period_ticks`, encodes its own estimate (not truth) as a neighbor report for broadcast.
+
+In safe hold the target is the position held when the state was entered, at zero velocity. In states with a speed scale below 1 a speed limiter removes forward acceleration above the limit and brakes the excess; nominal flight is bounded only by the vehicle, because closing a gap needs a brief excess over the cruise speed. `separation.max_accel` is also the acceleration limit of the command and should equal the airframe limit.
+
+`hash_state` folds in the fallback machine, the pose estimate and counters, the neighbor table counters and receipt ticks, each neighbor's current estimate, the hold position, the last target, and the last command. The pose estimator's covariance and the predictors' internal state enter only through the sigmas they report, so two brains whose hidden covariances differ but whose reported values agree would hash equal.
+
+Validation: driven by synthetic sensor data with a point-mass stand-in for the vehicle. A lone drone follows the mission; a drone in place among consistent neighbors commands under 0.1 m/s^2; silence moves it to degraded comms after the staleness limit and back; losing both fixes and reports passes through degraded navigation to safe hold, where it stops, and recovers to nominal when both return; identical inputs give bit-identical commands and hashes, and interleaved brains do not interfere.
+
+Limitations: the thresholds, scales, and gains are starting values. The brain does not avoid terrain or obstacles and does not control yaw. Position fixes are the only correction to the pose estimate, so a long fix outage lets the estimate drift as the accelerometer bias allows.

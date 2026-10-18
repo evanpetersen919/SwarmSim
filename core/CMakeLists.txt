@@ -33,7 +33,8 @@ add_library(swarm_core STATIC
   sim/src/control/mission.cpp
   sim/src/control/formation_control.cpp
   sim/src/control/separation.cpp
-  sim/src/control/fallback.cpp)
+  sim/src/control/fallback.cpp
+  sim/src/control/drone_brain.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)

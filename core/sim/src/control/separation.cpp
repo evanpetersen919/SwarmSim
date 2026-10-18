@@ -1,5 +1,6 @@
 #include "swarm/control/separation.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -18,6 +19,7 @@ Vec3 separation_accel(std::uint32_t self, const Vec3& own_position,
                       const SeparationParams& params) {
   const auto positive = [](double v) { return std::isfinite(v) && v > 0.0; };
   if (!positive(params.d_safe) || !positive(params.gain) || !positive(params.max_accel) ||
+      !(std::isfinite(params.max_margin) && params.max_margin >= params.d_safe) ||
       !(std::isfinite(params.kappa) && params.kappa >= 0.0)) {
     throw std::invalid_argument("SeparationParams: invalid parameter");
   }
@@ -30,7 +32,7 @@ Vec3 separation_accel(std::uint32_t self, const Vec3& own_position,
     if (n.slot == self || !finite(n.position) || !(std::isfinite(n.sigma) && n.sigma >= 0.0)) {
       continue;
     }
-    const double margin = params.d_safe + params.kappa * n.sigma;
+    const double margin = std::min(params.d_safe + params.kappa * n.sigma, params.max_margin);
     const Vec3 away = own_position - n.position;
     const double d = norm(away);
     if (!(d < margin)) {

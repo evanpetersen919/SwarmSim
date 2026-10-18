@@ -52,6 +52,20 @@ const FallbackBehavior& FallbackFsm::behavior_of(FallbackState state) const {
   return params_.nominal;
 }
 
+void FallbackFsm::hash_state(Fnv1a64& hash) const {
+  hash.update_u64(static_cast<std::uint64_t>(state_));
+  hash.update_u64(comms_bad_ ? 1 : 0);
+  hash.update_u64(navigation_bad_ ? 1 : 0);
+  hash.update_u64(has_dwell_ ? 1 : 0);
+  hash.update_u64(state_since_);
+  hash.update_u64(both_bad_ ? 1 : 0);
+  hash.update_u64(both_bad_since_);
+  hash.update_u64(all_good_ ? 1 : 0);
+  hash.update_u64(all_good_since_);
+  hash.update_u64(started_ ? 1 : 0);
+  hash.update_u64(last_tick_);
+}
+
 void FallbackFsm::enter(FallbackState next, std::uint64_t tick) {
   state_ = next;
   state_since_ = tick;

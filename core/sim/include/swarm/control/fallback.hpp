@@ -1,10 +1,13 @@
 #pragma once
 
 // Controller headers may include only this directory, swarm/estimation/, sensor_data.hpp,
-// vec3.hpp, drone_command.hpp, and swarm/format/byte_io.hpp. They must never include vehicle truth.
+// vec3.hpp, drone_command.hpp, and swarm/format/{byte_io,hash}.hpp. They must never include
+// vehicle truth.
 // Enforced by scripts/check_core_invariants.sh.
 
 #include <cstdint>
+
+#include "swarm/format/hash.hpp"
 
 namespace swarm {
 
@@ -56,9 +59,9 @@ struct FallbackParams {
   std::uint64_t recovery_ticks = 150;  // both good for this long leaves safe hold
 
   FallbackBehavior nominal{0.0, 1.0, 1.0, 1.0, false};
-  FallbackBehavior degraded_comms{0.5, 0.6, 1.5, 1.0, false};
-  FallbackBehavior degraded_navigation{0.0, 0.5, 1.5, 0.5, false};
-  FallbackBehavior safe_hold{0.0, 0.0, 2.0, 0.0, true};
+  FallbackBehavior degraded_comms{0.5, 0.6, 1.25, 1.0, false};
+  FallbackBehavior degraded_navigation{0.0, 0.5, 1.25, 0.5, false};
+  FallbackBehavior safe_hold{0.0, 0.0, 1.25, 0.0, true};
 };
 
 class FallbackFsm {
@@ -77,6 +80,9 @@ class FallbackFsm {
   bool navigation_bad() const { return navigation_bad_; }
   const FallbackBehavior& behavior() const { return behavior_of(state_); }
   const FallbackBehavior& behavior_of(FallbackState state) const;
+
+  // Folds every field that affects the machine's future behavior into `hash`.
+  void hash_state(Fnv1a64& hash) const;
 
  private:
   void enter(FallbackState next, std::uint64_t tick);

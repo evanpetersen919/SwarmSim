@@ -1,7 +1,8 @@
 #pragma once
 
 // Controller headers may include only this directory, swarm/estimation/, sensor_data.hpp,
-// vec3.hpp, drone_command.hpp, and swarm/format/byte_io.hpp. They must never include vehicle truth.
+// vec3.hpp, drone_command.hpp, and swarm/format/{byte_io,hash}.hpp. They must never include
+// vehicle truth.
 // Enforced by scripts/check_core_invariants.sh.
 
 #include <cstdint>
@@ -12,10 +13,11 @@
 namespace swarm {
 
 struct SeparationParams {
-  double d_safe = 8.0;      // meters, the margin for a neighbor known exactly
-  double kappa = 2.0;       // meters of extra margin per meter of position sigma
-  double gain = 4.0;        // m/s^2 of repulsion per meter of penetration
-  double max_accel = 12.0;  // m/s^2, cap on the repulsion from each neighbor and on the sum
+  double d_safe = 8.0;       // meters, the margin for a neighbor known exactly
+  double kappa = 2.0;        // meters of extra margin per meter of position sigma
+  double max_margin = 12.0;  // meters, the margin never grows past this
+  double gain = 4.0;         // m/s^2 of repulsion per meter of penetration
+  double max_accel = 12.0;   // m/s^2, cap on the repulsion from each neighbor and on the sum
 };
 
 // A neighbor as separation sees it: its slot (used only to break ties), the estimated position,
@@ -28,8 +30,11 @@ struct SeparationNeighbor {
 
 // Repulsive acceleration for the drone in slot `self` at `own_position`.
 //
-// A neighbor with uncertainty sigma has the margin d_safe + kappa * sigma. A neighbor farther away
-// than its margin contributes nothing. Inside it, the contribution points away from the neighbor
+// A neighbor with uncertainty sigma has the margin min(d_safe + kappa * sigma, max_margin). The cap
+// matters: a neighbor that has not been heard from for a long time has a large sigma, and without
+// a cap its margin would grow until it pushed this drone away from where the formation put it.
+// Formation slots must be farther apart than max_margin. A neighbor farther away than its margin
+// contributes nothing. Inside it, the contribution points away from the neighbor
 // with magnitude gain * (margin - distance), capped at max_accel. The contributions are summed and
 // the sum is capped at max_accel.
 //
@@ -37,7 +42,8 @@ struct SeparationNeighbor {
 // lower one, so the pair still receives equal and opposite pushes. Neighbors that are not finite,
 // have a negative sigma, or share this drone's slot are ignored.
 //
-// Throws std::invalid_argument if the parameters are not finite and positive (kappa may be zero)
+// Throws std::invalid_argument if the parameters are not finite and positive (kappa may be zero,
+// and max_margin must be at least d_safe)
 // or `own_position` is not finite.
 Vec3 separation_accel(std::uint32_t self, const Vec3& own_position,
                       const std::vector<SeparationNeighbor>& neighbors,

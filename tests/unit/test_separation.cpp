@@ -204,3 +204,16 @@ TEST(Separation, TheCombinedCommandGivesRepulsionPriorityWithinTheLimit) {
   EXPECT_NEAR(limited.x, 6.0, 1e-12);  // headroom 6
   EXPECT_THROW(swarm::combine_accel(pull, push, 0.0), std::invalid_argument);
 }
+
+TEST(Separation, TheMarginNeverGrowsPastItsCap) {
+  SeparationParams p;
+  p.max_margin = 10.0;
+  // A neighbor with an enormous sigma is treated as having the capped margin, so 11 m away is free.
+  EXPECT_EQ(swarm::norm(swarm::separation_accel(0, {0, 0, 0}, {at(1, {11, 0, 0}, 1000.0)}, p)),
+            0.0);
+  const Vec3 a = swarm::separation_accel(0, {0, 0, 0}, {at(1, {9, 0, 0}, 1000.0)}, p);
+  EXPECT_NEAR(a.x, -p.gain * 1.0, 1e-12);
+
+  p.max_margin = p.d_safe - 1.0;  // a cap below the base margin is invalid
+  EXPECT_THROW(swarm::separation_accel(0, {}, {}, p), std::invalid_argument);
+}

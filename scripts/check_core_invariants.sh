@@ -6,8 +6,8 @@
 #   - core/format (compiled into the Unreal plugin) includes Eigen or yaml-cpp,
 #   - estimator or controller sources include anything outside their allowed lists, which keeps
 #     ground truth out of them: estimators may use only estimation headers, sensor output types,
-#     vector types, and the byte helpers; controllers may also use control headers and the command
-#     type.
+#     vector types, and the byte helpers; controllers may also use control headers, the hash
+#     helper, and the command type.
 #
 # usage: check_core_invariants.sh [repository root]     (default: the repository this lives in)
 set -u
@@ -60,7 +60,7 @@ check_boundary Estimator \
   'swarm/(estimation/|sensor_data\.hpp|vec3\.hpp|format/byte_io\.hpp)' \
   core/sim/include/swarm/estimation core/sim/src/estimation
 check_boundary Controller \
-  'swarm/(control/|estimation/|sensor_data\.hpp|vec3\.hpp|drone_command\.hpp|format/byte_io\.hpp)' \
+  'swarm/(control/|estimation/|sensor_data\.hpp|vec3\.hpp|drone_command\.hpp|format/(byte_io|hash)\.hpp)' \
   core/sim/include/swarm/control core/sim/src/control
 
 [ "$status" -eq 0 ] && echo "core invariants: ok"
