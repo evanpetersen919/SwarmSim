@@ -425,3 +425,15 @@ A scenario is a YAML file with `version: 1` and a seed. It holds the scene (fiel
 Rules, from [ADR 0007](decisions/0007-strict-versioned-scenario-files.md): unknown keys are errors; all problems are reported with a path and line; scalars are parsed by the project, decimal only; times are in seconds and must be a whole number of ticks; the existing model validators run on the result. `canonical_text` writes a scenario back out with enough digits to round-trip, and the loader reads that text to an identical scenario.
 
 Limitations: the schema covers what Phase 5 needs. Terrain relief (`amplitude_m`) applies to hills only; a field is flat. Obstacle size ranges, the separation and fallback parameters, and the sensor noise parameters are not in the file and use the defaults of their structs. Ablation switches are not in version 1.
+
+## Scenario world
+
+Source: `core/scenario/include/swarm/scenario/world.hpp`. Status: unit-tested.
+
+`build_world` turns a scenario into a runnable world: the scene, the simulation configuration, and one drone configuration per drone. The scene is generated from the scenario seed (terrain, then obstacles). The obstacle-free area is centered on the first waypoint, so `scene.obstacles.spawn_clear_radius_m` clears the area where the swarm assembles. Terrain and obstacles do not depend on the number of drones.
+
+Start positions are a grid of `start.columns` columns centered on the first waypoint, with each drone moved by a random amount up to `jitter_m` in x and y and up to `altitude_jitter_m` in z. The draws come from their own stream (`kStreamStart`), three per drone in drone order regardless of the jitter amounts, so changing the jitter changes the positions but never the draws. Two drones in adjacent cells start at least `spacing_m - 2 * jitter_m` apart; the test checks this over 100 seeds.
+
+`build_world` rejects a formation whose slots are not farther apart than the separation margin (12 m by default), with a message in terms of `swarm.formation.spacing_m`, and rejects the oracle predictor until it is implemented. `make_simulation(threads)` returns a fresh simulation at tick 0 that refers to the world's scene; the world must outlive it. The hashes of a built simulation are identical for 1, 2, 4, and 8 threads.
+
+Limitations: the start layout is a flat-grid generator only, in absolute altitude; it does not follow the terrain, so a scenario over hills must set `altitude_m` above the relief. Obstacles are not avoided by the drones.

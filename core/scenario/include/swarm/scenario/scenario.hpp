@@ -13,9 +13,9 @@
 
 namespace swarm {
 
-// Where the drones start: a grid of `columns` columns, `spacing_m` apart, in the plane of the
-// terrain, centered on the origin, each moved by up to `jitter_m` in x and y and by up to
-// `altitude_jitter_m` in z around `altitude_m`.
+// Where the drones start: a grid of `columns` columns, `spacing_m` apart, centered on the first
+// waypoint of the mission, each drone moved by up to `jitter_m` in x and y and by up to
+// `altitude_jitter_m` in z around the altitude `altitude_m`.
 struct StartLayout {
   std::uint32_t columns = 4;
   double spacing_m = 35.0;
