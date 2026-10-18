@@ -66,3 +66,26 @@ bias(0) ~ N(0, initial_sigma^2)
 Random draws: each IMU has its own stream (`kStreamImuBase + drone id`) and draws eight normals per sample whatever the parameters, so changing one channel's parameters never shifts another channel's noise.
 
 Limitations: no attitude, so no tilt-dependent gravity coupling and no cross-axis effects. No scale-factor error, misalignment, temperature dependence, or saturation. No time-correlated (Gauss-Markov) bias.
+
+## Scene data and terrain
+
+Source: `core/format/include/swarm/format/scene.hpp`, `core/sim/include/swarm/terrain.hpp`. Status: unit-tested.
+
+A scene is a terrain heightfield plus box and vertical-cylinder obstacles, stored as plain data (`SceneData`) in `core/format` so that the Unreal plugin can rebuild the exact geometry the LiDAR saw.
+
+Terrain is a regular grid of height samples, centered on the origin. Each cell is split into two triangles, `(a, b, c)` and `(a, c, d)` for corners `a=(i,j)`, `b=(i+1,j)`, `c=(i+1,j+1)`, `d=(i,j+1)`. Height queries, ray casts, and the Unreal mesh all use this triangulation. Bilinear interpolation is not used, because it disagrees with the mesh inside a cell.
+
+Generation:
+
+- `field`: exactly flat at height 0.
+- `hills`: fractal 2D gradient noise. Each octave doubles the frequency and multiplies the amplitude by `persistence`; the sum is divided by the total amplitude, so every height stays within `+-amplitude`. Gradients come from a table of eight fixed directions selected by a splitmix64 hash of (seed, lattice x, lattice y). No random-number stream or libm function is involved, so the result is identical across compilers and platforms, and a golden hash in the tests enforces that.
+
+| Parameter | Meaning |
+|---|---|
+| `size_x`, `size_y` | Extent in meters, rounded up to whole cells |
+| `cell_size` | Grid spacing in meters (at most 4096 cells per axis) |
+| `amplitude` | Peak height in meters |
+| `feature_scale` | Wavelength of the first octave in meters |
+| `octaves`, `persistence` | Detail levels (1 to 16) and amplitude ratio between them |
+
+Limitations: terrain is a single-valued height surface, so there are no overhangs, caves, or water.
