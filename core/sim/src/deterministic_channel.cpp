@@ -106,6 +106,14 @@ bool DeterministicChannel::jammed(const Message& msg, std::uint64_t now_tick) {
   return false;
 }
 
+void DeterministicChannel::record(MessageOutcome outcome, const Message& msg,
+                                  std::uint64_t send_tick) {
+  if (sink_ != nullptr) {
+    const std::uint64_t deliver = outcome == MessageOutcome::kScheduled ? msg.deliver_tick : 0;
+    sink_->push_back({outcome, msg.sender, msg.receiver, send_tick, deliver});
+  }
+}
+
 void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
   if (msg.sender >= num_endpoints_ || msg.receiver >= num_endpoints_) {
     throw std::out_of_range("DeterministicChannel: endpoint id out of range");
@@ -124,6 +132,7 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
     }
     if (sent_this_tick_[msg.sender] >= config_.max_msgs_per_sender_per_tick) {
       ++stats_.dropped_rate;
+      record(MessageOutcome::kDroppedRate, msg, now_tick);
       return;
     }
     ++sent_this_tick_[msg.sender];
@@ -131,11 +140,13 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
 
   if (should_drop(msg.sender, msg.receiver)) {
     ++stats_.dropped_loss;
+    record(MessageOutcome::kDroppedLoss, msg, now_tick);
     return;
   }
 
   if (jammed(msg, now_tick)) {
     ++stats_.dropped_jam;
+    record(MessageOutcome::kDroppedJam, msg, now_tick);
     return;
   }
 
@@ -146,6 +157,7 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
     delay += jitter_rng_.below(config_.jitter_ticks + 1U);
   }
   msg.deliver_tick = now_tick + delay;
+  record(MessageOutcome::kScheduled, msg, now_tick);
   queue_.push(std::move(msg));
 }
 

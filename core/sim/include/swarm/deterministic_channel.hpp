@@ -52,7 +52,13 @@ class DeterministicChannel : public IChannel {
   std::vector<Message> take_inbox(std::uint32_t receiver) override;
   const ChannelStats& stats() const override { return stats_; }
 
+  // When set, send() appends one event per message. The vector must outlive the channel or be
+  // cleared with set_event_sink(nullptr). Events are in send order, which is fixed, so they are
+  // identical for every thread count. With no sink the channel behaves exactly as before.
+  void set_event_sink(std::vector<ChannelEvent>* sink) { sink_ = sink; }
+
  private:
+  void record(MessageOutcome outcome, const Message& msg, std::uint64_t send_tick);
   bool should_drop(std::uint32_t sender, std::uint32_t receiver);
   bool jammed(const Message& msg, std::uint64_t now_tick);
 
@@ -74,6 +80,7 @@ class DeterministicChannel : public IChannel {
   // threads for different receivers.
   std::vector<std::vector<Message>> inboxes_;
   ChannelStats stats_;
+  std::vector<ChannelEvent>* sink_ = nullptr;
 };
 
 }  // namespace swarm

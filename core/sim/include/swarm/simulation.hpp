@@ -43,6 +43,8 @@ class Simulation {
   std::size_t agent_count() const { return agents_.size(); }
   const IAgent& agent(std::size_t index) const { return *agents_[index]; }
   const IChannel& channel() const { return channel_; }
+  // See DeterministicChannel::set_event_sink. Set it before the first step.
+  void set_event_sink(std::vector<ChannelEvent>* sink) { channel_.set_event_sink(sink); }
 
  private:
   SimConfig config_;

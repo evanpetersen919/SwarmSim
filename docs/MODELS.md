@@ -437,3 +437,13 @@ Start positions are a grid of `start.columns` columns centered on the first wayp
 `build_world` rejects a formation whose slots are not farther apart than the separation margin (12 m by default), with a message in terms of `swarm.formation.spacing_m`, and rejects the oracle predictor until it is implemented. `make_simulation(threads)` returns a fresh simulation at tick 0 that refers to the world's scene; the world must outlive it. The hashes of a built simulation are identical for 1, 2, 4, and 8 threads.
 
 Limitations: the start layout is a flat-grid generator only, in absolute altitude; it does not follow the terrain, so a scenario over hills must set `altitude_m` above the relief. Obstacles are not avoided by the drones.
+
+## Channel message events
+
+Source: `core/sim/include/swarm/channel.hpp`, `deterministic_channel.hpp`. Status: unit-tested.
+
+`DeterministicChannel::set_event_sink` (and `Simulation::set_event_sink`) makes the channel append one `ChannelEvent` for every message it is given: scheduled with its delivery tick, or dropped by the loss model, the rate limit, or a jammer. Events carry the sender, the receiver, the send tick, and the delivery tick (zero for a dropped message). They are appended on the barrier thread in send order, so the list is identical for every thread count. With no sink set the channel is unchanged: a test compares a watched and an unwatched channel under loss, jitter, a rate limit, and a jammer and finds the same arrivals and statistics.
+
+Latency of a delivered message is `deliver_tick - send_tick`. Every scheduled message arrives at its scheduled tick, so the scheduled tick is the delivery tick; a test matches the scheduled ticks against the ticks at which messages actually arrive. A message scheduled for a tick after the end of a run is still in flight at the end; metrics exclude those.
+
+The sink is on the concrete class and not on `IChannel`: the real-socket backend will report what it can observe in its own way.
