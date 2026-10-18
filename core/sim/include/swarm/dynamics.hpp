@@ -1,5 +1,6 @@
 #pragma once
 
+#include "swarm/drone_command.hpp"
 #include "swarm/vec3.hpp"
 
 namespace swarm {
@@ -17,11 +18,6 @@ struct DroneState {
   Vec3 vel;
   Vec3 accel;  // acceleration actually applied during the last step
   double yaw = 0.0;
-  double yaw_rate = 0.0;
-};
-
-struct DroneCommand {
-  Vec3 accel;  // desired acceleration, world frame, gravity already compensated
   double yaw_rate = 0.0;
 };
 

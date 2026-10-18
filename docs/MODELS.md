@@ -293,3 +293,17 @@ The integration test runs eight drones that maneuver (a new random horizontal ac
 Both extrapolating predictors are far better than holding the last state. The Kalman predictor is **not** better than dead reckoning here: with maneuvering neighbors and the default process noise it is about 3% worse. The advantage in the straight-flight table above does not carry over to this scenario. This is a finding, not something tuned away: whether prediction beats dead reckoning, and by how much, depends on how well the process noise matches the neighbors' maneuvering, and it is left to the ablation phase to map that out.
 
 Limitations: the constant-velocity model, no gating or outlier handling, the report treated as independent of the filter's prior (slightly overconfident), and a single scalar position sigma in each report.
+
+## Formation shapes
+
+Source: `core/sim/include/swarm/control/formation.hpp`. Status: unit-tested.
+
+A formation is a list of slot offsets, one per drone, in the world frame and centered so that they average to the origin. The closest pair of slots is exactly `spacing` apart. Offsets use only basic arithmetic and fixed constants, so they are identical on every platform.
+
+| Shape | Layout |
+|---|---|
+| Line | One row along y, in slot order |
+| Wedge | A V: slot 0 is the apex at the front (largest x), later slots alternate sides and fall back one row per pair, with the arms making 60 degrees |
+| Grid | Rows of `c` columns, where `c` is the smallest integer with `c * c >= count`; the last row may be partial |
+
+Offsets do not rotate with the direction of travel. A circle needs trigonometry and is left for later.
