@@ -487,3 +487,20 @@ What the others do with a silent neighbor, measured in `tests/integration/test_d
 A neighbor that is silent because of a jam, and not failed, also gets the last-position rule once it has been silent for three seconds. In the jam scenarios of the swarm tests this changed neither the smallest separation (1.92 m) nor the final slot error (0.43 m). A longer jam would make drones keep clear of positions where their neighbors no longer are, which is the conservative choice.
 
 Limitations: the failure is instant and total. Failures during assembly were not studied separately: the slot error while a formation is still assembling is dominated by assembly, and the measurements above fail a drone after it has settled.
+
+## Metrics: formation error, separation, collisions
+
+Source: `core/scenario/include/swarm/scenario/metrics.hpp`. Status: unit-tested on hand-built logs and integration-tested on a recorded run.
+
+`analyze_log` takes the bytes of a scenario log and nothing else. The scenario it needs (mission, formation, metric settings) is read from the log header, and the per-tick state from the snapshots. Records without drone state, which a snapshot stride produces, are skipped for these metrics. Sums are taken in tick order and then drone order, with only addition, division, and `sqrt`, so the result is reproducible.
+
+- **Slot error and formation RMSE.** The slot of drone `i` is `r(t) + o_i`, with `r` the mission reference and `o_i` the formation offset, computed with the same `MissionPath` and `make_formation` the drones use. The state in the record of tick `k` is the state after that tick's step, so it is evaluated at time `(k + 1) * dt`. The RMSE is over alive drones and over records. It is reported for the whole run and, separately, for records at or after `metrics.settle_s`, because the whole-run value includes the assembly transient. Failed drones are excluded. A value that cannot be computed (no record at or after the settle time) is empty and not zero.
+- **Minimum separation.** The smallest true distance between any two drones over all records with state, failed drones included, since a failed drone is still an object in the way.
+- **Collisions.** Counted as episodes per pair: a pair starts one when its distance falls below `metrics.collision_radius_m` and ends it when the distance is back at or above the radius. A distance equal to the radius is not inside. A pair already inside in the first record starts an episode there. The count is over all pairs.
+- **Alive at end.** Alive drones in the last record with state.
+
+Unusable logs return a status and a message and no values: not a log, a demo log, a scenario that does not load or disagrees with the header, a snapshot that does not decode (the message names the tick) or has the wrong drone count, and a log with no records.
+
+Validation: hand-built logs with known positions give zero error, an exact constant error, a hand-computed mix, and the expected whole-run and settled values; the minimum separation equals a brute-force minimum over a random log; collision episodes are counted once however long they last, twice for two dips, and not at all for a distance equal to the radius. On a recorded run the values match a computation done separately from the simulation's own state to 1e-9, and a stride can only miss the closest approach, never report a smaller one.
+
+Limitations: with a snapshot stride the closest approach between recorded ticks is not seen, so minimum separation is an upper bound on the true minimum and collisions can be missed; the default stride of 1 sees every tick. The pairwise loops are quadratic in the drone count, which is fine at the sizes used here.

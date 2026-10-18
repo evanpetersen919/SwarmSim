@@ -1,0 +1,119 @@
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <string>
+#include <vector>
+
+#include "swarm/control/mission.hpp"
+#include "swarm/drone_agent.hpp"
+#include "swarm/scenario/metrics.hpp"
+#include "swarm/scenario/run.hpp"
+#include "swarm/scenario/world.hpp"
+
+using swarm::Scenario;
+using swarm::Vec3;
+
+namespace {
+
+constexpr std::uint64_t kTicks = 600;  // 12 s
+
+Scenario scenario() {
+  std::ifstream in(std::string(SWARM_SCENARIO_DIR) + "/formation_jam.yaml", std::ios::binary);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  swarm::LoadResult r = swarm::load_scenario(text);
+  EXPECT_TRUE(r.ok());
+  Scenario s = r.scenario;
+  s.drones = 6;
+  s.duration_ticks = kTicks;
+  s.metrics.settle_s = 6.0;
+  s.faults.push_back({3, 400});
+  return s;
+}
+
+}  // namespace
+
+TEST(MetricsRun, AnalyzingARecordedRunMatchesAnIndependentComputationFromTheSimulation) {
+  const Scenario s = scenario();
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(s, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome out = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(out.ok()) << out.message;
+
+  // The same quantities from the simulation's own state, computed here, not by the library.
+  const swarm::ScenarioWorld world = swarm::build_world(s);
+  const auto sim = world.make_simulation(1);
+  const swarm::MissionPath path(s.mission);
+  double sum_all = 0.0, sum_settled = 0.0;
+  std::uint64_t n_all = 0, n_settled = 0;
+  double min_sep = std::numeric_limits<double>::infinity();
+  for (std::uint64_t tick = 0; tick < kTicks; ++tick) {
+    sim->step();
+    const double time = static_cast<double>(tick + 1) * s.dt;
+    const Vec3 center = path.at(time).position;
+    for (std::size_t i = 0; i < 6; ++i) {
+      const auto& a = dynamic_cast<const swarm::DroneAgent&>(sim->agent(i));
+      if (a.alive()) {
+        const double e = swarm::distance(a.truth().pos, center + world.offsets[i]);
+        sum_all += e * e;
+        ++n_all;
+        if (time >= s.metrics.settle_s) {
+          sum_settled += e * e;
+          ++n_settled;
+        }
+      }
+      for (std::size_t j = i + 1; j < 6; ++j) {
+        const auto& b = dynamic_cast<const swarm::DroneAgent&>(sim->agent(j));
+        min_sep = std::min(min_sep, swarm::distance(a.truth().pos, b.truth().pos));
+      }
+    }
+  }
+
+  ASSERT_TRUE(out.result.formation_rmse.has_value());
+  ASSERT_TRUE(out.result.formation_rmse_settled.has_value());
+  ASSERT_TRUE(out.result.min_separation.has_value());
+  EXPECT_NEAR(*out.result.formation_rmse, std::sqrt(sum_all / static_cast<double>(n_all)), 1e-9);
+  EXPECT_NEAR(*out.result.formation_rmse_settled,
+              std::sqrt(sum_settled / static_cast<double>(n_settled)), 1e-9);
+  EXPECT_NEAR(*out.result.min_separation, min_sep, 1e-9);
+  EXPECT_EQ(out.result.ticks, kTicks);
+  EXPECT_EQ(out.result.drones, 6U);
+  EXPECT_EQ(out.result.alive_at_end, 5U);  // drone 3 failed at tick 400
+  EXPECT_EQ(out.result.collision_episodes, 0U);
+  EXPECT_GT(*out.result.formation_rmse, *out.result.formation_rmse_settled);  // assembly is worse
+}
+
+TEST(MetricsRun, TheResultIsReproducibleAndDoesNotDependOnTheThreadCountThatRecordedTheLog) {
+  const Scenario s = scenario();
+  std::vector<std::uint8_t> one;
+  std::vector<std::uint8_t> eight;
+  ASSERT_EQ(swarm::run_scenario(s, 1, one), swarm::LogStatus::kOk);
+  ASSERT_EQ(swarm::run_scenario(s, 8, eight), swarm::LogStatus::kOk);
+  const auto a = swarm::analyze_log(one.data(), one.size());
+  const auto b = swarm::analyze_log(one.data(), one.size());
+  const auto c = swarm::analyze_log(eight.data(), eight.size());
+  ASSERT_TRUE(a.ok() && b.ok() && c.ok());
+  EXPECT_EQ(*a.result.formation_rmse, *b.result.formation_rmse);
+  EXPECT_EQ(*a.result.formation_rmse, *c.result.formation_rmse);
+  EXPECT_EQ(*a.result.min_separation, *c.result.min_separation);
+}
+
+TEST(MetricsRun, ASnapshotStrideSeesFewerStatesSoItCanOnlyMissTheClosestApproach) {
+  Scenario s = scenario();
+  std::vector<std::uint8_t> every;
+  ASSERT_EQ(swarm::run_scenario(s, 1, every), swarm::LogStatus::kOk);
+  s.snapshot_every_ticks = 25;
+  std::vector<std::uint8_t> strided;
+  ASSERT_EQ(swarm::run_scenario(s, 1, strided), swarm::LogStatus::kOk);
+
+  const auto full = swarm::analyze_log(every.data(), every.size());
+  const auto some = swarm::analyze_log(strided.data(), strided.size());
+  ASSERT_TRUE(full.ok() && some.ok());
+  EXPECT_EQ(some.result.ticks, kTicks);  // every tick still has a record
+  EXPECT_GE(*some.result.min_separation, *full.result.min_separation);
+  EXPECT_EQ(some.result.alive_at_end, 5U);
+}
