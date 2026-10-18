@@ -179,3 +179,71 @@ TEST(MetricsRun, RecoveryTimesOnARecordedRunMatchAnIndependentScan) {
   RecordProperty("recovery_after_jam_and_fault_s",
                  std::to_string(found ? static_cast<double>(start - 400) * s.dt : -1.0));
 }
+
+TEST(MetricsRun, MessageMetricsOnARecordedRunMatchTheChannelAndTheLossSetting) {
+  Scenario s = scenario();
+  s.faults.clear();
+  s.drones = 4;
+  s.duration_ticks = 600;
+  s.channel.jammers.clear();
+  s.channel.loss_model = swarm::LossModel::kIndependent;
+  s.channel.loss = 0.3;
+  s.channel.latency_ticks = 2;
+  s.channel.jitter_ticks = 1;
+
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(s, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome out = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(out.ok()) << out.message;
+  const swarm::MetricsResult& m = out.result;
+
+  // The channel's own statistics, from a separate run.
+  const swarm::ScenarioWorld world = swarm::build_world(s);
+  const auto sim = world.make_simulation(1);
+  for (std::uint64_t tick = 0; tick < 600; ++tick) {
+    sim->step();
+  }
+  const swarm::ChannelStats& stats = sim->channel().stats();
+  EXPECT_EQ(m.messages_sent, stats.sent);
+  EXPECT_EQ(m.messages_delivered, stats.delivered);
+  EXPECT_EQ(m.dropped_loss, stats.dropped_loss);
+  EXPECT_EQ(m.dropped_rate, 0U);
+  EXPECT_EQ(m.dropped_jam, 0U);
+  EXPECT_EQ(m.messages_sent, m.messages_delivered + m.dropped_loss + m.messages_in_flight);
+
+  // 4 drones, 3 neighbors each, a report every 5 ticks for 600 ticks.
+  EXPECT_EQ(m.messages_sent, 4U * 3U * 120U);
+  ASSERT_TRUE(m.delivery_ratio.has_value());
+  RecordProperty("delivery_ratio_at_30_percent_loss", std::to_string(*m.delivery_ratio));
+  EXPECT_NEAR(*m.delivery_ratio, 0.7, 0.05);  // about 3.4 standard deviations at 1,440 messages
+
+  // Latency is the channel latency plus a jitter draw of 0 or 1 ticks, at 0.02 s per tick.
+  ASSERT_TRUE(m.latency_p50_s.has_value() && m.latency_p95_s.has_value());
+  EXPECT_GE(*m.latency_p50_s, 2 * s.dt - 1e-12);
+  EXPECT_LE(*m.latency_p95_s, 3 * s.dt + 1e-12);
+  EXPECT_LE(*m.latency_p50_s, *m.latency_p95_s);
+
+  // The snapshot stride does not change anything about messages.
+  s.snapshot_every_ticks = 25;
+  std::vector<std::uint8_t> strided;
+  ASSERT_EQ(swarm::run_scenario(s, 1, strided), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome other = swarm::analyze_log(strided.data(), strided.size());
+  ASSERT_TRUE(other.ok());
+  EXPECT_EQ(other.result.messages_sent, m.messages_sent);
+  EXPECT_EQ(other.result.messages_delivered, m.messages_delivered);
+  EXPECT_EQ(*other.result.delivery_ratio, *m.delivery_ratio);
+  EXPECT_EQ(*other.result.latency_p95_s, *m.latency_p95_s);
+}
+
+TEST(MetricsRun, JamDropsAppearInTheMessageMetrics) {
+  Scenario s = scenario();
+  s.faults.clear();
+  s.drones = 4;
+  s.duration_ticks = 500;  // the scenario's jam covers ticks 100 to 400
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(s, 1, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome out = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(out.ok());
+  EXPECT_GT(out.result.dropped_jam, 0U);
+  EXPECT_LT(*out.result.delivery_ratio, 0.8);  // about 300 of 500 ticks are jammed
+}

@@ -84,6 +84,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   std::uint64_t count_all = 0;
   double sum_settled = 0.0;
   std::uint64_t count_settled = 0;
+  std::vector<std::uint64_t> latencies_ticks;  // delivery tick - send tick, per delivered message
+  std::vector<std::uint64_t> delivery_ticks_pending;    // scheduled messages, checked at the end
   std::vector<std::pair<std::uint64_t, double>> trace;  // (tick, formation RMSE), where defined
   std::vector<char> inside(static_cast<std::size_t>(n) * (n > 0 ? n - 1 : 0) / 2, 0);
 
@@ -105,6 +107,29 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
       return failure(
           MetricsStatus::kBadSnapshot,
           std::string("tick ") + std::to_string(record.tick) + ": " + to_string(decoded));
+    }
+    for (const SnapshotEvent& e : snapshot.events) {
+      ++out.messages_sent;
+      switch (e.kind) {
+        case SnapshotEventKind::kScheduled:
+          if (e.deliver_tick < e.send_tick) {
+            return failure(MetricsStatus::kBadSnapshot,
+                           "tick " + std::to_string(record.tick) +
+                               ": a message is delivered before it is sent");
+          }
+          latencies_ticks.push_back(e.deliver_tick - e.send_tick);
+          delivery_ticks_pending.push_back(e.deliver_tick);
+          break;
+        case SnapshotEventKind::kDroppedLoss:
+          ++out.dropped_loss;
+          break;
+        case SnapshotEventKind::kDroppedRate:
+          ++out.dropped_rate;
+          break;
+        case SnapshotEventKind::kDroppedJam:
+          ++out.dropped_jam;
+          break;
+      }
     }
     if (snapshot.agents.empty()) {
       continue;  // a tick the snapshot stride skipped
@@ -172,6 +197,31 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   if (count_settled > 0) {
     out.formation_rmse_settled = std::sqrt(sum_settled / static_cast<double>(count_settled));
+  }
+
+  // Messages. The last tick in the log is out.ticks - 1; anything scheduled after it is in flight.
+  std::vector<std::uint64_t> delivered_latency;
+  for (std::size_t k = 0; k < latencies_ticks.size(); ++k) {
+    if (delivery_ticks_pending[k] < out.ticks) {
+      delivered_latency.push_back(latencies_ticks[k]);
+    } else {
+      ++out.messages_in_flight;
+    }
+  }
+  out.messages_delivered = delivered_latency.size();
+  const std::uint64_t decided =
+      out.messages_delivered + out.dropped_loss + out.dropped_rate + out.dropped_jam;
+  if (decided > 0) {
+    out.delivery_ratio = static_cast<double>(out.messages_delivered) / static_cast<double>(decided);
+  }
+  if (!delivered_latency.empty()) {
+    std::sort(delivered_latency.begin(), delivered_latency.end());
+    const std::uint64_t count = delivered_latency.size();
+    // Nearest rank with integer arithmetic: ceil(0.50 * n) and ceil(0.95 * n).
+    const std::uint64_t rank50 = (50 * count + 99) / 100;
+    const std::uint64_t rank95 = (95 * count + 99) / 100;
+    out.latency_p50_s = static_cast<double>(delivered_latency[rank50 - 1]) * scenario.dt;
+    out.latency_p95_s = static_cast<double>(delivered_latency[rank95 - 1]) * scenario.dt;
   }
 
   // Recovery after each disturbance the log covers.

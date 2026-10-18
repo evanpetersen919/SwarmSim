@@ -63,6 +63,23 @@ struct MetricsResult {
   // an episode there. The count is over all pairs.
   std::uint64_t collision_episodes = 0;
 
+  // Messages, from the events in the records (every tick has them, whatever the snapshot stride).
+  // A scheduled message is delivered at its delivery tick. One whose delivery tick is after the
+  // last record is still in flight when the log ends and is counted as such, and is left out of
+  // the latency and of the delivery ratio.
+  std::uint64_t messages_sent = 0;       // every event
+  std::uint64_t messages_delivered = 0;  // scheduled, with a delivery tick within the log
+  std::uint64_t messages_in_flight = 0;
+  std::uint64_t dropped_loss = 0;
+  std::uint64_t dropped_rate = 0;
+  std::uint64_t dropped_jam = 0;
+  // delivered / (delivered + all drops). Empty when no message has been decided.
+  std::optional<double> delivery_ratio;
+  // Percentiles of (delivery tick - send tick) * dt over delivered messages, by the nearest-rank
+  // rule: the value at index ceil(p * n) - 1 of the sorted list. Empty when none was delivered.
+  std::optional<double> latency_p50_s;
+  std::optional<double> latency_p95_s;
+
   // Recovery after each disturbance seen in the log, in tick order (a jam end before a fault at
   // the same tick). Empty when the scenario has none that the log covers.
   std::vector<Recovery> recoveries;
