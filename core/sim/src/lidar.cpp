@@ -38,6 +38,13 @@ void validate_config(const LidarConfig& c) {
   if (!(c.dropout_probability >= 0.0 && c.dropout_probability <= 1.0)) {
     throw std::invalid_argument("LidarConfig: dropout_probability must be in [0, 1]");
   }
+  if (!(c.terrain_reflectivity > 0.0 && c.terrain_reflectivity <= 1.0) ||
+      !(c.obstacle_reflectivity > 0.0 && c.obstacle_reflectivity <= 1.0)) {
+    throw std::invalid_argument("LidarConfig: reflectivity must be in (0, 1]");
+  }
+  if (!(c.intensity_threshold >= 0.0 && c.intensity_threshold < 1.0)) {
+    throw std::invalid_argument("LidarConfig: intensity_threshold must be in [0, 1)");
+  }
 }
 
 }  // namespace
@@ -75,6 +82,11 @@ Vec3 Lidar::beam_direction(std::uint32_t beam, std::uint32_t azimuth, double yaw
 }
 
 Scan Lidar::scan(const Vec3& origin, double yaw, const IScene& scene) {
+  return scan(origin, yaw, scene, Weather::clear());
+}
+
+Scan Lidar::scan(const Vec3& origin, double yaw, const IScene& scene, const Weather& weather) {
+  weather.validate();
   Scan out;
   out.beams = config_.beams;
   out.azimuth_samples = config_.azimuth_samples;
@@ -96,12 +108,19 @@ Scan Lidar::scan(const Vec3& origin, double yaw, const IScene& scene) {
     if (hit.distance < config_.min_range) {
       continue;
     }
+    const double reflectivity = hit.kind == HitKind::kTerrain ? config_.terrain_reflectivity
+                                                              : config_.obstacle_reflectivity;
+    const double intensity = weather.intensity(reflectivity, hit.distance);
+    if (intensity < config_.intensity_threshold) {
+      continue;
+    }
     if (dropout < config_.dropout_probability) {
       continue;
     }
     const double sigma = config_.range_noise_sigma + config_.range_noise_sigma_per_m * hit.distance;
     out.returns[i].valid = true;
     out.returns[i].range = hit.distance + sigma * noise;
+    out.returns[i].intensity = intensity;
   }
   return out;
 }

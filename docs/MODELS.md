@@ -105,3 +105,50 @@ Boxes (axis-aligned in x and y) and vertical cylinders placed on the terrain by 
 Known behavior: when the scene is crowded, large obstacles are rejected more often than small ones, so the realized mix drifts toward small obstacles (for example cylinders). Keep density low enough to reach the target if the mix matters.
 
 Limitations: obstacles are axis-aligned, so there are no rotated buildings, and they do not interact with terrain slope beyond the base height.
+
+## Ray casting
+
+Source: `core/sim/include/swarm/scene.hpp`, `core/sim/include/swarm/geometry.hpp`. Status: unit-tested, and checked against brute force on 70,000 random rays.
+
+`Scene::raycast` finds the nearest hit along a unit-direction ray within a maximum range.
+
+- Terrain: the triangulated surface from the scene-data section. It is two-sided, so a ray starting below the ground hits it from below. Triangles are tested with Moller-Trumbore, with a small slack on the barycentric bounds so rays through shared edges or vertices do not slip between triangles.
+- Obstacles: boxes by the slab method, vertical cylinders by a side-wall quadratic plus two cap discs. Obstacles are solid: a ray that starts inside one ignores it. A ray that grazes an edge, or is tangent to a cylinder, counts as a hit.
+- Traversal: the ray is clipped to the terrain's xy extent and walked cell by cell. Each cell tests its two terrain triangles and the obstacles registered in it. Traversal stops once the best hit is no farther than the end of the cell just walked, which makes the first hit found the nearest one. An obstacle is registered in every cell its footprint overlaps.
+- Geometry outside the terrain's xy extent does not exist.
+
+Queries are `const` and keep no state, so many threads can query one scene at once.
+
+## LiDAR
+
+Source: `core/sim/include/swarm/lidar.hpp`. Status: unit-tested.
+
+A spinning LiDAR mounted level at the drone's position, yawing with it.
+
+- Pattern: beam `b` has elevation spread evenly over the vertical field of view (a single beam sits at the middle). Sample `k` of `N` has azimuth `-fov/2 + (k + 0.5) * fov / N` relative to the heading. The default is 16 beams by 90 samples over 360 degrees.
+- Per ray: cast against the scene out to `max_range`; discard a hit closer than `min_range`; discard a hit whose relative intensity falls below `intensity_threshold`; discard it with probability `dropout_probability`. A kept return has range `true + sigma * N(0, 1)` with `sigma = range_noise_sigma + range_noise_sigma_per_m * true`. Measured range can fall slightly outside the limits because of noise.
+- Random draws: one normal and one uniform per ray, in scan order, whether or not the ray hits. Scene or weather changes therefore never shift the noise on other rays.
+- The whole scan is taken at one pose. Motion during a revolution is ignored.
+
+Beam directions use `sin` and `cos`, and weather uses `exp`, so scans are reproducible on the same binary and platform and not guaranteed bit-identical across platforms.
+
+Limitations: no beam divergence, no multiple returns, no incidence-angle dependence of intensity, no rolling-shutter distortion, and no specular or retro-reflective targets.
+
+## Weather
+
+Source: `core/sim/include/swarm/weather.hpp`. Status: unit-tested. Fog relation standard but not yet validated against data; rain constants are placeholders.
+
+Weather sets an extinction coefficient `alpha` in 1/m:
+
+```
+alpha_fog  = 3.912 / visibility                    (Koschmieder, 2% contrast threshold)
+alpha_rain = rain_coefficient * rate^rain_exponent  (rate in mm/h)
+alpha      = alpha_fog + alpha_rain
+intensity  = reflectivity * exp(-2 * alpha * range)  (out and back)
+```
+
+A return is detected when its intensity reaches `intensity_threshold`, so the maximum detectable range of a surface is `ln(reflectivity / threshold) / (2 * alpha)`. With the default reflectivity of 0.6 for obstacles, a threshold of 0.05, and a visibility of 200 m, that is about 63 m.
+
+The rain constants (`rain_coefficient = 4e-4`, `rain_exponent = 0.6`) are placeholders chosen to give an extinction of a few per kilometer in moderate rain. They are not from a cited source and have not been checked against data. With them, rain has a modest effect on strong targets within 100 m (100 mm/h pushes the detection limit of a 0.6-reflectivity target to roughly 190 m), while fog is the dominant effect. Do not draw conclusions about rain until the constants are replaced with sourced values.
+
+Limitations: weather is uniform in space and time, there is no backscatter clutter or false returns from rain or fog, and it does not affect the IMU or communications.

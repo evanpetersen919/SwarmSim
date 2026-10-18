@@ -21,7 +21,8 @@ add_library(swarm_core STATIC
   sim/src/obstacles.cpp
   sim/src/scene.cpp
   sim/src/geometry.cpp
-  sim/src/lidar.cpp)
+  sim/src/lidar.cpp
+  sim/src/weather.cpp)
 add_library(swarm::core ALIAS swarm_core)
 target_include_directories(swarm_core PUBLIC sim/include)
 find_package(Threads REQUIRED)
