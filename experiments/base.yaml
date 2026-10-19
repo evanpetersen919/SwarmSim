@@ -1,0 +1,51 @@
+# The scenario that the experiments in this directory vary. Straight flight over open field, six
+# to twenty drones, no jammers, no faults, clear air, and independent loss of zero. The axes in
+# matrix.yaml replace parts of it. Its seed is ignored: the experiment sets the seed.
+version: 1
+name: matrix_base
+seed: 1
+dt: 0.02
+duration_s: 60
+
+scene:
+  type: field
+  size_m: [1200, 1200]
+  cell_m: 8
+  amplitude_m: 12
+  obstacles:
+    density_per_m2: 0.0002
+    spawn_clear_radius_m: 60
+
+swarm:
+  drones: 10
+  formation: {shape: wedge, spacing_m: 20}
+  start: {columns: 4, spacing_m: 35, jitter_m: 8, altitude_m: 45, altitude_jitter_m: 3}
+
+mission:
+  waypoints:
+    - [-150, 0, 45]
+    - [150, 0, 45]
+  speed_mps: 4
+  loop: false
+
+weather: {visibility_m: 20000, rain_mm_h: 0}
+
+comms:
+  latency_ticks: 2
+  jitter_ticks: 1
+  loss_model: independent
+  loss: 0.0
+  jammers: []
+
+control:
+  predictor: kalman
+  report_period_ticks: 5
+  staleness_ticks: 50
+
+faults: []
+
+metrics:
+  settle_s: 20
+  collision_radius_m: 1.0
+  recovery_threshold_m: 1.0
+  recovery_hold_s: 2.0

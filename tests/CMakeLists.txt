@@ -4,8 +4,9 @@ file(GLOB_RECURSE SWARM_TEST_SOURCES CONFIGURE_DEPENDS
   unit/*.cpp property/*.cpp determinism/*.cpp integration/*.cpp)
 
 add_executable(swarm_tests ${SWARM_TEST_SOURCES})
-target_link_libraries(swarm_tests PRIVATE swarm::core swarm::scenario swarm::net swarm::format GTest::gtest_main)
-target_compile_definitions(swarm_tests PRIVATE SWARM_SCENARIO_DIR="${CMAKE_SOURCE_DIR}/scenarios")
+target_link_libraries(swarm_tests PRIVATE swarm::core swarm::scenario swarm::experiment swarm::net swarm::format GTest::gtest_main)
+target_compile_definitions(swarm_tests PRIVATE SWARM_SCENARIO_DIR="${CMAKE_SOURCE_DIR}/scenarios"
+  SWARM_EXPERIMENT_DIR="${CMAKE_SOURCE_DIR}/experiments")
 target_include_directories(swarm_tests PRIVATE support)
 swarm_configure_target(swarm_tests)
 gtest_discover_tests(swarm_tests)

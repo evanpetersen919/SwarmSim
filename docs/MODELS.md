@@ -726,3 +726,15 @@ Equivalence. Each tick, every endpoint sends a beacon to its next two neighbors,
 Cost. For UDP and for TCP separately, one message at a time on one thread, the time from the call that sends a message to the call that returns it at the receiver (after one warm-up message), as nearest-rank p50, p95, p99 and maximum in microseconds; and the rate at which a batch is sent and then received. The report prints the platform, compiler and number of logical cores, and the channel model's configured latency in milliseconds beside the measurements.
 
 Limits: these are loopback timings on one machine and say nothing about a radio. The model's latency is a parameter, not a measurement. Run it in a Release build, and quote the platform line with any number taken from it. No test asserts a timing.
+
+## Experiments and cell expansion
+
+Source: `core/experiment/include/swarm/experiment/experiment.hpp`, `experiments/`. Status: unit-tested, including the planned matrix.
+
+An experiment file (version 1, strict YAML) names a base scenario file, a first seed and a seed count, and a list of axes. An axis has a lowercase name and levels; a level has a label (letters, digits, `_` and `.`) and a `set` mapping written in the scenario format. The cells are the product of the axes' levels in file order, the last axis varying fastest; with no axes there is one cell, `base`. A cell's scenario is the base with each chosen level's `set` merged over it (maps key by key, any other value replaced), passed through the ordinary scenario loader, and named `<experiment>.<labels joined by '-'>`. Replicate `r` of a cell runs with seed `first_seed + r`, the same for every cell, so comparisons between cells are paired.
+
+Rejected with a path and, where there is one, a line: unknown keys, a wrong version, missing keys, duplicate axis names or labels, an empty axis, a fragment that is not a mapping or sets `seed`, `name`, or `version`, two axes that write the same value, a base that cannot be read, a fragment that makes a cell's scenario invalid (reported with the cell's name and the scenario loader's message), and more than 100,000 cells. Loading takes a function that reads files, so no file access happens inside the library.
+
+`experiments/matrix.yaml` is the planned matrix: 4 loss levels (0, 10, 30, 50 percent, independent), 3 weather (clear, fog at 200 m visibility, rain at 8 mm/h), 3 jamming (none, constant, pulsed), 3 drone counts (5, 10, 20), 2 fault settings (none, drone 2 fails at 30 s), and 2 scenes (field, hills): 432 cells, 2,160 runs at five seeds. The level values are assumptions chosen for this study, not measurements.
+
+Limits: the cells are not run by this library; the batch driver does that. Because seeds are shared, replicates of different cells are not independent of each other.

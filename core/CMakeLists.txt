@@ -46,3 +46,4 @@ target_link_libraries(swarm_core PUBLIC swarm_format swarm::eigen Threads::Threa
 swarm_configure_target(swarm_core)
 
 add_subdirectory(scenario)
+add_subdirectory(experiment)

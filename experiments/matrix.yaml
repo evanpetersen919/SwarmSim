@@ -1,0 +1,45 @@
+# The planned evaluation matrix: 4 loss levels x 3 weather x 3 jamming x 3 drone counts x 2 faults
+# x 2 scenes = 432 cells. Five seeds per cell is 2,160 runs. The seed count is the one value to
+# change for the final run.
+version: 1
+name: matrix
+base: base.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: loss
+    levels:
+      - {label: p00, set: {comms: {loss_model: independent, loss: 0.0}}}
+      - {label: p10, set: {comms: {loss_model: independent, loss: 0.1}}}
+      - {label: p30, set: {comms: {loss_model: independent, loss: 0.3}}}
+      - {label: p50, set: {comms: {loss_model: independent, loss: 0.5}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+      - {label: rain, set: {weather: {visibility_m: 20000, rain_mm_h: 8}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: constant
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 45], radius_m: 150, mode: constant, from_s: 20, to_s: 40, loss: 0.9, affects: receiver}
+      - label: pulsed
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 45], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
+  - name: drones
+    levels:
+      - {label: n05, set: {swarm: {drones: 5, start: {columns: 3}}}}
+      - {label: n10, set: {swarm: {drones: 10, start: {columns: 4}}}}
+      - {label: n20, set: {swarm: {drones: 20, start: {columns: 5}}}}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 30}]}}
+  - name: scene
+    levels:
+      - {label: field, set: {scene: {type: field}}}
+      - {label: hills, set: {scene: {type: hills}}}
