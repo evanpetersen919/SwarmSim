@@ -20,6 +20,14 @@ if(TARGET swarm_sim)
       -P ${CMAKE_CURRENT_SOURCE_DIR}/integration/cli_roundtrip.cmake)
 endif()
 
+if(TARGET swarm_netcmp)
+  add_test(
+    NAME netcmp_check
+    COMMAND ${CMAKE_COMMAND}
+      -DNETCMP=$<TARGET_FILE:swarm_netcmp>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/integration/netcmp_check.cmake)
+endif()
+
 # Architectural rules: run the invariants script on the real tree and on fixtures that must pass
 # or fail. Needs bash, which Linux has and Windows has through Git for Windows.
 find_program(SWARM_BASH bash HINTS "C:/Program Files/Git/bin" "C:/Program Files/Git/usr/bin"

@@ -714,3 +714,15 @@ The log does not record the transport, in the same way that it does not record t
 - The command-line script records both scenarios over sockets and compares the files byte for byte with the simulated recordings, checks that bad options (an unknown transport, a missing value, a timeout that is not a number or is negative) are usage errors, and runs the verifier on the log.
 
 Limitations: the whole run still happens in one process on one machine; sockets carry the messages but the drones are not separate programs. Loopback timing says nothing about a radio.
+
+## Real versus simulated comparison
+
+Source: `net/include/swarm/net/compare.hpp`, `apps/swarm_netcmp.cpp`. Status: unit and command-line tested; timings are not asserted.
+
+`swarm_netcmp` pushes the same traffic through the deterministic channel and the socket channel and reports two things.
+
+Equivalence. Each tick, every endpoint sends a beacon to its next two neighbors, and every 25 ticks endpoint 0 sends a command to endpoint 1 (over TCP). At every tick the messages delivered to every endpoint are compared field by field, payload included. The report says whether they were identical and, if not, where they first differed. Exit status is 0 for identical, 1 for a difference or a network loss, 2 for a usage error. `--lose-every N` makes the operating system "lose" every Nth message, to test the tool.
+
+Cost. For UDP and for TCP separately, one message at a time on one thread, the time from the call that sends a message to the call that returns it at the receiver (after one warm-up message), as nearest-rank p50, p95, p99 and maximum in microseconds; and the rate at which a batch is sent and then received. The report prints the platform, compiler and number of logical cores, and the channel model's configured latency in milliseconds beside the measurements.
+
+Limits: these are loopback timings on one machine and say nothing about a radio. The model's latency is a parameter, not a measurement. Run it in a Release build, and quote the platform line with any number taken from it. No test asserts a timing.
