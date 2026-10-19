@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "swarm/control/command.hpp"
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/deterministic_channel.hpp"
@@ -38,6 +39,12 @@ enum class PredictorChoice {
 struct Fault {
   std::uint32_t drone = 0;
   std::uint64_t tick = 0;
+};
+
+// A command a ground station sends to every drone at `tick`.
+struct ScenarioCommand {
+  std::uint64_t tick = 0;
+  CommandKind kind = CommandKind::kHold;
 };
 
 struct MetricsSettings {
@@ -78,6 +85,8 @@ struct Scenario {
   std::uint64_t staleness_ticks = 50;
 
   std::vector<Fault> faults;
+  // Sorted by tick. When not empty, the world has a ground station as its last endpoint.
+  std::vector<ScenarioCommand> commands;
   MetricsSettings metrics;
   std::uint64_t snapshot_every_ticks = 1;
 

@@ -2,9 +2,11 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "swarm/drone_agent.hpp"
+#include "swarm/ground_station.hpp"
 #include "swarm/scenario/scenario.hpp"
 #include "swarm/scene.hpp"
 #include "swarm/simulation.hpp"
@@ -21,6 +23,9 @@ struct ScenarioWorld {
   SimConfig sim;
   std::vector<Vec3> offsets;  // formation slot offsets, one per drone
   std::vector<DroneAgentConfig> agents;
+  // Present only when the scenario has commands. The station is the last endpoint, after the
+  // drones, so a scenario without commands has exactly one endpoint per drone, as before.
+  std::optional<GroundStationConfig> station;
 
   // A fresh simulation at tick 0. `threads` never changes the results.
   std::unique_ptr<Simulation> make_simulation(std::size_t threads) const;

@@ -131,7 +131,8 @@ TEST(ScenarioLoader, ACompleteFileLoadsEveryField) {
 }
 
 TEST(ScenarioLoader, TheShippedExamplesAllLoad) {
-  for (const char* name : {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml"}) {
+  for (const char* name :
+       {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml", "hold_resume.yaml"}) {
     const std::string text = read_file(name);
     ASSERT_FALSE(text.empty()) << name;
     const LoadResult r = load_scenario(text);
@@ -367,7 +368,8 @@ TEST(ScenarioLoader, ModelValidatorsRejectWhatTheFieldChecksMiss) {
 }
 
 TEST(ScenarioLoader, CanonicalTextReadsBackToTheSameScenario) {
-  for (const char* name : {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml"}) {
+  for (const char* name :
+       {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml", "hold_resume.yaml"}) {
     const LoadResult first = load_scenario(read_file(name));
     ASSERT_TRUE(first.ok()) << name << describe(first);
     const std::string text = swarm::canonical_text(first.scenario);
@@ -392,4 +394,60 @@ TEST(ScenarioLoader, CanonicalTextKeepsAwkwardNamesAndFullPrecision) {
   EXPECT_EQ(back.scenario.dt, s.dt);
   EXPECT_EQ(back.scenario.duration_ticks, s.duration_ticks);
   EXPECT_EQ(back.scenario.mission.speed, s.mission.speed);
+}
+
+TEST(ScenarioLoader, ACommandsListLoadsAndIsSortedByTime) {
+  const LoadResult r = load_scenario(std::string(kMinimal) +
+                                     "commands:\n"
+                                     "  - {at_s: 12, kind: resume}\n"
+                                     "  - {at_s: 5, kind: hold}\n"
+                                     "  - {at_s: 12, kind: hold}\n");
+  ASSERT_TRUE(r.ok()) << describe(r);
+  const auto& c = r.scenario.commands;
+  ASSERT_EQ(c.size(), 3U);
+  EXPECT_EQ(c[0].tick, 250U);  // the hold at 5 s, moved first
+  EXPECT_EQ(c[0].kind, swarm::CommandKind::kHold);
+  EXPECT_EQ(c[1].tick, 600U);  // the two at 12 s keep the order they were written in
+  EXPECT_EQ(c[1].kind, swarm::CommandKind::kResume);
+  EXPECT_EQ(c[2].kind, swarm::CommandKind::kHold);
+}
+
+TEST(ScenarioLoader, WithoutACommandsListThereAreNoCommands) {
+  EXPECT_TRUE(load_scenario(kMinimal).scenario.commands.empty());
+  EXPECT_TRUE(load_scenario(std::string(kMinimal) + "commands: []\n").scenario.commands.empty());
+}
+
+TEST(ScenarioLoader, BadCommandsAreErrorsWithTheirPaths) {
+  const auto commands = [&](const std::string& body) {
+    return load_scenario(std::string(kMinimal) + "commands:\n" + body);
+  };
+  EXPECT_TRUE(has_error(commands("  - {at_s: 5, kind: land}\n"), "commands[0].kind",
+                        "must be one of hold, resume"));
+  EXPECT_TRUE(has_error(commands("  - {kind: hold}\n"), "commands[0].at_s", "required"));
+  EXPECT_TRUE(has_error(commands("  - {at_s: 5}\n"), "commands[0].kind", "required"));
+  EXPECT_TRUE(has_error(commands("  - {at_s: -1, kind: hold}\n"), "commands[0].at_s"));
+  EXPECT_TRUE(has_error(commands("  - {at_s: 5.005, kind: hold}\n"), "commands[0].at_s",
+                        "whole number of ticks"));
+  EXPECT_TRUE(has_error(commands("  - {at_s: 5, kind: hold, who: all}\n"), "commands[0].who",
+                        "unknown key"));
+  EXPECT_TRUE(has_error(commands("  - 5\n"), "commands[0]", "mapping"));
+  EXPECT_TRUE(
+      has_error(load_scenario(std::string(kMinimal) + "commands: hold\n"), "commands", "list"));
+  // Two bad entries give two errors.
+  const LoadResult two = commands("  - {at_s: 5, kind: x}\n  - {at_s: 7, kind: y}\n");
+  EXPECT_EQ(two.errors.size(), 2U);
+}
+
+TEST(ScenarioLoader, CommandsRoundTripThroughCanonicalText) {
+  const LoadResult first = load_scenario(read_file("hold_resume.yaml"));
+  ASSERT_TRUE(first.ok()) << describe(first);
+  ASSERT_EQ(first.scenario.commands.size(), 2U);
+  EXPECT_EQ(first.scenario.commands[0].tick, 1500U);
+  EXPECT_EQ(first.scenario.commands[1].tick, 1800U);
+  const std::string text = swarm::canonical_text(first.scenario);
+  const LoadResult second = load_scenario(text);
+  ASSERT_TRUE(second.ok()) << describe(second);
+  EXPECT_EQ(swarm::canonical_text(second.scenario), text);
+  ASSERT_EQ(second.scenario.commands.size(), 2U);
+  EXPECT_EQ(second.scenario.commands[1].kind, swarm::CommandKind::kResume);
 }

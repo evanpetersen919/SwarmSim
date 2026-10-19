@@ -1,0 +1,34 @@
+# Six drones fly a wedge over open field. A ground station tells them to hold at 30 s and to
+# resume at 36 s, through a channel that loses half the beacons in bursts and a jam of every link
+# from 28 s to 35 s. Commands are reliable, so every drone gets them anyway.
+version: 1
+name: hold_resume
+seed: 11
+dt: 0.02
+duration_s: 64
+
+swarm:
+  drones: 6
+  formation: {shape: wedge, spacing_m: 20}
+
+mission:
+  waypoints:
+    - [-150, 0, 20]
+    - [150, 0, 20]
+  speed_mps: 4
+
+comms:
+  latency_ticks: 2
+  jitter_ticks: 1
+  loss_model: burst
+  loss: 0.5
+  mean_burst: 4.0
+  jammers:
+    - {center: [0, 0, 0], radius_m: inf, mode: constant, from_s: 28, to_s: 35, loss: 1.0, affects: either}
+
+commands:
+  - {at_s: 30, kind: hold}
+  - {at_s: 36, kind: resume}
+
+metrics:
+  settle_s: 20

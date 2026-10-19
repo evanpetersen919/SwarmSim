@@ -90,6 +90,15 @@ ScenarioWorld build_world(const Scenario& s) {
     world.agents.push_back(std::move(c));
   }
 
+  if (!s.commands.empty()) {
+    GroundStationConfig station;
+    station.drones = s.drones;
+    for (const ScenarioCommand& c : s.commands) {
+      station.schedule.push_back({c.tick, c.kind});
+    }
+    world.station = std::move(station);
+  }
+
   // The brain rejects slots that are not farther apart than the separation margin. Say so here,
   // in terms of the scenario.
   if (s.drones > 1) {
@@ -112,6 +121,9 @@ std::unique_ptr<Simulation> ScenarioWorld::make_simulation(std::size_t threads) 
   built.reserve(agents.size());
   for (const DroneAgentConfig& config : agents) {
     built.push_back(std::make_unique<DroneAgent>(config, *scene));
+  }
+  if (station) {
+    built.push_back(std::make_unique<GroundStationAgent>(*station));
   }
   return std::make_unique<Simulation>(sim, std::move(built), threads);
 }

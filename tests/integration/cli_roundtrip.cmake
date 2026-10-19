@@ -119,3 +119,13 @@ run_sim(2 metrics "${LOG}")
 run_sim(2 metrics)
 run_sim(2 metrics "${SLOG}" --csv)
 run_sim(2 metrics "${SLOG}" --bogus)
+
+# A scenario with commands: the station is not a drone, and the log verifies on another thread count.
+set(CLOG "${WORKDIR}/cli_commands.log")
+file(REMOVE "${CLOG}")
+run_sim(0 run "${SCENARIOS}/hold_resume.yaml" --out "${CLOG}" --threads 1)
+run_sim(0 --replay "${CLOG}" --verify --threads 4)
+run_sim(0 metrics "${CLOG}")
+if(NOT last_out MATCHES "\nhold_resume,11,6,")
+  message(FATAL_ERROR "unexpected metrics row for the commands scenario:\n${last_out}")
+endif()

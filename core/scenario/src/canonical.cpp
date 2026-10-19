@@ -177,6 +177,16 @@ std::string canonical_text(const Scenario& s) {
     }
   }
 
+  if (s.commands.empty()) {
+    line("commands: []");
+  } else {
+    line("commands:");
+    for (const ScenarioCommand& c : s.commands) {
+      line("  - at_s: " + seconds(c.tick));
+      line(std::string("    kind: ") + (c.kind == CommandKind::kHold ? "hold" : "resume"));
+    }
+  }
+
   line("metrics:");
   line("  settle_s: " + num(s.metrics.settle_s));
   line("  collision_radius_m: " + num(s.metrics.collision_radius_m));

@@ -32,8 +32,9 @@ LogRecord make_record(const Simulation& sim, std::vector<ChannelEvent>& events, 
   Snapshot snapshot;
   const bool with_agents = tick % s.snapshot_every_ticks == 0 || tick + 1 == s.duration_ticks;
   if (with_agents) {
-    snapshot.agents.reserve(sim.agent_count());
-    for (std::size_t i = 0; i < sim.agent_count(); ++i) {
+    // The drones only: with commands there is also a ground station, after them.
+    snapshot.agents.reserve(s.drones);
+    for (std::size_t i = 0; i < s.drones; ++i) {
       const DroneAgent& drone = dynamic_cast<const DroneAgent&>(sim.agent(i));
       AgentSnapshot a;
       a.alive = drone.alive();

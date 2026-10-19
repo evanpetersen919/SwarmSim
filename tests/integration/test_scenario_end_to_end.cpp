@@ -230,7 +230,8 @@ TEST(EndToEnd, FogDenseEnoughToHideTheGroundRemovesTheFixesAndBreaksTheFormation
 }
 
 TEST(EndToEnd, EveryShippedExampleRunsAndVerifiesAndYieldsAMetricsRow) {
-  for (const char* name : {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml"}) {
+  for (const char* name :
+       {"minimal.yaml", "formation_jam.yaml", "hills_fog_fault.yaml", "hold_resume.yaml"}) {
     Scenario s = load(name);
     s.duration_ticks = 250;  // five seconds
     std::vector<std::uint8_t> bytes;

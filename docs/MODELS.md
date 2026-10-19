@@ -600,3 +600,21 @@ Two rules make a hold a promise to stay put. While holding, separation counts on
 Validation: the codec round-trips and rejects each malformed form; one drone stops within 12 m of where it was told to hold, stays within 0.05 m afterwards, stays nominal, and after a resume is back within 1.5 m of its slot; commands arrive in either order, duplicates are ignored, and the commanded state is part of the hash. In a swarm of six drones with half the beacons lost in bursts and every link jammed for 7 s around the hold, every drone received and applied both commands, the worst speed 4 s into the hold was 0.27 m/s and 0.12 m/s at 6.6 s, no drone moved more than 1 m between those times, and after the resume every drone was within 2 m of its slot. Hashes are identical for 1, 2, 4, and 8 threads. A station with an empty schedule leaves the drones bit-identical under independent loss; under burst loss it would not, because the number of links seeds the burst states, so a scenario without commands has no station.
 
 Limitations: commands are never lost or delayed by the model (a stated simplification), the slot of a drone is not reassigned, and one station commands all drones at once.
+
+## Scenario commands
+
+Source: `core/scenario/include/swarm/scenario/scenario.hpp`, `world.hpp`. Status: unit- and integration-tested.
+
+A scenario may list commands for a ground station to send to every drone:
+
+    commands:
+      - {at_s: 30, kind: hold}
+      - {at_s: 36, kind: resume}
+
+Each entry needs `at_s`, which must be a whole number of ticks like every time in a file, and `kind`, which is `hold` or `resume`. Entries may be written in any order; the loader sorts them by time, and entries at the same time keep the order they were written in. At most 1,000 entries. A scenario without the key has no commands, and canonical text writes `commands: []`.
+
+When the list is not empty the built world has a ground station, placed after the drones so that its endpoint is the drone count. The station sits at the origin for the jamming zones. A scenario without commands has no station and exactly one endpoint per drone, so every existing scenario and its hashes are unchanged: a test pins the state hash of a 300-tick run of `formation_jam.yaml`, recorded before this change. The station is not a drone for anything that reads a log: the log header and every snapshot hold the drones only, the verifier and the metrics ignore it, and the brain's neighbors are the drones.
+
+Measured on `scenarios/hold_resume.yaml` (six drones, a hold at 30 s and a resume at 36 s, half the beacons lost in bursts, every link jammed from 28 s to 35 s): the formation RMSE is 0.27 m just before the hold, 22.97 m at the end of the hold (the reference has moved about 24 m on), and 0.20 m at the end of the run, 28 s after the resume. The log verifies on 2 and 4 threads, its bytes are identical for 1 and 4 threads, and the metrics count six drones and one recovery (the end of the jam). A hold and a resume are not disturbances in the recovery metric.
+
+Limitations: one station for all drones, at the origin; commands go to every drone at once; there is no way to address a single drone.

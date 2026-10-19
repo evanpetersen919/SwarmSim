@@ -46,6 +46,7 @@ namespace {
 constexpr double kInf = std::numeric_limits<double>::infinity();
 constexpr std::uint32_t kMaxDrones = 4096;
 constexpr std::size_t kMaxNameLength = 256;
+constexpr std::size_t kMaxCommands = 1000;
 
 struct Context {
   std::vector<ScenarioError> errors;
@@ -677,6 +678,45 @@ void read_faults(Section& root, Scenario& s, const Clock& clock) {
   }
 }
 
+void read_commands(Section& root, Scenario& s, const Clock& clock) {
+  const YAML::Node node = root.find("commands");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (!node.IsSequence()) {
+    root.ctx().add("commands", line_of(node), "must be a list");
+    return;
+  }
+  if (node.size() > kMaxCommands) {
+    root.ctx().add("commands", line_of(node),
+                   "has too many entries (at most " + std::to_string(kMaxCommands) + ")");
+    return;
+  }
+  for (std::size_t i = 0; i < node.size(); ++i) {
+    const std::string path = "commands[" + std::to_string(i) + "]";
+    Section sec(root.ctx(), node[i], path);
+    if (!sec.valid()) {
+      continue;
+    }
+    ScenarioCommand c;
+    const bool has_time = clock.read(sec, "at_s", c.tick, true);
+    bool has_kind = read_choice<CommandKind>(
+        sec, "kind", c.kind, {{"hold", CommandKind::kHold}, {"resume", CommandKind::kResume}});
+    if (!has_kind && !sec.find("kind").IsDefined()) {
+      sec.require("kind");
+    }
+    sec.finish();
+    if (has_time && has_kind) {
+      s.commands.push_back(c);
+    }
+  }
+  // Authors may list commands in any order; the station sends them in time order, and commands at
+  // the same time keep the order they were written in.
+  std::stable_sort(
+      s.commands.begin(), s.commands.end(),
+      [](const ScenarioCommand& a, const ScenarioCommand& b) { return a.tick < b.tick; });
+}
+
 void read_metrics(Section& root, Scenario& s) {
   const YAML::Node node = root.find("metrics");
   if (!node.IsDefined()) {
@@ -788,6 +828,7 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   read_comms(root, s, clock);
   read_control(root, s);
   read_faults(root, s, clock);
+  read_commands(root, s, clock);
   read_metrics(root, s);
   read_log(root, s);
   root.finish();

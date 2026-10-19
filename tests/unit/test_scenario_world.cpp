@@ -213,3 +213,50 @@ TEST(ScenarioWorld, ABuiltSimulationStepsAndItsHashesAreIdenticalForEveryThreadC
   }
   EXPECT_EQ(run(1), reference);  // a second simulation from the same world starts from scratch
 }
+
+TEST(ScenarioWorld, NoCommandsMeansNoStationAndHashesThatDoNotChange) {
+  const Scenario s = load("formation_jam.yaml");
+  const ScenarioWorld w = swarm::build_world(s);
+  const auto sim = w.make_simulation(2);
+  EXPECT_EQ(sim->agent_count(), 8U);  // the drones and nothing else
+  for (int i = 0; i < 300; ++i) {
+    sim->step();
+  }
+  // Recorded before the commands list existed. A scenario without commands must not change.
+  EXPECT_EQ(sim->state_hash(), 17280099539539696319ULL);
+}
+
+TEST(ScenarioWorld, CommandsAddAGroundStationAsTheLastEndpoint) {
+  Scenario s = load("formation_jam.yaml");
+  s.commands = {{500, swarm::CommandKind::kHold}, {900, swarm::CommandKind::kResume}};
+  const ScenarioWorld w = swarm::build_world(s);
+  ASSERT_TRUE(w.station.has_value());
+  EXPECT_EQ(w.station->drones, 8U);
+  ASSERT_EQ(w.station->schedule.size(), 2U);
+  EXPECT_EQ(w.station->schedule[0].tick, 500U);
+  EXPECT_EQ(w.station->schedule[1].kind, swarm::CommandKind::kResume);
+
+  const auto sim = w.make_simulation(1);
+  ASSERT_EQ(sim->agent_count(), 9U);  // eight drones, then the station
+  EXPECT_NE(dynamic_cast<const swarm::GroundStationAgent*>(&sim->agent(8)), nullptr);
+  for (std::size_t i = 0; i < 8; ++i) {
+    EXPECT_NE(dynamic_cast<const swarm::DroneAgent*>(&sim->agent(i)), nullptr);
+  }
+  // The drones still address only each other: the brain's neighbors are the drones.
+  EXPECT_EQ(w.agents[0].brain.num_drones, 8U);
+}
+
+TEST(ScenarioWorld, ASwarmThatIsToldToHoldIsCommandedThroughTheBuiltSimulation) {
+  Scenario s = load("formation_jam.yaml");
+  s.channel.jammers.clear();
+  s.commands = {{100, swarm::CommandKind::kHold}};
+  const ScenarioWorld w = swarm::build_world(s);
+  const auto sim = w.make_simulation(2);
+  for (int i = 0; i < 160; ++i) {
+    sim->step();
+  }
+  for (std::size_t i = 0; i < 8; ++i) {
+    const auto& d = dynamic_cast<const swarm::DroneAgent&>(sim->agent(i));
+    EXPECT_TRUE(d.brain().holding_commanded()) << "drone " << i;
+  }
+}
