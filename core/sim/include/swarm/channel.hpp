@@ -14,6 +14,8 @@ struct ChannelStats {
   std::uint64_t dropped_loss = 0;
   std::uint64_t dropped_rate = 0;
   std::uint64_t dropped_jam = 0;
+  // Messages the model let through that never arrived over a real network (a real transport only).
+  std::uint64_t dropped_network = 0;
 };
 
 // What the channel decided for one message, recorded when an event sink is set.

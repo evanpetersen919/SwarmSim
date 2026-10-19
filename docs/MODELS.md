@@ -679,3 +679,21 @@ A sender that writes a lot before anything reads would fill the socket buffers a
 Validation: a command arrives whole; 10,000 messages of random sizes arrive in the same order, byte for byte, none lost; messages written a byte at a time are reassembled; one connection is opened per pair and direction and reused; order is kept per pair when several pairs send to one receiver; a closed connection is reported, the other connections carry on, and sending reopens the closed direction; a corrupt stream is reported and closed while others carry on; a message for another endpoint and a false sender are counted and dropped; misuse is rejected and opens no connection.
 
 Limitations: loopback and IPv4 only; endpoints are limited to 512 listeners and each used pair costs two descriptors; no TLS and no authentication; a false sender on a connection's first message is not detected; the receive side is polled, so a message is delivered when the owner next calls `send` or `receive`.
+
+## Socket channel
+
+Source: `net/include/swarm/net/socket_channel.hpp`. Status: integration-tested. Decision record: [0008](decisions/0008-real-sockets-under-the-channel-model.md).
+
+A channel that carries its messages over real UDP and TCP sockets and still behaves exactly like the simulated one. Each message goes through the same `ChannelModel` as on the deterministic channel, which decides whether the rate limit, the loss model, or a jammer drops it and the tick it is delivered at. A dropped message never touches a socket. One the model lets through is serialized and sent at once, a beacon as a UDP datagram and a command over TCP. When the simulation reaches the delivery tick the channel hands it to the receiver's inbox, in the order the deterministic channel would, waiting up to a timeout (one second by default) for the bytes if they have not arrived. The order comes from a `DeliveryQueue` that holds a placeholder for each message in flight.
+
+If a scheduled message does not arrive in time it is counted as `dropped_network` (in the channel statistics and in `timed_out`) and not delivered, and the run continues. Datagrams that arrive twice are counted as `duplicates`, and ones that were not awaited (late, or never sent by this channel) as `unexpected`. The transports' own statistics are available through `net_stats()`. A payload the wire format cannot carry is refused before anything changes, so it leaves no placeholder behind to time out later. At most 256 endpoints, since each takes two descriptors.
+
+Validation:
+
+- A 400-tick run of eight demo agents under burst loss, jitter, a rate limit, a pulsed jammer, and a global jammer, over real sockets, gives the final state hash 13965888112468217684 and the message-event digest 17948217017054799834, with 6,400 sent, 1,861 delivered, and 637, 3,200, and 680 dropped by loss, the rate limit, and jamming. These are the numbers recorded from the deterministic channel before its model was extracted, so the real transport reproduces the simulated channel exactly. Only the messages the model let through touched a socket; the number sent as datagrams equals the number of scheduled events.
+- The state hash at every tick and every message event equal those of the deterministic channel for 1, 2, 4, and 8 threads, which also exercises reading inboxes from several threads.
+- Driven with the same traffic, the two channels deliver the same messages, with the same fields and payloads, in the same order at every tick. Over 20,000 messages at a set loss of 0.3, the observed loss is 0.2929 with independent loss and 0.3019 with bursts of mean length four.
+- Beacons travel as UDP and commands over TCP, counted by the transports; commands survive total beacon loss and arrive in order, matching the deterministic channel.
+- With a test hook that makes the network lose every tenth message, 10 of 100 are counted as network drops, 90 are delivered, and the channel carries on and delivers 20 more afterwards.
+
+Limitations: loopback only, so it says nothing about real latency or loss; the receive timeout is wall-clock time, which is the one way a real network can change a run; a message lost by the operating system makes the run differ from the simulated one.
