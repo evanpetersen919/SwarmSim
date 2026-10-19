@@ -659,3 +659,23 @@ Endpoints are limited to 512, because each is a descriptor and many systems allo
 Validation: two endpoints exchange beacons and commands with every field intact; payloads of 0, 1, 2, 100, 1,000, 1,099, and 1,100 bytes arrive whole; 32 endpoints each send one message to every other (992 messages) and each message arrives once, at its addressee, with its payload; a burst of 6,000 messages from one endpoint to another all arrive; garbage, an empty datagram, and a datagram of 3,000 bytes are counted as malformed, a message with a false sender as foreign, a message at the wrong socket as misdelivered, a valid message from a program outside the set as foreign, and the transport delivers a good message after each; a receive times out empty after about the time given and polls with zero; misuse (no endpoints, too many, a missing endpoint, an oversized payload) is rejected and sends nothing.
 
 Limitations: loopback only, IPv4, and one thread. Delivery order between two endpoints is not promised by UDP (it holds on loopback in practice, and nothing here depends on it: the socket channel reassembles order from its own ledger). A message is lost if the operating system drops it, which the statistics make visible as `sent` minus `received`.
+
+## TCP transport
+
+Source: `net/include/swarm/net/tcp_connections.hpp`. Status: unit-tested.
+
+The transport for commands: bytes arrive whole, in order, and once. Each endpoint listens on a port the operating system chose. The first time a message goes from one endpoint to another, a connection is opened from the sender to the receiver's listener, and it is reused for every later message in that direction. A ground station commanding 40 drones holds 40 connections (a test checks the count), not a mesh. Messages use the wire format back to back on the stream. TCP keeps no write boundaries, so the receiving side reassembles them with the stream decoder, and a test writes messages one byte at a time and gets them all back.
+
+On the receiving side the transport accepts connections and reads from them in one loop (`receive`, and `send` does the same every 16 sends). What it checks, counting what it throws away:
+
+- The stream decodes. A corrupt stream cannot be resynchronized, so the connection is closed and counted as `broken`; the messages completed before the corruption are kept.
+- A message arrived on the listener of the endpoint it is addressed to (otherwise `misdelivered`).
+- Every message on one connection names the same sender, the one named by the first message (otherwise `misattributed`). Without a handshake the first message cannot be checked, so a connection can claim a false sender only on its first message.
+
+A connection the peer closes is counted as `closed` and forgotten, and the next send in that direction opens a new one. A write that finds the connection closed opens one new connection and writes again; if that also fails, `NetError` is thrown. After the receiver closes a broken connection, the sender learns of it only from a failed write, so the first message written right after may be lost to the closed connection and later messages arrive. That follows from how TCP reports a close, and it only arises when the stream was corrupted, which needs something other than this transport writing to the port.
+
+A sender that writes a lot before anything reads would fill the socket buffers and block, with nobody to read. Draining every 16 sends prevents it: a test writes 20,000 messages before the first receive.
+
+Validation: a command arrives whole; 10,000 messages of random sizes arrive in the same order, byte for byte, none lost; messages written a byte at a time are reassembled; one connection is opened per pair and direction and reused; order is kept per pair when several pairs send to one receiver; a closed connection is reported, the other connections carry on, and sending reopens the closed direction; a corrupt stream is reported and closed while others carry on; a message for another endpoint and a false sender are counted and dropped; misuse is rejected and opens no connection.
+
+Limitations: loopback and IPv4 only; endpoints are limited to 512 listeners and each used pair costs two descriptors; no TLS and no authentication; a false sender on a connection's first message is not detected; the receive side is polled, so a message is delivered when the owner next calls `send` or `receive`.
