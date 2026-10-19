@@ -1,8 +1,8 @@
 #pragma once
 
 // Controller headers may include only this directory, swarm/estimation/, sensor_data.hpp,
-// vec3.hpp, drone_command.hpp, and swarm/format/{byte_io,hash}.hpp. They must never include
-// vehicle truth.
+// vec3.hpp, drone_command.hpp, message.hpp, and swarm/format/{byte_io,hash}.hpp. They must
+// never include vehicle truth.
 // Enforced by scripts/check_core_invariants.sh.
 
 #include <cstddef>

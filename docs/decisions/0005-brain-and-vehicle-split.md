@@ -13,7 +13,7 @@ Split the drone agent in two.
 - **Vehicle side** (`DroneAgent`): owns the simulated truth and the dynamics, and runs the sensor models, which are allowed to read truth. It produces sensor outputs and applies a command.
 - **Brain** (`DroneBrain`, under `control/`): estimation, neighbor tracking, formation, separation, and the fallback state machine. Its inputs are an IMU sample, a position fix, received message payloads, and the tick. Its outputs are a command and a report to broadcast.
 
-The include whitelist that already keeps estimators away from truth now covers `core/sim/**/control/` as well. Controllers may include control and estimation headers, the sensor output types, vector types, the byte helpers, the hash helper, and the command type, and nothing else from the project. `scripts/check_core_invariants.sh` fails CI otherwise, and tests run it against fixtures with a deliberate violation.
+The include whitelist that already keeps estimators away from truth now covers `core/sim/**/control/` as well. Controllers may include control and estimation headers, the sensor output types, vector types, the byte helpers, the hash helper, the command type, and the message type, and nothing else from the project. `scripts/check_core_invariants.sh` fails CI otherwise, and tests run it against fixtures with a deliberate violation.
 
 The command type moved to its own header, `drone_command.hpp`, so a controller can name its output without including the truth-side `dynamics.hpp`.
 

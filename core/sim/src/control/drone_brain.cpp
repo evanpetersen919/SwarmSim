@@ -83,6 +83,10 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
 
   // Neighbor reports. The table filters out stale, duplicate, and malformed payloads.
   for (const InboundReport& in : input.inbox) {
+    if (in.type == MessageType::kCommand) {
+      apply_command(in, pose.position);
+      continue;
+    }
     const ReceiveResult result =
         table_.on_message(in.sender, in.payload.data(), in.payload.size(), tick);
     if (result == ReceiveResult::kAccepted && in.sender != config_.id) {
@@ -121,7 +125,9 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   fb.ticks_since_fix = tick - last_fix_tick_;
   fb.pose_sigma = own_sigma;
   const FallbackState state = fsm_.update(fb, tick);
-  const FallbackBehavior& behavior = fsm_.behavior();
+  // A commanded hold behaves like safe hold: stop, hold the position, and keep a wide margin.
+  const FallbackBehavior& behavior =
+      commanded_hold_ ? fsm_.behavior_of(FallbackState::kSafeHold) : fsm_.behavior();
   if (state == FallbackState::kSafeHold && before != FallbackState::kSafeHold) {
     hold_position_ = pose.position;
     has_hold_ = true;
@@ -171,12 +177,24 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   separation.d_safe *= behavior.margin_scale;
   std::vector<SeparationNeighbor> others;
   for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
-    if (j != config_.id && estimates_[j].valid) {
+    // A holding drone is not moved by a prediction it cannot check: a neighbor that has gone silent
+    // is extrapolated at the speed it had, which for a swarm told to hold together is wrong, and
+    // would push the holding drone around. While holding, only neighbors heard from recently
+    // count. (Estimates supplied from outside are always current.)
+    bool counts = j != config_.id && estimates_[j].valid;
+    if (counts && behavior.hold && !supplied) {
+      const auto age = table_.age(j, tick);
+      counts = age && *age <= config_.staleness_ticks;
+    }
+    if (counts) {
       others.push_back({j, estimates_[j].position, estimates_[j].position_sigma + own_sigma});
     }
     // A neighbor silent for long enough may have stopped where it was last heard. The prediction
     // carries it onward, so keep its last reported position as a second point to stay clear of.
-    if (j != config_.id && !supplied && config_.last_known_after_ticks > 0) {
+    // This protects a drone that is moving; a drone that is holding cannot fly into anything, and
+    // the last positions of neighbors that were moving when they went silent are often inside its
+    // margin, which would push it around for no reason.
+    if (j != config_.id && !supplied && !behavior.hold && config_.last_known_after_ticks > 0) {
       const NeighborRecord* record = table_.get(j);
       if (record != nullptr && tick - record->receipt_tick >= config_.last_known_after_ticks) {
         others.push_back({j, record->report.position, record->report.position_sigma + own_sigma});
@@ -202,6 +220,32 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   return out;
 }
 
+void DroneBrain::apply_command(const InboundReport& in, const Vec3& position) {
+  Command command;
+  if (decode_command(in.payload.data(), in.payload.size(), command) != CommandStatus::kOk) {
+    ++command_counters_.malformed;
+    return;
+  }
+  // Only a command issued later than the last one applied counts, so a reordered pair or a
+  // duplicate cannot leave the drone in the wrong state.
+  if (has_command_ && command.issue_tick <= last_command_tick_) {
+    ++command_counters_.stale;
+    return;
+  }
+  has_command_ = true;
+  last_command_tick_ = command.issue_tick;
+  ++command_counters_.applied;
+  if (command.kind == CommandKind::kHold) {
+    if (!commanded_hold_ && fsm_.state() != FallbackState::kSafeHold) {
+      hold_position_ = position;  // hold where the drone is now
+      has_hold_ = true;
+    }
+    commanded_hold_ = true;
+  } else {
+    commanded_hold_ = false;
+  }
+}
+
 void DroneBrain::hash_state(Fnv1a64& hash) const {
   fsm_.hash_state(hash);
   hash.update_u64(started_ ? 1 : 0);
@@ -210,6 +254,12 @@ void DroneBrain::hash_state(Fnv1a64& hash) const {
   hash.update_u64(fresh_);
   hash.update_u64(has_hold_ ? 1 : 0);
   hash_vec(hash, hold_position_);
+  hash.update_u64(commanded_hold_ ? 1 : 0);
+  hash.update_u64(has_command_ ? 1 : 0);
+  hash.update_u64(last_command_tick_);
+  hash.update_u64(command_counters_.applied);
+  hash.update_u64(command_counters_.stale);
+  hash.update_u64(command_counters_.malformed);
 
   const PoseEstimate p = pose_.estimate();
   hash_vec(hash, p.position);

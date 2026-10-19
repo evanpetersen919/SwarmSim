@@ -50,7 +50,7 @@ void DroneAgent::step(AgentContext& ctx) {
   }
   in.inbox.reserve(ctx.inbox.size());
   for (Message& m : ctx.inbox) {
-    in.inbox.push_back({m.sender, std::move(m.payload)});
+    in.inbox.push_back({m.sender, std::move(m.payload), m.type});
   }
 
   if (config_.oracle) {

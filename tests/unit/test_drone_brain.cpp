@@ -504,3 +504,141 @@ TEST(DroneBrain, SuppliedEstimatesAlsoTurnOffTheLastKnownPositionRule) {
   EXPECT_LT(command(false).x, command(true).x - 8.0);  // without: pushed away from the 4 m ghost
   EXPECT_GT(command(true).x, -3.0);
 }
+
+namespace {
+
+swarm::InboundReport command_message(swarm::CommandKind kind, std::uint64_t issue_tick,
+                                     std::uint32_t sender = 9) {
+  return {sender, swarm::encode_command({kind, issue_tick}), swarm::MessageType::kCommand};
+}
+
+// A lone drone flying a mission along +x at 5 m/s.
+Rig lone_flier() { return Rig(config(0, 1, {0, 0, 20}, true)); }
+
+double speed(const Rig& rig) { return swarm::norm(rig.truth.vel); }
+
+}  // namespace
+
+TEST(DroneBrainCommands, AHoldCommandStopsTheDroneNearWhereItWasAndKeepsItThere) {
+  Rig rig = lone_flier();
+  for (int t = 0; t < 400; ++t) {
+    rig.step();
+  }
+  ASSERT_GT(speed(rig), 4.0);  // flying
+  const Vec3 at_command = rig.truth.pos;
+  rig.step({command_message(swarm::CommandKind::kHold, 400)});
+  EXPECT_TRUE(rig.brain.holding_commanded());
+  for (int t = 0; t < 800; ++t) {
+    rig.step();
+  }
+  EXPECT_LT(speed(rig), 0.05);
+  const Vec3 settled = rig.truth.pos;
+  EXPECT_LT(swarm::distance(settled, at_command), 12.0);  // it needs room to stop from 5 m/s
+  for (int t = 0; t < 300; ++t) {
+    rig.step();
+  }
+  EXPECT_LT(swarm::distance(rig.truth.pos, settled), 0.05);  // and it stays there
+  EXPECT_EQ(rig.brain.state(), FallbackState::kNominal);     // a hold is not a fallback state
+  EXPECT_EQ(rig.brain.command_counters().applied, 1U);
+}
+
+TEST(DroneBrainCommands, AResumeCommandBringsTheDroneBackToTheFormation) {
+  Rig rig = lone_flier();
+  for (int t = 0; t < 300; ++t) {
+    rig.step();
+  }
+  rig.step({command_message(swarm::CommandKind::kHold, 300)});
+  for (int t = 0; t < 800; ++t) {
+    rig.step();
+  }
+  ASSERT_LT(speed(rig), 0.05);
+  rig.step({command_message(swarm::CommandKind::kResume, 1100)});
+  EXPECT_FALSE(rig.brain.holding_commanded());
+  for (int t = 0; t < 3000; ++t) {  // 30 s to catch the reference up again
+    rig.step();
+  }
+  const Vec3 slot = Vec3{5.0 * 0.01 * static_cast<double>(rig.tick), 0.0, 20.0};
+  EXPECT_LT(swarm::distance(rig.truth.pos, slot), 1.5);
+  EXPECT_EQ(rig.brain.command_counters().applied, 2U);
+}
+
+TEST(DroneBrainCommands, ACommandOlderThanTheLastOneAppliedIsIgnoredWhateverTheArrivalOrder) {
+  {
+    // The hold was issued at tick 100 and the resume at tick 50; the hold arrives first.
+    Rig rig = lone_flier();
+    rig.step({command_message(swarm::CommandKind::kHold, 100)});
+    rig.step({command_message(swarm::CommandKind::kResume, 50)});
+    EXPECT_TRUE(rig.brain.holding_commanded());
+    EXPECT_EQ(rig.brain.command_counters().stale, 1U);
+  }
+  {
+    // The resume was issued at 200 and the hold at 100; the resume arrives first.
+    Rig rig = lone_flier();
+    rig.step({command_message(swarm::CommandKind::kResume, 200)});
+    rig.step({command_message(swarm::CommandKind::kHold, 100)});
+    EXPECT_FALSE(rig.brain.holding_commanded());
+    EXPECT_EQ(rig.brain.command_counters().stale, 1U);
+  }
+  {
+    // The same two commands in either order end in the same state: a hold at 10 and a resume at
+    // 20 leave the drone flying.
+    Rig a = lone_flier();
+    a.step({command_message(swarm::CommandKind::kHold, 10),
+            command_message(swarm::CommandKind::kResume, 20)});
+    Rig b = lone_flier();
+    b.step({command_message(swarm::CommandKind::kResume, 20),
+            command_message(swarm::CommandKind::kHold, 10)});
+    EXPECT_FALSE(a.brain.holding_commanded());
+    EXPECT_FALSE(b.brain.holding_commanded());
+  }
+}
+
+TEST(DroneBrainCommands, ADuplicateCommandIsIgnored) {
+  Rig rig = lone_flier();
+  rig.step({command_message(swarm::CommandKind::kHold, 40)});
+  rig.step({command_message(swarm::CommandKind::kHold, 40)});
+  rig.step({command_message(swarm::CommandKind::kResume, 40)});  // same issue tick: not newer
+  EXPECT_TRUE(rig.brain.holding_commanded());
+  EXPECT_EQ(rig.brain.command_counters().applied, 1U);
+  EXPECT_EQ(rig.brain.command_counters().stale, 2U);
+}
+
+TEST(DroneBrainCommands, MalformedCommandsAreCountedAndIgnored) {
+  Rig rig = lone_flier();
+  swarm::InboundReport too_short{9, {1, 1}, swarm::MessageType::kCommand};
+  swarm::InboundReport bad_version = command_message(swarm::CommandKind::kHold, 5);
+  bad_version.payload[0] = 7;
+  swarm::InboundReport bad_kind = command_message(swarm::CommandKind::kHold, 5);
+  bad_kind.payload[1] = 0;
+  rig.step({too_short, bad_version, bad_kind});
+  EXPECT_FALSE(rig.brain.holding_commanded());
+  EXPECT_EQ(rig.brain.command_counters().malformed, 3U);
+  EXPECT_EQ(rig.brain.command_counters().applied, 0U);
+}
+
+TEST(DroneBrainCommands, ACommandPayloadSentAsABeaconIsNotACommand) {
+  Rig rig = lone_flier();
+  swarm::InboundReport disguised{9, swarm::encode_command({swarm::CommandKind::kHold, 5}),
+                                 swarm::MessageType::kBeacon};
+  rig.step({disguised});
+  EXPECT_FALSE(rig.brain.holding_commanded());
+  EXPECT_EQ(rig.brain.command_counters().applied, 0U);
+  EXPECT_EQ(rig.brain.table_counters().unknown_sender, 1U);  // sender 9 is not a drone
+}
+
+TEST(DroneBrainCommands, TheCommandedStateIsPartOfTheBrainsHash) {
+  const auto digest_after = [](std::vector<swarm::InboundReport> first) {
+    Rig rig = lone_flier();
+    rig.step(std::move(first));
+    for (int t = 0; t < 10; ++t) {
+      rig.step();
+    }
+    return digest(rig.brain);
+  };
+  const std::uint64_t none = digest_after({});
+  const std::uint64_t hold = digest_after({command_message(swarm::CommandKind::kHold, 3)});
+  const std::uint64_t hold_later = digest_after({command_message(swarm::CommandKind::kHold, 4)});
+  EXPECT_NE(none, hold);
+  EXPECT_NE(hold, hold_later);  // the issue tick of the last command is state too
+  EXPECT_EQ(hold, digest_after({command_message(swarm::CommandKind::kHold, 3)}));
+}

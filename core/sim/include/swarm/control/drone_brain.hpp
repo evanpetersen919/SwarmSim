@@ -1,8 +1,8 @@
 #pragma once
 
 // Controller headers may include only this directory, swarm/estimation/, sensor_data.hpp,
-// vec3.hpp, drone_command.hpp, and swarm/format/{byte_io,hash}.hpp. They must never include
-// vehicle truth.
+// vec3.hpp, drone_command.hpp, message.hpp, and swarm/format/{byte_io,hash}.hpp. They must
+// never include vehicle truth.
 // Enforced by scripts/check_core_invariants.sh.
 
 #include <cstdint>
@@ -10,6 +10,7 @@
 #include <optional>
 #include <vector>
 
+#include "swarm/control/command.hpp"
 #include "swarm/control/fallback.hpp"
 #include "swarm/control/formation_control.hpp"
 #include "swarm/control/mission.hpp"
@@ -20,6 +21,7 @@
 #include "swarm/estimation/neighbor_table.hpp"
 #include "swarm/estimation/pose_estimator.hpp"
 #include "swarm/format/hash.hpp"
+#include "swarm/message.hpp"
 #include "swarm/sensor_data.hpp"
 #include "swarm/vec3.hpp"
 
@@ -49,7 +51,8 @@ struct BrainConfig {
 
   // A neighbor not heard from for this many ticks may have stopped where it was last heard, while
   // its prediction carries it on. From then on separation also keeps clear of its last reported
-  // position. 0 turns this off.
+  // position. 0 turns this off. It does not apply while the drone is holding, whether commanded
+  // or in safe hold.
   std::uint64_t last_known_after_ticks = 150;
 
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
@@ -62,6 +65,8 @@ struct BrainConfig {
 struct InboundReport {
   std::uint32_t sender = 0;
   std::vector<std::uint8_t> payload;
+  // A beacon payload is a neighbor report, a command payload is a Command.
+  MessageType type = MessageType::kBeacon;
 };
 
 struct BrainInput {
@@ -94,6 +99,12 @@ struct BrainOutput {
 // acceleration above the limit and brakes the excess), the separation margin, the formation gains,
 // and the weight on the mission reference. The separation margin also widens by the drone's own
 // position uncertainty.
+struct CommandCounters {
+  std::uint64_t applied = 0;    // changed the commanded state or repeated it with a newer tick
+  std::uint64_t stale = 0;      // older than, or as old as, the last command applied
+  std::uint64_t malformed = 0;  // did not decode
+};
+
 class DroneBrain {
  public:
   // Throws std::invalid_argument for an invalid configuration.
@@ -113,6 +124,14 @@ class DroneBrain {
   const FormationTarget& target() const { return target_; }
   const DroneCommand& last_command() const { return last_command_; }
 
+  // While a drone is holding (commanded or in safe hold), separation counts only neighbors heard
+  // from within `staleness_ticks`, and the last-known-position rule is off: a hold is a hard
+  // promise to stay put, and a prediction that cannot be checked must not break it.
+  // True while a hold command is in force. A commanded hold uses the same stopping behavior as
+  // the fallback machine's safe hold but is not a fallback state, and the machine is unaffected.
+  bool holding_commanded() const { return commanded_hold_; }
+  const CommandCounters& command_counters() const { return command_counters_; }
+
   // Folds everything that decides the brain's behavior into `hash`: the fallback machine, the
   // pose estimate and counters, the neighbor table counters and report ages, each neighbor's
   // current estimate, the hold position, the last target and the last command. Estimator internals
@@ -120,6 +139,8 @@ class DroneBrain {
   void hash_state(Fnv1a64& hash) const;
 
  private:
+  void apply_command(const InboundReport& in, const Vec3& position);
+
   BrainConfig config_;
   MissionPath path_;
   PoseEstimator pose_;
@@ -133,6 +154,10 @@ class DroneBrain {
   std::uint64_t last_tick_ = 0;
   bool started_ = false;
   bool has_hold_ = false;
+  bool commanded_hold_ = false;
+  bool has_command_ = false;
+  std::uint64_t last_command_tick_ = 0;
+  CommandCounters command_counters_;
   Vec3 hold_position_;
   FormationTarget target_;
   DroneCommand last_command_;
