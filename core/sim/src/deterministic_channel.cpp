@@ -121,6 +121,7 @@ void DeterministicChannel::send(std::uint64_t now_tick, Message msg) {
   ++stats_.sent;
   // seq is consumed even if the message is dropped, so it reflects send order.
   msg.seq = next_seq_[msg.sender]++;
+  msg.send_tick = now_tick;
 
   // Rate limit first, and without any random draw, so limited messages never move the loss or
   // jitter streams.

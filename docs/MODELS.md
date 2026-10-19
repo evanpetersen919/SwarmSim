@@ -558,3 +558,17 @@ Source: `tests/integration/test_scenario_end_to_end.cpp`. All numbers below are 
 - **Full scenario**: eight drones with burst loss, a jam from 2 s to 8 s, and drone 3 failing at 20 s record, verify on another thread count, and give a metrics row in which no cell is empty (two recovery results, jam drops and loss drops both present).
 
 Limitations: one seed per case, so the differences between loss levels are small and the ordering is not a statistical result; the batch phase repeats cases over seeds. The cases were chosen to be the sanity checks the plan names, not to span the evaluation matrix.
+
+## Wire protocol
+
+Source: `net/include/swarm/net/wire.hpp`. Status: unit-tested.
+
+The format shared by the UDP and TCP transports. A message is a 30-byte header followed by its payload, little-endian: two magic bytes `S` and `N`, a version byte (1), a type byte (1 for a beacon, 2 for a command), the sender, the receiver, the sequence number, the send tick, and a 16-bit payload length. The payload is at most 1,100 bytes, which keeps a datagram well under a typical path MTU. A UDP datagram holds one message. A TCP stream holds messages back to back, and the length in the header is enough to find the end of each. There is no checksum, because UDP and TCP have their own. The delivery tick is not on the wire: it is a property of the channel's model and the receiving side learns it from its own record of the send. The exact layout is in the header and in `tests/unit/test_wire.cpp`, which checks the encoder and decoder against hand-written bytes.
+
+`decode_message` takes exactly one datagram and reports one of: truncated, bad magic, bad version, unknown type, oversized payload, or trailing bytes. `FrameDecoder` takes a byte stream in pieces of any size, including one byte at a time, and returns whole messages as they complete. A header problem cannot be skipped over on a stream, because there is no way to find the next message, so the decoder fails and stays failed; messages completed before the failure are kept. It checks each header field as soon as its bytes have arrived, so garbage is noticed at its first byte, and it never holds more than one incomplete message.
+
+`Message` gained a `type` (default beacon) and a `send_tick`, which the deterministic channel now sets when a message is sent. Existing senders are unchanged.
+
+Validation: a byte-exact layout test; 500 randomized round trips including the empty and the largest payload and the extreme values of every field; every truncation of a datagram is rejected; each malformed field has its own status; the stream decoder returns the same messages for whole, one-byte, random, and every-possible-split chunkings.
+
+Limitations: no versioning beyond the version byte, no compression, no authentication or encryption, no fragmentation of a message larger than the limit (such a message is refused at encoding).

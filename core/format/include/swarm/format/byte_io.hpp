@@ -15,6 +15,11 @@ static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559,
 
 inline void put_u8(std::vector<std::uint8_t>& out, std::uint8_t v) { out.push_back(v); }
 
+inline void put_u16(std::vector<std::uint8_t>& out, std::uint16_t v) {
+  out.push_back(static_cast<std::uint8_t>(v & 0xFFU));
+  out.push_back(static_cast<std::uint8_t>((v >> 8) & 0xFFU));
+}
+
 inline void put_u32(std::vector<std::uint8_t>& out, std::uint32_t v) {
   for (int i = 0; i < 4; ++i) {
     out.push_back(static_cast<std::uint8_t>((v >> (8 * i)) & 0xFFU));
@@ -31,6 +36,11 @@ inline void put_f64(std::vector<std::uint8_t>& out, double v) {
   std::uint64_t bits = 0;
   std::memcpy(&bits, &v, sizeof(bits));
   put_u64(out, bits);
+}
+
+inline std::uint16_t get_u16(const std::uint8_t* p) {
+  return static_cast<std::uint16_t>(static_cast<unsigned>(p[0]) |
+                                    (static_cast<unsigned>(p[1]) << 8));
 }
 
 inline std::uint32_t get_u32(const std::uint8_t* p) {
