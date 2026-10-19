@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -214,16 +215,27 @@ TEST(ScenarioWorld, ABuiltSimulationStepsAndItsHashesAreIdenticalForEveryThreadC
   EXPECT_EQ(run(1), reference);  // a second simulation from the same world starts from scratch
 }
 
-TEST(ScenarioWorld, NoCommandsMeansNoStationAndHashesThatDoNotChange) {
+TEST(ScenarioWorld, WithoutCommandsTheBuiltSimulationIsExactlyTheDronesAndNothingElse) {
+  // No hash is pinned here: a full drone run uses sin, cos, and Eigen, whose results are not
+  // promised to match across platforms. Instead the built simulation is compared with one put
+  // together by hand from the drone agents alone, which must be identical on every platform.
   const Scenario s = load("formation_jam.yaml");
   const ScenarioWorld w = swarm::build_world(s);
-  const auto sim = w.make_simulation(2);
-  EXPECT_EQ(sim->agent_count(), 8U);  // the drones and nothing else
-  for (int i = 0; i < 300; ++i) {
-    sim->step();
+  EXPECT_FALSE(w.station.has_value());
+
+  const auto built = w.make_simulation(2);
+  EXPECT_EQ(built->agent_count(), 8U);  // the drones and nothing else
+
+  std::vector<std::unique_ptr<swarm::IAgent>> agents;
+  for (const swarm::DroneAgentConfig& config : w.agents) {
+    agents.push_back(std::make_unique<swarm::DroneAgent>(config, *w.scene));
   }
-  // Recorded before the commands list existed. A scenario without commands must not change.
-  EXPECT_EQ(sim->state_hash(), 17280099539539696319ULL);
+  swarm::Simulation by_hand(w.sim, std::move(agents), 2);
+  for (int i = 0; i < 300; ++i) {
+    built->step();
+    by_hand.step();
+    ASSERT_EQ(built->state_hash(), by_hand.state_hash()) << "tick " << i;
+  }
 }
 
 TEST(ScenarioWorld, CommandsAddAGroundStationAsTheLastEndpoint) {
