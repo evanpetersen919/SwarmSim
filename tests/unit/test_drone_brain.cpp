@@ -487,7 +487,7 @@ TEST(DroneBrain, SuppliedEstimatesAlsoTurnOffTheLastKnownPositionRule) {
     std::vector<swarm::NeighborEstimate> far(3);
     far[0].valid = true;
     far[0].position = {80, 0, 20};
-    Vec3 command;
+    Vec3 last;
     for (std::uint64_t t = 0; t <= 200; ++t) {
       swarm::BrainInput in;
       in.imu.accel = {0.0, 0.0, 9.81};
@@ -497,9 +497,9 @@ TEST(DroneBrain, SuppliedEstimatesAlsoTurnOffTheLastKnownPositionRule) {
       if (supplied) {
         in.neighbor_override = far;
       }
-      command = brain.step(in, t).command.accel;
+      last = brain.step(in, t).command.accel;
     }
-    return command;
+    return last;
   };
   EXPECT_LT(command(false).x, command(true).x - 8.0);  // without: pushed away from the 4 m ghost
   EXPECT_GT(command(true).x, -3.0);
