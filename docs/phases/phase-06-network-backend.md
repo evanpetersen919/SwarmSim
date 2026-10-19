@@ -229,3 +229,27 @@ Tests:
 - A swarm obeys hold and resume commands carried over TCP, and loses none of them under heavy beacon loss and jamming.
 - The comparison tool runs and states what it does and does not show.
 - MODELS.md, the decision record, and DETERMINISM.md written; PLAN.md change log and README status updated.
+
+## Outcome
+
+Phase 6 was completed in ten commits (47 to 56). A scenario can be run over real UDP and TCP sockets on loopback, and the result is the same log as the simulated run.
+
+What was verified, by tests:
+
+- A scenario recorded over sockets is byte-identical to the simulated recording, including a scenario with burst loss and a jam and the `hold_resume.yaml` scenario, whose commands travel over TCP.
+- That log verifies on the simulated channel on 1, 3, and 8 threads, and the recording is the same for 1 and 4 threads.
+- A network that loses messages is counted, and the log it produces fails verification.
+- `swarm_netcmp` compares the two channels message by message and reports the cost of the real transport. Its timings are machine-dependent and no test asserts them.
+
+Changes from the design above:
+
+- `core/` cannot include `net/`, so scenario running takes a `ChannelFactory` (a function from the endpoint count and the seeded channel configuration to a channel). Without one, the run uses the deterministic channel.
+- `IChannel` gained `endpoint_count()` and `set_event_sink()`; the message event sink moved onto the interface so that any channel can feed the log.
+- Commands needed `message.hpp` added to the controllers' include whitelist in the invariants script.
+- A holding drone ignores stale neighbor predictions and the last-known-position rule. Without this, stale constant-velocity extrapolation moved holding drones at about 1 m/s.
+
+Open items:
+
+- The comparison tool's numbers have not been recorded in the repository; they depend on the machine and are to be taken in the release phase with the platform line quoted.
+- The drones are not separate processes. Sockets carry the messages inside one process.
+- Reliable commands are not delayed by loss or jamming in the model.
