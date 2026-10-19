@@ -637,3 +637,25 @@ The core must stay independent of all this. The invariants script now fails if a
 Validation: two sockets get different ports; datagrams carry the sender's address and keep their boundaries and order; truncation is reported; a receive times out as a status after about the time asked, polls with a zero timeout, and returns at once when data is waiting; a second bind to a port in use throws with the reason; a freed port can be bound again; four MiB crosses a TCP connection exactly while the sender writes from another thread; reads may return pieces of a write; a closed peer is reported after the bytes sent before the close have been read; a write to a closed peer reports closed and does not kill the process; a timed-out exact read says how much arrived; accepts happen in connection order and time out cleanly; connecting to a port nobody listens on throws with the reason.
 
 Limitations: IPv4 loopback only, blocking calls only, no `epoll` or `io_uring`, no IPv6, no TLS. Poll restarts its timeout if a signal interrupts it on POSIX. The Windows and POSIX code paths are small and parallel, but a behavior that differs between systems (buffer sizes, which errors a closed peer produces) is handled where it was observed or documented and no further.
+
+## UDP transport
+
+Source: `net/include/swarm/net/udp_endpoints.hpp`. Status: unit-tested.
+
+The transport for state beacons. A set of endpoints exchange messages as UDP datagrams over the loopback interface, one socket per endpoint, each on a port the operating system chose. `send` serializes a message with the wire format and sends it from the sender's socket to the receiver's. `receive` returns the valid messages that have arrived, waiting up to a timeout if none have. UDP is unreliable by nature and this class does not hide that: it neither retransmits nor orders.
+
+What it checks on every arrival, in this order, counting what it throws away and carrying on:
+
+1. The datagram decodes as exactly one wire message and was not cut short (otherwise it is `malformed`).
+2. It came from the address of the endpoint named as its sender (otherwise `foreign`). A program that is not one of the endpoints cannot deliver a message by sending to a port.
+3. It arrived at the socket of the endpoint named as its receiver (otherwise `misdelivered`).
+
+These checks catch accidents. They are not a defense against anything malicious on the machine, and there is no authentication.
+
+A UDP receiver silently drops datagrams once its queue is full, and the queue holds far fewer small datagrams than its size in bytes suggests, because each datagram carries kernel overhead. A sender that writes thousands of datagrams before the receiver reads would lose most of them on Linux with default settings. So `send` drains the sockets every 16 sends into an internal list, which `receive` returns, and a burst of thousands of messages does not overflow a queue. The kernel buffers are also asked to be large, as a best effort.
+
+Endpoints are limited to 512, because each is a descriptor and many systems allow 1,024 per process.
+
+Validation: two endpoints exchange beacons and commands with every field intact; payloads of 0, 1, 2, 100, 1,000, 1,099, and 1,100 bytes arrive whole; 32 endpoints each send one message to every other (992 messages) and each message arrives once, at its addressee, with its payload; a burst of 6,000 messages from one endpoint to another all arrive; garbage, an empty datagram, and a datagram of 3,000 bytes are counted as malformed, a message with a false sender as foreign, a message at the wrong socket as misdelivered, a valid message from a program outside the set as foreign, and the transport delivers a good message after each; a receive times out empty after about the time given and polls with zero; misuse (no endpoints, too many, a missing endpoint, an oversized payload) is rejected and sends nothing.
+
+Limitations: loopback only, IPv4, and one thread. Delivery order between two endpoints is not promised by UDP (it holds on loopback in practice, and nothing here depends on it: the socket channel reassembles order from its own ledger). A message is lost if the operating system drops it, which the statistics make visible as `sent` minus `received`.
