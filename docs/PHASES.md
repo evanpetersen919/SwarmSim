@@ -100,16 +100,20 @@ Goal: scenario-driven runs that produce the numbers in the plan. Detailed design
 
 ## Phase 6: Real network backend
 
-Goal: the same drone code runs over real UDP and TCP sockets.
+Goal: the same drone code runs over real UDP and TCP sockets, and the result is bit-identical to the simulated channel. Detailed design: [phases/phase-06-network-backend.md](phases/phase-06-network-backend.md).
 
 | # | Commit | New tests |
 |---|---|---|
-| 47 | Wire protocol serialization | Round trip; malformed and truncated input rejected |
-| 48 | Portable socket wrapper (Windows and Linux) | Open, bind, send, receive on loopback |
-| 49 | `UdpChannel` for state beacons | Loopback delivery between two endpoints |
-| 50 | `TcpChannel` for commands | Ordered, acknowledged delivery on loopback |
-| 51 | Loss shim in front of the real channel | Observed loss matches the shim setting |
-| 52 | Real versus simulated channel comparison tool | Runs and emits latency and loss statistics |
+| 47 | Wire protocol | Byte-exact layout; round trip; every truncation and each malformed header rejected; stream decoder reassembles any chunking |
+| 48 | Channel model extracted; injectable channel; reliable message class | Hash of a harsh run unchanged; model matches channel; reliable messages never dropped and consume no random draws |
+| 49 | Hold and resume commands in the brain, and a ground station agent | Hold stops and holds; resume re-forms; stale and malformed commands ignored; commands survive heavy loss |
+| 50 | Scenario `commands` list | Loader and canonical round trip; no change without commands; snapshots and metrics ignore the station |
+| 51 | Portable socket wrapper (Windows and Linux) | Loopback UDP and TCP; poll timeout is a status; RAII closes; invariants forbid sockets in the core |
+| 52 | UDP transport for beacons | Exact delivery between endpoints; burst of thousands; foreign and malformed datagrams counted |
+| 53 | TCP transport for commands | Ordered, whole, lossless over 10,000 messages; one-byte writes reassemble; connections opened once per pair |
+| 54 | Socket channel (model plus real transport, barrier delivery) | State hash equal to the deterministic channel for every thread count; events equal; observed loss matches the setting |
+| 55 | Run a scenario over sockets | Log byte-identical to the simulated run; verifies on the simulated channel |
+| 56 | Real versus simulated comparison tool | Identical deliveries; documented fields; ordered percentiles; no absolute latency asserted |
 
 ## Phase 7: Batch runs and analysis
 
@@ -117,12 +121,12 @@ Goal: reproducible result tables and figures.
 
 | # | Commit | New tests |
 |---|---|---|
-| 53 | Experiment matrix expansion from a config | Cell count is 432 for the planned matrix; seeds enumerated |
-| 54 | Batch driver running cells in parallel | Output identical regardless of how many cells run at once |
-| 55 | Ablation configurations | Each ablation disables exactly one component |
-| 56 | Python analysis: aggregation and confidence intervals (pytest) | Known inputs give known intervals |
-| 57 | Figure scripts | Run on a small fixture and produce the expected files |
-| 58 | Fog visibility fit against published numbers | Model output within tolerance of the cited curve |
+| 57 | Experiment matrix expansion from a config | Cell count is 432 for the planned matrix; seeds enumerated |
+| 58 | Batch driver running cells in parallel | Output identical regardless of how many cells run at once |
+| 59 | Ablation configurations | Each ablation disables exactly one component |
+| 60 | Python analysis: aggregation and confidence intervals (pytest) | Known inputs give known intervals |
+| 61 | Figure scripts | Run on a small fixture and produce the expected files |
+| 62 | Fog visibility fit against published numbers | Model output within tolerance of the cited curve |
 
 ## Phase 8: Unreal viewer
 
@@ -130,17 +134,17 @@ Goal: replay a recorded run in Unreal 5.4. CI cannot build Unreal, so each row h
 
 | # | Commit | New tests or checks |
 |---|---|---|
-| 59 | Log reader used from the plugin | Same reader sources pass a core test; plugin builds |
-| 60 | Terrain mesh from the scenario heightfield | Manual: matches core geometry at sampled points |
-| 61 | Obstacles and drones spawned from code | Manual: counts match the log |
-| 62 | Replay playback and camera | Manual: playback state hash matches the log at the final tick |
-| 63 | Weather and jamming visuals (optional) | Manual |
+| 63 | Log reader used from the plugin | Same reader sources pass a core test; plugin builds |
+| 64 | Terrain mesh from the scenario heightfield | Manual: matches core geometry at sampled points |
+| 65 | Obstacles and drones spawned from code | Manual: counts match the log |
+| 66 | Replay playback and camera | Manual: playback state hash matches the log at the final tick |
+| 67 | Weather and jamming visuals (optional) | Manual |
 
 ## Phase 9: Release
 
 | # | Commit | Check |
 |---|---|---|
-| 64 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
-| 65 | 30-seed run if time allows | Same command, config change only |
-| 66 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
-| 67 | Tag `v0.1.0` | CI green on the tagged commit |
+| 68 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
+| 69 | 30-seed run if time allows | Same command, config change only |
+| 70 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
+| 71 | Tag `v0.1.0` | CI green on the tagged commit |
