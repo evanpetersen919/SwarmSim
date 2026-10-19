@@ -3,6 +3,7 @@
 #   - core/ reads wall-clock time or unseeded randomness (a deliberate exception needs
 #     "allow-wallclock: <reason>" on the same line),
 #   - a build file enables -ffast-math,
+#   - core/ includes a socket header or anything from net/,
 #   - core/format (compiled into the Unreal plugin) includes Eigen or yaml-cpp,
 #   - estimator or controller sources include anything outside their allowed lists, which keeps
 #     ground truth out of them: estimators may use only estimation headers, sensor output types,
@@ -21,6 +22,15 @@ hits=$(grep -rEn --include='*.cpp' --include='*.hpp' --include='*.h' "$forbidden
 if [ -n "$hits" ]; then
   echo "Wall-clock or unseeded randomness found in core/:"
   echo "$hits"
+  status=1
+fi
+
+# Real sockets and the network library stay out of core/: the core must not depend on the operating
+# system's network stack or on anything in net/, so its results cannot depend on a network.
+network=$(grep -rEn --include='*.cpp' --include='*.hpp' --include='*.h'   '#include *[<"](sys/socket\.h|netinet/|arpa/inet\.h|netdb\.h|poll\.h|sys/poll\.h|sys/select\.h|sys/epoll\.h|winsock2\.h|ws2tcpip\.h|swarm/net/)'   core/ 2>/dev/null)
+if [ -n "$network" ]; then
+  echo "Socket headers or the net library included from core/:"
+  echo "$network"
   status=1
 fi
 

@@ -47,6 +47,13 @@ if(SWARM_BASH)
   swarm_invariants_test(invariants_estimator_source_leak ${FIXTURES}/leak_via_src 1 "scene.hpp")
   swarm_invariants_test(invariants_clean_controller ${FIXTURES}/control_clean 0 "core invariants: ok")
   swarm_invariants_test(invariants_controller_leak ${FIXTURES}/control_leak 1 "scene.hpp")
+  swarm_invariants_test(invariants_core_includes_net ${FIXTURES}/core_net_leak 1 "swarm/net/wire.hpp")
+  swarm_invariants_test(invariants_core_includes_socket_header ${FIXTURES}/core_socket_leak 1
+                        "sys/socket.h")
+  swarm_invariants_test(invariants_core_includes_winsock ${FIXTURES}/core_winsock_leak 1
+                        "winsock2.h")
+  swarm_invariants_test(invariants_net_may_use_the_clock_and_sockets ${FIXTURES}/net_allowed 0
+                        "core invariants: ok")
 else()
   message(STATUS "bash not found: invariants tests are skipped")
 endif()

@@ -23,6 +23,12 @@ bash scripts/check_core_invariants.sh
 clang-format --dry-run -Werror $(git ls-files '*.cpp' '*.hpp')
 ```
 
+## Network code
+
+The tests that use sockets bind to 127.0.0.1 on ports the operating system chooses, so they need no setup and parallel runs do not collide. They do need the loopback interface, which every desktop and CI runner has. On Windows, a firewall prompt for a test executable can be dismissed; loopback traffic does not leave the machine.
+
+To look at the traffic on Linux while a test runs, `ss -ulpn` and `ss -tlpn` list the UDP and TCP sockets, and `tcpdump -i lo -X 'udp or tcp'` shows the packets. Sockets, wall-clock time, and the `net/` library are allowed in `net/` and the apps and are forbidden in `core/`; `scripts/check_core_invariants.sh` enforces it.
+
 ## Unreal plugin
 
 Requirements: Unreal Engine 5.4 and Visual Studio 2022 with the "Game development with C++" workload.
