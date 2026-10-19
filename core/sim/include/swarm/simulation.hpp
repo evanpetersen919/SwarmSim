@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "swarm/agent.hpp"
+#include "swarm/channel.hpp"
 #include "swarm/deterministic_channel.hpp"
 #include "swarm/lockstep_pool.hpp"
 #include "swarm/message.hpp"
@@ -32,8 +33,14 @@ struct SimConfig {
 // If an agent throws, step() rethrows and the simulation must be discarded.
 class Simulation {
  public:
+  // Uses a DeterministicChannel built from `config.channel`, seeded with `config.seed`.
   Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAgent>> agents,
              std::size_t threads);
+  // Uses a channel built by the caller, which is responsible for seeding it. Throws
+  // std::invalid_argument if the channel is null or does not connect exactly one endpoint per
+  // agent.
+  Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAgent>> agents,
+             std::size_t threads, std::unique_ptr<IChannel> channel);
 
   void step();
 
@@ -42,14 +49,14 @@ class Simulation {
   std::uint64_t state_hash() const { return hash_; }
   std::size_t agent_count() const { return agents_.size(); }
   const IAgent& agent(std::size_t index) const { return *agents_[index]; }
-  const IChannel& channel() const { return channel_; }
-  // See DeterministicChannel::set_event_sink. Set it before the first step.
-  void set_event_sink(std::vector<ChannelEvent>* sink) { channel_.set_event_sink(sink); }
+  const IChannel& channel() const { return *channel_; }
+  // See IChannel::set_event_sink. Set it before the first step.
+  void set_event_sink(std::vector<ChannelEvent>* sink) { channel_->set_event_sink(sink); }
 
  private:
   SimConfig config_;
   SimClock clock_;
-  DeterministicChannel channel_;
+  std::unique_ptr<IChannel> channel_;
   LockstepPool pool_;
   std::vector<std::unique_ptr<IAgent>> agents_;
   std::vector<Rng> rngs_;

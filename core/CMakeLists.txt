@@ -10,6 +10,7 @@ add_library(swarm_core STATIC
   sim/src/sim_clock.cpp
   sim/src/rng.cpp
   sim/src/delivery_queue.cpp
+  sim/src/channel_model.cpp
   sim/src/deterministic_channel.cpp
   sim/src/lockstep_pool.cpp
   sim/src/simulation.cpp

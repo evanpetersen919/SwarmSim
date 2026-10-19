@@ -30,12 +30,24 @@ ChannelConfig channel_config_for(const SimConfig& config) {
 
 Simulation::Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAgent>> agents,
                        std::size_t threads)
+    : Simulation(config, std::move(agents), threads, nullptr) {}
+
+Simulation::Simulation(const SimConfig& config, std::vector<std::unique_ptr<IAgent>> agents,
+                       std::size_t threads, std::unique_ptr<IChannel> channel)
     : config_(config),
       clock_(config.dt),
-      channel_(checked_agent_count(agents.size()), channel_config_for(config)),
       pool_(threads),
       agents_(std::move(agents)),
       outboxes_(agents_.size()) {
+  const std::uint32_t count = checked_agent_count(agents_.size());
+  if (channel == nullptr) {
+    channel_ = std::make_unique<DeterministicChannel>(count, channel_config_for(config));
+  } else {
+    if (channel->endpoint_count() != count) {
+      throw std::invalid_argument("Simulation: the channel must connect one endpoint per agent");
+    }
+    channel_ = std::move(channel);
+  }
   rngs_.reserve(agents_.size());
   for (std::size_t i = 0; i < agents_.size(); ++i) {
     rngs_.emplace_back(config_.seed, kStreamAgentBase + i);
@@ -56,12 +68,12 @@ void Simulation::step() {
   const std::uint64_t tick = clock_.tick();
   const double time = clock_.time();
 
-  channel_.deliver(tick);
+  channel_->deliver(tick);
 
   pool_.for_each(agents_.size(), [&](std::size_t i) {
     const auto id = static_cast<std::uint32_t>(i);
     outboxes_[i].clear();
-    AgentContext ctx{tick, time, id, rngs_[i], channel_.take_inbox(id), outboxes_[i], peers_};
+    AgentContext ctx{tick, time, id, rngs_[i], channel_->take_inbox(id), outboxes_[i], peers_};
     agents_[i]->step(ctx);
   });
 
@@ -70,12 +82,12 @@ void Simulation::step() {
     positions_[i] = agents_[i]->position();
     peers_[i] = {positions_[i], agents_[i]->velocity()};
   }
-  channel_.set_positions(positions_);
+  channel_->set_positions(positions_);
 
   for (std::size_t sender = 0; sender < agents_.size(); ++sender) {
     for (auto& msg : outboxes_[sender]) {
       msg.sender = static_cast<std::uint32_t>(sender);
-      channel_.send(tick, std::move(msg));
+      channel_->send(tick, std::move(msg));
     }
   }
 
@@ -85,7 +97,7 @@ void Simulation::step() {
   for (const auto& agent : agents_) {
     agent->hash_state(hash);
   }
-  const ChannelStats& stats = channel_.stats();
+  const ChannelStats& stats = channel_->stats();
   hash.update_u64(stats.sent);
   hash.update_u64(stats.delivered);
   hash.update_u64(stats.dropped_loss);

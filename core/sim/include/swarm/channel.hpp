@@ -54,6 +54,14 @@ class IChannel {
   virtual std::vector<Message> take_inbox(std::uint32_t receiver) = 0;
 
   virtual const ChannelStats& stats() const = 0;
+
+  // The number of endpoints (agents) the channel connects.
+  virtual std::uint32_t endpoint_count() const = 0;
+
+  // When set, send() appends one event per message, in send order. The vector must outlive the
+  // channel or be cleared with set_event_sink(nullptr). With no sink the channel behaves exactly
+  // as without one.
+  virtual void set_event_sink(std::vector<ChannelEvent>* sink) = 0;
 };
 
 }  // namespace swarm

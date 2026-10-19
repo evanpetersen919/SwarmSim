@@ -572,3 +572,15 @@ The format shared by the UDP and TCP transports. A message is a 30-byte header f
 Validation: a byte-exact layout test; 500 randomized round trips including the empty and the largest payload and the extreme values of every field; every truncation of a datagram is rejected; each malformed field has its own status; the stream decoder returns the same messages for whole, one-byte, random, and every-possible-split chunkings.
 
 Limitations: no versioning beyond the version byte, no compression, no authentication or encryption, no fragmentation of a message larger than the limit (such a message is refused at encoding).
+
+## Channel model and message classes
+
+Source: `core/sim/include/swarm/channel_model.hpp`. Status: unit-tested.
+
+What happens to a message on a channel is decided by `ChannelModel`: the rate limit, the loss model and its burst state, the jammers, and the latency and jitter, with their seeded random streams. It decides one message at a time, in the order it is given, and the outcome depends only on the configuration, the seed, and that order. `DeterministicChannel` is the model plus a queue that holds messages until their delivery tick. The socket channel of Phase 6 uses the same model, so the two cannot drift apart. `IChannel` gained `endpoint_count` and `set_event_sink`, and `Simulation` can be given a channel built by the caller.
+
+Messages have two classes. A beacon is unreliable, as before. A command (`MessageType::kCommand`) models a transport that retransmits: the rate limit, the loss model, and the jammers do not drop it, it is delivered after exactly the base latency with no jitter, it does not count toward the rate limit, and it draws no random numbers, so adding commands to a run never changes the fate of any beacon. Commands from one sender to one receiver arrive in the order sent. The model does not represent retransmission delay, so a command on a jammed link is treated as if it got through at the base latency. That is a stated simplification, not a measurement.
+
+Validation: the refactor changed nothing. A harsh run (burst loss, jitter, a rate limit of one, a pulsed and a global jammer, eight demo agents, 400 ticks) has the state hash 13965888112468217684, the message-event digest 17948217017054799834, and 6,400 sent, 1,861 delivered, 637 dropped by loss, 3,200 by the rate limit, and 680 by jamming, and these were recorded from the channel before the model was extracted and are asserted unchanged. The model alone gives the same decision as the channel for 16,800 messages. Reliable messages survive loss of 1.0, a jammer over everything, and a rate limit of one, and arrive in order; interleaving them leaves every beacon's outcome and delivery tick unchanged. A simulation uses a channel it is given, passes it the event sink, and rejects one with the wrong number of endpoints.
+
+Limitations: the reliable class is a model of a retransmitting transport with unlimited patience, not of TCP. A command is never late because the link is bad.
