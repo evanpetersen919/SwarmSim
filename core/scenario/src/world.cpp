@@ -116,7 +116,8 @@ ScenarioWorld build_world(const Scenario& s) {
   return world;
 }
 
-std::unique_ptr<Simulation> ScenarioWorld::make_simulation(std::size_t threads) const {
+std::unique_ptr<Simulation> ScenarioWorld::make_simulation(
+    std::size_t threads, const ChannelFactory& channel_factory) const {
   std::vector<std::unique_ptr<IAgent>> built;
   built.reserve(agents.size());
   for (const DroneAgentConfig& config : agents) {
@@ -125,7 +126,17 @@ std::unique_ptr<Simulation> ScenarioWorld::make_simulation(std::size_t threads) 
   if (station) {
     built.push_back(std::make_unique<GroundStationAgent>(*station));
   }
-  return std::make_unique<Simulation>(sim, std::move(built), threads);
+  if (!channel_factory) {
+    return std::make_unique<Simulation>(sim, std::move(built), threads);
+  }
+  ChannelConfig channel = sim.channel;
+  channel.seed = sim.seed;  // as the simulation seeds its own channel
+  std::unique_ptr<IChannel> made =
+      channel_factory(static_cast<std::uint32_t>(built.size()), channel);
+  if (made == nullptr) {
+    throw std::invalid_argument("make_simulation: the channel factory returned no channel");
+  }
+  return std::make_unique<Simulation>(sim, std::move(built), threads, std::move(made));
 }
 
 }  // namespace swarm

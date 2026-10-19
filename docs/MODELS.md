@@ -697,3 +697,20 @@ Validation:
 - With a test hook that makes the network lose every tenth message, 10 of 100 are counted as network drops, 90 are delivered, and the channel carries on and delivers 20 more afterwards.
 
 Limitations: loopback only, so it says nothing about real latency or loss; the receive timeout is wall-clock time, which is the one way a real network can change a run; a message lost by the operating system makes the run differ from the simulated one.
+
+## Running a scenario over sockets
+
+Source: `core/scenario/include/swarm/scenario/run.hpp`, `world.hpp`, `apps/swarm_sim.cpp`. Status: integration-tested.
+
+`swarm_sim run SCENARIO --out FILE --transport sockets` runs the scenario with its messages carried over real UDP and TCP sockets on the loopback interface (see the socket channel), and writes the same kind of log as a simulated run. `--receive-timeout-ms N` (default 1000) is how long the channel waits for a message's bytes at its delivery tick. The command prints the number of network drops, which is zero in a normal run, and warns on standard error if it is not.
+
+The core cannot include the network library, so the runner takes the channel from the caller: `run_scenario` and `ScenarioWorld::make_simulation` accept a `ChannelFactory`, a function from the number of endpoints and the scenario's seeded channel configuration to a channel. Without one the run is over the deterministic channel. The program that wants sockets, here `swarm_sim`, passes a factory that makes a socket channel. A factory that returns no channel, or one with the wrong number of endpoints, is rejected. `run_scenario` can also report the channel's statistics at the end of the run.
+
+The log does not record the transport, in the same way that it does not record the thread count: the transport is not part of what defines the run. So:
+
+- A scenario run over sockets writes a log that is byte-identical to the log of the same run over the simulated channel. Tests compare the whole byte string for a scenario with burst loss and a jam, and for `hold_resume.yaml`, whose commands travel over TCP (twelve commands over six connections, one per drone, and the beacons as more than a thousand datagrams).
+- That log verifies by re-execution on the simulated channel, on 1, 3, and 8 threads, and the log bytes are the same for 1 and 4 threads of the recording run.
+- If the operating system loses a message so that the run differs, the channel counts it as a network drop and the run reports it. The log of such a run fails verification: a test makes the network lose every fiftieth message and finds a hash or snapshot mismatch.
+- The command-line script records both scenarios over sockets and compares the files byte for byte with the simulated recordings, checks that bad options (an unknown transport, a missing value, a timeout that is not a number or is negative) are usage errors, and runs the verifier on the log.
+
+Limitations: the whole run still happens in one process on one machine; sockets carry the messages but the drones are not separate programs. Loopback timing says nothing about a radio.

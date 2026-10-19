@@ -129,3 +129,35 @@ run_sim(0 metrics "${CLOG}")
 if(NOT last_out MATCHES "\nhold_resume,11,6,")
   message(FATAL_ERROR "unexpected metrics row for the commands scenario:\n${last_out}")
 endif()
+
+# Running over real sockets: the log is byte-identical to the simulated run's, it verifies on the
+# simulated channel, and bad transport options are usage errors.
+set(SOCK_LOG "${WORKDIR}/cli_sockets.log")
+file(REMOVE "${SOCK_LOG}")
+run_sim(0 run "${SCENARIOS}/formation_jam.yaml" --out "${SOCK_LOG}" --threads 2 --transport sockets)
+if(NOT last_out MATCHES "network drops: 0")
+  message(FATAL_ERROR "the sockets run did not report zero network drops:\n${last_out}")
+endif()
+run_sim(0 --replay "${SOCK_LOG}" --verify --threads 3)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${SLOG}" "${SOCK_LOG}"
+                RESULT_VARIABLE log_differs)
+if(NOT log_differs EQUAL 0)
+  message(FATAL_ERROR "the log recorded over sockets differs from the simulated log")
+endif()
+
+set(SOCK_CLOG "${WORKDIR}/cli_sockets_commands.log")
+file(REMOVE "${SOCK_CLOG}")
+run_sim(0 run "${SCENARIOS}/hold_resume.yaml" --out "${SOCK_CLOG}" --transport sockets)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${CLOG}" "${SOCK_CLOG}"
+                RESULT_VARIABLE commands_differ)
+if(NOT commands_differ EQUAL 0)
+  message(FATAL_ERROR "the commands log recorded over sockets differs from the simulated log")
+endif()
+
+run_sim(0 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/cli_simulated_flag.log" --transport simulated)
+run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport carrier-pigeon)
+run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport)
+run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport sockets
+        --receive-timeout-ms abc)
+run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport sockets
+        --receive-timeout-ms -5)

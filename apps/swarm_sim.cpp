@@ -9,10 +9,12 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <system_error>
 #include <vector>
 
+#include "swarm/net/socket_channel.hpp"
 #include "swarm/run.hpp"
 #include "swarm/scenario/metrics.hpp"
 #include "swarm/scenario/metrics_csv.hpp"
@@ -39,7 +41,10 @@ void print_usage() {
   std::cout
       << "usage:\n"
          "  swarm_sim run SCENARIO --out FILE          run a scenario file and write its log\n"
-         "                                             (--threads N is allowed)\n"
+         "      --threads N                            threads; never changes results\n"
+         "      --transport simulated|sockets          carry messages over real UDP and TCP\n"
+         "                                             on loopback (default simulated)\n"
+         "      --receive-timeout-ms N                 wait for a socket message (1000)\n"
          "  swarm_sim metrics LOG [--csv FILE]         compute metrics from a scenario log and\n"
          "                                             write a CSV header and row (stdout if\n"
          "                                             no file is given)\n"
@@ -234,9 +239,12 @@ int run_scenario_command(int argc, char** argv) {
   std::string scenario_path;
   std::string out_path;
   std::size_t threads = 1;
+  bool use_sockets = false;
+  int receive_timeout_ms = 1000;
   for (int i = 2; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--out" || arg == "--threads") {
+    if (arg == "--out" || arg == "--threads" || arg == "--transport" ||
+        arg == "--receive-timeout-ms") {
       if (i + 1 >= argc) {
         std::cerr << "swarm_sim: missing value for " << arg << "\n";
         return kExitUsage;
@@ -244,6 +252,19 @@ int run_scenario_command(int argc, char** argv) {
       const char* value = argv[++i];
       if (arg == "--out") {
         out_path = value;
+      } else if (arg == "--transport") {
+        const std::string name = value;
+        if (name != "simulated" && name != "sockets") {
+          std::cerr << "swarm_sim: unknown transport '" << name
+                    << "' (expected simulated or sockets)\n";
+          return kExitUsage;
+        }
+        use_sockets = name == "sockets";
+      } else if (arg == "--receive-timeout-ms") {
+        if (!parse_number(value, receive_timeout_ms) || receive_timeout_ms < 0) {
+          std::cerr << "swarm_sim: invalid value '" << value << "' for --receive-timeout-ms\n";
+          return kExitUsage;
+        }
       } else if (!parse_number(value, threads) || threads < 1) {
         std::cerr << "swarm_sim: invalid value '" << value << "' for --threads\n";
         return kExitUsage;
@@ -276,7 +297,16 @@ int run_scenario_command(int argc, char** argv) {
 
   std::vector<std::uint8_t> log;
   std::uint64_t hash = 0;
-  const swarm::LogStatus status = swarm::run_scenario(loaded.scenario, threads, log, &hash);
+  swarm::ChannelFactory factory;
+  if (use_sockets) {
+    factory = [receive_timeout_ms](std::uint32_t endpoints, const swarm::ChannelConfig& config) {
+      return std::unique_ptr<swarm::IChannel>(
+          std::make_unique<swarm::net::SocketChannel>(endpoints, config, receive_timeout_ms));
+    };
+  }
+  swarm::ChannelStats channel;
+  const swarm::LogStatus status =
+      swarm::run_scenario(loaded.scenario, threads, log, &hash, factory, &channel);
   if (status != swarm::LogStatus::kOk) {
     std::cerr << "cannot record: " << swarm::to_string(status) << "\n";
     return kExitUsage;
@@ -288,6 +318,13 @@ int run_scenario_command(int argc, char** argv) {
   std::cout << "ran " << loaded.scenario.name << ": " << loaded.scenario.duration_ticks
             << " ticks, " << loaded.scenario.drones << " drones, hash=" << hex16(hash) << ", log "
             << out_path << "\n";
+  if (use_sockets) {
+    std::cout << "transport: sockets, network drops: " << channel.dropped_network << "\n";
+    if (channel.dropped_network > 0) {
+      std::cerr << "swarm_sim: the network lost " << channel.dropped_network
+                << " messages, so this log will not verify against the simulated channel\n";
+    }
+  }
   return kExitOk;
 }
 

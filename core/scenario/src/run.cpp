@@ -76,9 +76,10 @@ bool is_scenario_log(const LogHeader& header) {
 }
 
 LogStatus run_scenario(const Scenario& scenario, std::size_t threads,
-                       std::vector<std::uint8_t>& log_bytes, std::uint64_t* final_hash) {
+                       std::vector<std::uint8_t>& log_bytes, std::uint64_t* final_hash,
+                       const ChannelFactory& channel_factory, ChannelStats* channel_stats) {
   const ScenarioWorld world = build_world(scenario);
-  const std::unique_ptr<Simulation> sim = world.make_simulation(threads);
+  const std::unique_ptr<Simulation> sim = world.make_simulation(threads, channel_factory);
   std::vector<ChannelEvent> events;
   sim->set_event_sink(&events);
 
@@ -104,6 +105,9 @@ LogStatus run_scenario(const Scenario& scenario, std::size_t threads,
   log_bytes = writer.bytes();
   if (final_hash != nullptr) {
     *final_hash = last_hash;
+  }
+  if (channel_stats != nullptr) {
+    *channel_stats = sim->channel().stats();
   }
   return LogStatus::kOk;
 }
