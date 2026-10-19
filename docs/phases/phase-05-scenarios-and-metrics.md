@@ -1,6 +1,6 @@
 # Phase 5: Scenarios, faults, metrics, baselines
 
-Status: planned. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 4](phase-04-control.md).
+Status: complete (commits 35 to 46). Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 4](phase-04-control.md).
 
 ## Goal
 
@@ -348,3 +348,45 @@ Tests:
 - Every metric in the plan's evaluation section except tick time versus drone count is computed from a log, with its definition documented and its edge cases tested.
 - The oracle, dead-reckoning, and hold-last baselines run from the scenario file.
 - MODELS.md, the decision records, and the scenario README written; PLAN.md change log and README status updated.
+
+## Outcome
+
+### Results
+
+Numbers come from the tests named in [MODELS.md](../MODELS.md); every one is recorded by a command in the repository. The scenario is eight drones in a wedge for 60 s at 50 Hz unless stated.
+
+- **Scenario to numbers.** A scenario file alone reproduces a run. The log it writes verifies on re-execution for any thread count, comparing hashes and snapshot bytes. From the log alone the metrics give formation error (whole run and settled), minimum separation, collision episodes, recovery time with censoring, message latency percentiles, and delivery ratio, in a 23-column CSV row with no invented zeros.
+- **Kalman against the oracle at zero loss.** Settled slot error 0.439 m against 0.448 m.
+- **Loss.** Up to 50 percent loss leaves the settled slot error within 0.05 m of the no-loss value in steady straight flight, and raises the neighbor estimate error only from 0.177 m to 0.180 m. Bursts cost slightly more than independent drops at the same mean. The estimate error during a 3 s jam is 9.51 m for hold-last, 0.274 m for dead reckoning, and 0.264 m for Kalman when the formation has settled; during assembly it is 13.4 m, 5.92 m, and 6.33 m, so the ordering of the extrapolating predictors changes with the situation.
+- **Fog.** The position fix disappears abruptly: all fixes survive at 200 m visibility (settled error 0.83 m), 24 of about 12,000 at 150 m, and the settled error is then 42.9 m.
+- **Failure.** After a wedge member fails, the other seven stay within 0.60 m of their slots and 9.8 m from each other. In single file, followers flew through the failed drone (0.08 to 0.28 m) until silent neighbors kept their last reported position as a second point to avoid (5.9 to 6.2 m), at the price that the followers behind it never reach their slots (21.9 m worst error).
+
+### Problems found by the tests and fixed in the phase
+
+- Single-file followers flew through a failed drone, because its prediction kept moving (see above). The brain now also avoids a silent neighbor's last reported position after `last_known_after_ticks`.
+- With no packet loss, a drone could still start in degraded comms. This was fixed in Phase 4 and is noted there.
+- Two commits failed CI on a compiler that is stricter than the one used locally (a clang sign conversion in the snapshot codec and a gcc shadowed variable in a test). Both were fixed in a following commit. Local builds use MSVC only, so every commit now also runs Visual Studio's clang-tidy on the changed sources before it is made.
+- The sanitizer jobs grew to over half an hour after the formation swarm tests were added. The heaviest tests now use a smaller size under sanitizers (`test_scale.hpp`).
+
+### Changes from the plan above
+
+- The log header holds the scenario in canonical form, not the original file text. The content is identical; comments and layout are not kept.
+- Every record carries its tick's message events, and the drone state only on the stride ticks and the last tick. The plan attached events to the next written record, which would have delayed them.
+- A failed drone's velocity is set to zero. The plan kept the velocity it had, which would have made the oracle report a moving drone that is not moving.
+- The start grid and the obstacle-free area are centered on the mission's first waypoint, not on the origin.
+- `amplitude_m` applies to hills only; a field is flat. The plan listed a default for fields.
+- A message event is 25 bytes, not 17.
+- The brain gained `last_known_after_ticks` and `BrainInput::neighbor_override`; the simulation publishes `AgentContext::peers`; `swarm_sim` gained the `run` and `metrics` subcommands; and the verification entry point is `verify_run_log`, which handles both kinds of log. Decision records 0006 and 0007 were added.
+- Scenario files use `to_s` and `from_s` for jam windows and omit `to_s` for a jam that never ends.
+
+### Open items
+
+- Tick time versus drone count is a benchmark and not a log metric; it is still unrecorded. The benchmark numbers from before the weather model are stale.
+- Every case ran one seed. Differences between loss levels are small and are not statistical results; the batch phase repeats cases over seeds.
+- Loss was tested in steady straight flight only, not during maneuvers.
+- Failures during assembly were not studied separately, and nothing reassigns a failed drone's slot or routes around it.
+- The ablation switches (no prediction, no fallback, no separation) are not in the scenario format yet.
+- The fog cliff comes from the detection model at one flight altitude; it has not been compared with a published curve (planned for Phase 7).
+- The Unreal host has not been rebuilt since the scene and snapshot code was added to `core/format`.
+- The sanitizer CI jobs take over twenty minutes per commit. A setting that cancels superseded runs on `main` would shorten the queue, at the cost of intermediate results.
+
