@@ -642,3 +642,113 @@ TEST(DroneBrainCommands, TheCommandedStateIsPartOfTheBrainsHash) {
   EXPECT_NE(hold, hold_later);  // the issue tick of the last command is state too
   EXPECT_EQ(hold, digest_after({command_message(swarm::CommandKind::kHold, 3)}));
 }
+
+namespace {
+
+BrainConfig with_switches(BrainConfig c, bool fallback, bool separation) {
+  c.fallback_enabled = fallback;
+  c.separation_enabled = separation;
+  return c;
+}
+
+}  // namespace
+
+TEST(DroneBrainAblation, BothSwitchesDefaultToOn) {
+  const BrainConfig c;
+  EXPECT_TRUE(c.fallback_enabled);
+  EXPECT_TRUE(c.separation_enabled);
+}
+
+TEST(DroneBrainAblation, WithoutSeparationANeighborInsideTheMarginDoesNotPushTheDrone) {
+  const BrainConfig base = config(0, 2, {0, 0, 20}, false);
+  Rig on(with_switches(base, true, true));
+  Rig off(with_switches(base, true, false));
+  // The neighbor reports itself 3 m away, well inside the separation margin.
+  const InboundReport close = report_from(1, 0, {0, 3, 20});
+  const Vec3 pushed = on.step({close}).command.accel;
+  const Vec3 free = off.step({close}).command.accel;
+  EXPECT_NE(pushed, free);
+  EXPECT_GT(swarm::norm(pushed - free), 1.0);
+  EXPECT_LT(pushed.y, free.y - 1.0);  // with the rule it is pushed away from the neighbor, -y
+}
+
+TEST(DroneBrainAblation, SeparationOffChangesNothingWhileNeighborsAreFarApart) {
+  const BrainConfig base = config(1, 3, {0, 0, 20}, false);
+  Rig on(with_switches(base, true, true));
+  Rig off(with_switches(base, true, false));
+  for (std::uint64_t t = 0; t < 300; ++t) {
+    std::vector<InboundReport> inbox;
+    if (t % 10 == 0) {
+      inbox.push_back(report_from(0, t, {0, -15, 20}));
+      inbox.push_back(report_from(2, t, {0, 15, 20}));
+    }
+    ASSERT_EQ(on.step(inbox).command.accel, off.step(inbox).command.accel) << "tick " << t;
+  }
+}
+
+TEST(DroneBrainAblation, FallbackOffChangesNothingWhileTheStateStaysNominal) {
+  const BrainConfig base = config(1, 3, {0, 0, 20}, false);
+  Rig on(with_switches(base, true, true));
+  Rig off(with_switches(base, false, true));
+  for (std::uint64_t t = 0; t < 400; ++t) {
+    std::vector<InboundReport> inbox;
+    if (t % 10 == 0) {
+      inbox.push_back(report_from(0, t, {0, -15, 20}));
+      inbox.push_back(report_from(2, t, {0, 15, 20}));
+    }
+    ASSERT_EQ(on.step(inbox).command.accel, off.step(inbox).command.accel) << "tick " << t;
+  }
+  EXPECT_EQ(on.brain.state(), FallbackState::kNominal);
+  EXPECT_EQ(digest(on.brain), digest(off.brain));
+}
+
+TEST(DroneBrainAblation, WithoutFallbackALostFixDoesNotStopTheDroneButTheStateIsStillReported) {
+  const BrainConfig base = config(0, 2, {0, 0, 20}, true);
+  Rig on(with_switches(base, true, true));
+  Rig off(with_switches(base, false, true));
+  on.fixes = false;
+  off.fixes = false;
+  for (int t = 0; t < 1500; ++t) {
+    on.step();
+    off.step();
+  }
+  EXPECT_EQ(on.brain.state(), FallbackState::kSafeHold);
+  EXPECT_EQ(off.brain.state(), FallbackState::kSafeHold);  // the machine still runs
+  EXPECT_LT(speed(on), 0.2);                               // with it, the drone stopped
+  EXPECT_GT(speed(off), 2.0);                              // without it, it flies on
+}
+
+TEST(DroneBrainAblation, AHoldCommandStillHoldsWithoutFallback) {
+  Rig rig(with_switches(config(0, 1, {0, 0, 20}, true), false, true));
+  for (int t = 0; t < 400; ++t) {
+    rig.step();
+  }
+  rig.step({command_message(swarm::CommandKind::kHold, 400)});
+  for (int t = 0; t < 800; ++t) {
+    rig.step();
+  }
+  EXPECT_TRUE(rig.brain.holding_commanded());
+  EXPECT_LT(speed(rig), 0.05);
+}
+
+TEST(DroneBrainAblation, WithoutPredictionANeighborIsHeldWhereItWasLastReported) {
+  // The prediction ablation is the hold-last predictor. A neighbor reported moving at 5 m/s is
+  // extrapolated by dead reckoning and not by hold-last, which shows in the drone's command.
+  BrainConfig reckoning = config(0, 2, {0, 0, 20}, false);
+  reckoning.predictor = PredictorKind::kDeadReckoning;
+  BrainConfig hold = reckoning;
+  hold.predictor = PredictorKind::kHoldLast;
+  Rig a(reckoning);
+  Rig b(hold);
+  Vec3 last_a;
+  Vec3 last_b;
+  for (std::uint64_t t = 0; t < 40; ++t) {
+    std::vector<InboundReport> inbox;
+    if (t == 0) {
+      inbox.push_back(report_from(1, 0, {0, 15, 20}, {0, 5, 0}));
+    }
+    last_a = a.step(inbox).command.accel;
+    last_b = b.step(inbox).command.accel;
+  }
+  EXPECT_NE(last_a, last_b);
+}

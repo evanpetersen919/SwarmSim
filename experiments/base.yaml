@@ -1,6 +1,10 @@
-# The scenario that the experiments in this directory vary. Straight flight over open field, six
-# to twenty drones, no jammers, no faults, clear air, and independent loss of zero. The axes in
-# matrix.yaml replace parts of it. Its seed is ignored: the experiment sets the seed.
+# The scenario that the experiments in this directory vary: straight flight over open field with
+# ten drones, no jammers, no faults, clear air, and no packet loss. The axes replace parts of it.
+# Its seed is ignored: the experiment sets the seed.
+#
+# The drones fly at 20 m. At 45 m the LiDAR position fix finds no ground returns, the drones lose
+# their fixes, enter safe hold, and stop while the mission reference moves on (formation error of
+# over 100 m in a 60 s run). That is a limit of the sensor model, kept out of these experiments.
 version: 1
 name: matrix_base
 seed: 1
@@ -19,12 +23,12 @@ scene:
 swarm:
   drones: 10
   formation: {shape: wedge, spacing_m: 20}
-  start: {columns: 4, spacing_m: 35, jitter_m: 8, altitude_m: 45, altitude_jitter_m: 3}
+  start: {columns: 4, spacing_m: 35, jitter_m: 8, altitude_m: 20, altitude_jitter_m: 3}
 
 mission:
   waypoints:
-    - [-150, 0, 45]
-    - [150, 0, 45]
+    - [-150, 0, 20]
+    - [150, 0, 20]
   speed_mps: 4
   loop: false
 

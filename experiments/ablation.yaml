@@ -1,0 +1,32 @@
+# Ablations: the full controller and three variants that each disable one component, under loss,
+# jamming, and a drone failure. 4 variants x 3 loss levels x 2 jamming x 2 faults = 48 cells.
+# no_prediction is the hold-last predictor: neighbors are treated as stationary at their last
+# report. It is the same configuration as the hold_last row of baselines.yaml.
+version: 1
+name: ablation
+base: base.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: variant
+    levels:
+      - {label: full, set: {}}
+      - {label: no_prediction, set: {control: {predictor: hold_last}}}
+      - {label: no_fallback, set: {control: {fallback: false}}}
+      - {label: no_separation, set: {control: {separation: false}}}
+  - name: loss
+    levels:
+      - {label: p10, set: {comms: {loss_model: independent, loss: 0.1}}}
+      - {label: p30, set: {comms: {loss_model: independent, loss: 0.3}}}
+      - {label: p50, set: {comms: {loss_model: independent, loss: 0.5}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: pulsed
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 30}]}}

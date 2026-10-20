@@ -7,5 +7,7 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `base.yaml` | The scenario that the experiments vary |
 | `matrix.yaml` | The planned matrix: loss, weather, jamming, drone count, faults, and scene; 432 cells |
 | `smoke.yaml` | Eight short runs, for checking the tools |
+| `ablation.yaml` | The full controller and three variants that each disable one component; 48 cells |
+| `baselines.yaml` | Hold-last, dead reckoning, Kalman, and the oracle predictors; 48 cells |
 
 A `base` path is relative to the experiment file.

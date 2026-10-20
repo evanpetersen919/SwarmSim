@@ -351,3 +351,81 @@ TEST(ExperimentFiles, ThePlannedMatrixHas432CellsAndEveryCellLoads) {
   EXPECT_TRUE(t.faults.empty());
   EXPECT_TRUE(t.channel.jammers.empty());
 }
+
+namespace {
+
+Expansion expand_file(const std::string& name) {
+  const swarm::ReadFile read = swarm::testing::read_from(SWARM_EXPERIMENT_DIR);
+  std::string text;
+  EXPECT_TRUE(read(name, text)) << name;
+  const LoadedExperiment l = swarm::load_experiment(text, read);
+  EXPECT_TRUE(l.ok()) << name << "\n" << error_text(l);
+  const Expansion x = swarm::expand(l.experiment);
+  EXPECT_TRUE(x.ok()) << name;
+  return x;
+}
+
+}  // namespace
+
+TEST(ExperimentFiles, EachAblationVariantDisablesExactlyOneComponent) {
+  const Expansion x = expand_file("ablation.yaml");
+  ASSERT_EQ(x.cells.size(), 48U);
+  // Variant is the first axis and varies slowest: the cells of one variant are contiguous, and the
+  // same position in each block has the same loss, jamming, and faults.
+  const std::size_t block = 12;
+  for (std::size_t i = 0; i < block; ++i) {
+    const swarm::Scenario& full = x.cells[i].scenario;
+    const swarm::Scenario& no_prediction = x.cells[block + i].scenario;
+    const swarm::Scenario& no_fallback = x.cells[2 * block + i].scenario;
+    const swarm::Scenario& no_separation = x.cells[3 * block + i].scenario;
+    EXPECT_EQ(full.predictor, swarm::PredictorChoice::kKalman);
+    EXPECT_TRUE(full.fallback_enabled);
+    EXPECT_TRUE(full.separation_enabled);
+
+    EXPECT_EQ(no_prediction.predictor, swarm::PredictorChoice::kHoldLast);
+    EXPECT_TRUE(no_prediction.fallback_enabled);
+    EXPECT_TRUE(no_prediction.separation_enabled);
+
+    EXPECT_EQ(no_fallback.predictor, swarm::PredictorChoice::kKalman);
+    EXPECT_FALSE(no_fallback.fallback_enabled);
+    EXPECT_TRUE(no_fallback.separation_enabled);
+
+    EXPECT_EQ(no_separation.predictor, swarm::PredictorChoice::kKalman);
+    EXPECT_TRUE(no_separation.fallback_enabled);
+    EXPECT_FALSE(no_separation.separation_enabled);
+
+    // Nothing else differs: undo the one change and the text matches the full controller's.
+    const auto text_of = [](swarm::Scenario s) {
+      s.name = "x";
+      return swarm::canonical_text(s);
+    };
+    swarm::Scenario undo = no_prediction;
+    undo.predictor = swarm::PredictorChoice::kKalman;
+    EXPECT_EQ(text_of(undo), text_of(full));
+    undo = no_fallback;
+    undo.fallback_enabled = true;
+    EXPECT_EQ(text_of(undo), text_of(full));
+    undo = no_separation;
+    undo.separation_enabled = true;
+    EXPECT_EQ(text_of(undo), text_of(full));
+  }
+}
+
+TEST(ExperimentFiles, TheBaselinesDifferOnlyInThePredictor) {
+  const Expansion x = expand_file("baselines.yaml");
+  ASSERT_EQ(x.cells.size(), 48U);
+  const swarm::PredictorChoice order[] = {
+      swarm::PredictorChoice::kHoldLast, swarm::PredictorChoice::kDeadReckoning,
+      swarm::PredictorChoice::kKalman, swarm::PredictorChoice::kOracle};
+  for (std::size_t v = 0; v < 4; ++v) {
+    for (std::size_t i = 0; i < 12; ++i) {
+      swarm::Scenario s = x.cells[v * 12 + i].scenario;
+      EXPECT_EQ(s.predictor, order[v]);
+      s.predictor = swarm::PredictorChoice::kKalman;
+      s.name = "x";
+      swarm::Scenario ref = x.cells[2 * 12 + i].scenario;
+      ref.name = "x";
+      EXPECT_EQ(swarm::canonical_text(s), swarm::canonical_text(ref));
+    }
+  }
+}

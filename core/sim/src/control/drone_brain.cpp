@@ -126,8 +126,10 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   fb.pose_sigma = own_sigma;
   const FallbackState state = fsm_.update(fb, tick);
   // A commanded hold behaves like safe hold: stop, hold the position, and keep a wide margin.
-  const FallbackBehavior& behavior =
-      commanded_hold_ ? fsm_.behavior_of(FallbackState::kSafeHold) : fsm_.behavior();
+  const FallbackBehavior& behavior = commanded_hold_ ? fsm_.behavior_of(FallbackState::kSafeHold)
+                                     : config_.fallback_enabled
+                                         ? fsm_.behavior()
+                                         : fsm_.behavior_of(FallbackState::kNominal);
   if (state == FallbackState::kSafeHold && before != FallbackState::kSafeHold) {
     hold_position_ = pose.position;
     has_hold_ = true;
@@ -201,7 +203,9 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
       }
     }
   }
-  const Vec3 push = separation_accel(config_.id, pose.position, others, separation);
+  const Vec3 push = config_.separation_enabled
+                        ? separation_accel(config_.id, pose.position, others, separation)
+                        : Vec3{};
 
   BrainOutput out;
   out.command.accel = combine_accel(pull, push, separation.max_accel);
@@ -236,7 +240,8 @@ void DroneBrain::apply_command(const InboundReport& in, const Vec3& position) {
   last_command_tick_ = command.issue_tick;
   ++command_counters_.applied;
   if (command.kind == CommandKind::kHold) {
-    if (!commanded_hold_ && fsm_.state() != FallbackState::kSafeHold) {
+    const bool safe_hold = config_.fallback_enabled && fsm_.state() == FallbackState::kSafeHold;
+    if (!commanded_hold_ && !safe_hold) {
       hold_position_ = position;  // hold where the drone is now
       has_hold_ = true;
     }

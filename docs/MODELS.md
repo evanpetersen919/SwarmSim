@@ -750,3 +750,13 @@ The table has one row per task, in task order: `experiment, cell, <one column pe
 The table is identical for any number of jobs: tasks share no state, each writes its own slot, and rows are written in index order. A unit test and the command-line script compare 1 job with several, byte for byte.
 
 Limits: logs are held in memory per running task. Sampled verification checks the determinism of the sampled tasks only; the determinism tests cover the rest.
+
+## Ablation switches
+
+Source: `core/sim/include/swarm/control/drone_brain.hpp` (`fallback_enabled`, `separation_enabled`), scenario keys `control.fallback` and `control.separation`. Status: unit and integration tested.
+
+Both default to true. `control.fallback: false` makes a drone behave as in the nominal state whatever the fallback state machine decides. The machine still runs and the drone still reports its state, so the effect of removing it can be measured against what it would have done. A commanded hold is not a fallback and still works. `control.separation: false` removes the repulsion term, so the drone feels only the formation pull. Removing prediction is not a switch: it is `control.predictor: hold_last`, which treats a neighbor as stationary at its last report, and it is the same configuration as the hold-last baseline.
+
+The canonical scenario text, which is stored in each log header, writes a switch only when it is false, so logs of scenarios that leave the switches alone are byte-identical to what earlier builds wrote. `experiments/ablation.yaml` compares the full controller with each variant under loss, jamming, and a drone failure, and `experiments/baselines.yaml` compares the four predictors, hold-last, dead reckoning, Kalman, and the oracle.
+
+Limits: an ablation measures what the component does in these scenarios, not what it would do in others. With fallback off there is no safe hold, so a drone that has lost its position fixes keeps flying on a drifting estimate.

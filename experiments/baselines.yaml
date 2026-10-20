@@ -1,0 +1,33 @@
+# Baselines: how a drone estimates its neighbors, from the least to the most informed, under loss,
+# jamming, and a drone failure. 4 predictors x 3 loss levels x 2 jamming x 2 faults = 48 cells.
+# hold_last treats a neighbor as stationary at its last report, dead_reckoning extrapolates it at
+# its reported velocity, kalman is the default filter, and oracle reads the neighbors true state
+# and is an upper bound, not a method a real swarm could use.
+version: 1
+name: baselines
+base: base.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: predictor
+    levels:
+      - {label: hold_last, set: {control: {predictor: hold_last}}}
+      - {label: dead_reckoning, set: {control: {predictor: dead_reckoning}}}
+      - {label: kalman, set: {control: {predictor: kalman}}}
+      - {label: oracle, set: {control: {predictor: oracle}}}
+  - name: loss
+    levels:
+      - {label: p10, set: {comms: {loss_model: independent, loss: 0.1}}}
+      - {label: p30, set: {comms: {loss_model: independent, loss: 0.3}}}
+      - {label: p50, set: {comms: {loss_model: independent, loss: 0.5}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: pulsed
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 30}]}}

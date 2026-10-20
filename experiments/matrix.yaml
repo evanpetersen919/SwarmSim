@@ -24,12 +24,12 @@ axes:
         set:
           comms:
             jammers:
-              - {center: [0, 0, 45], radius_m: 150, mode: constant, from_s: 20, to_s: 40, loss: 0.9, affects: receiver}
+              - {center: [0, 0, 20], radius_m: 150, mode: constant, from_s: 20, to_s: 40, loss: 0.9, affects: receiver}
       - label: pulsed
         set:
           comms:
             jammers:
-              - {center: [0, 0, 45], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
+              - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
   - name: drones
     levels:
       - {label: n05, set: {swarm: {drones: 5, start: {columns: 3}}}}

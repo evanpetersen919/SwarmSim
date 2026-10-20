@@ -55,6 +55,13 @@ struct BrainConfig {
   // or in safe hold.
   std::uint64_t last_known_after_ticks = 150;
 
+  // Switches for ablation studies; both default to on. With fallback off the state machine still
+  // runs and reports its state, but the drone always behaves as in the nominal state, apart from
+  // a commanded hold, which is not a fallback. With separation off the drone feels no repulsion
+  // from its neighbors. Turning off prediction is the hold-last predictor, not a switch.
+  bool fallback_enabled = true;
+  bool separation_enabled = true;
+
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.

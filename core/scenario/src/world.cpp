@@ -72,6 +72,8 @@ ScenarioWorld build_world(const Scenario& s) {
         c.brain.predictor = PredictorKind::kKalman;
         break;
     }
+    c.brain.fallback_enabled = s.fallback_enabled;
+    c.brain.separation_enabled = s.separation_enabled;
     c.brain.report_period_ticks = s.report_period_ticks;
     c.brain.staleness_ticks = s.staleness_ticks;
     c.start = starts[i];

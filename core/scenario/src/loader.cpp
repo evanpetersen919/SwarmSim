@@ -636,6 +636,8 @@ void read_control(Section& root, Scenario& s) {
                                 {"dead_reckoning", PredictorChoice::kDeadReckoning},
                                 {"hold_last", PredictorChoice::kHoldLast},
                                 {"oracle", PredictorChoice::kOracle}});
+  read_bool(sec, "fallback", s.fallback_enabled);
+  read_bool(sec, "separation", s.separation_enabled);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);
   sec.finish();

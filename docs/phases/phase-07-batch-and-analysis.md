@@ -48,7 +48,9 @@ One row per task: the experiment name, the cell index, one column per axis holdi
 
 ### Ablations disable exactly one component
 
-The control stack gains three switches with defaults that leave behaviour unchanged: prediction (off means a neighbor is treated as stationary at its last report, which is the existing hold-last predictor), the fallback state machine (off means the brain stays in the nominal state whatever the link quality), and the separation rule (off means no repulsion term). The scenario format reads them under `control`, the canonical text writes them only when they differ from the default, so existing logs and golden files do not change, and a test per switch checks that turning it off changes the brain's output in the intended place and nowhere else. The "no prediction" ablation and the hold-last baseline are the same configuration; the documentation says so once and does not present it as two results.
+Two switches are added to the control stack, both on by default: the fallback state machine (off means the drone always behaves as in the nominal state; the machine still runs and reports its state, so the log shows when it would have acted, and a commanded hold still works because it is not a fallback), and the separation rule (off means no repulsion term). The third ablation, prediction, needs no switch: it is the hold-last predictor, which treats a neighbor as stationary at its last report, and the scenario format already selects it. It is the same configuration as the hold-last baseline, and the documentation says so once instead of presenting it as two results.
+
+The scenario format reads the switches as `control.fallback` and `control.separation` (true or false). The canonical text writes a switch only when it is off, so the header of every existing log, and so every existing hash, is unchanged. Tests check that a switch at its default leaves the log bytes unchanged, that each switch off changes the run, and that the changed log still verifies, because the switch is part of the scenario in the header. Experiment files `ablation.yaml` and `baselines.yaml` hold the two comparisons; a test checks that each ablation variant differs from the full controller in that one setting and nowhere else.
 
 ### Analysis is Python reading CSV, with pinned dependencies and tests
 
@@ -76,7 +78,7 @@ The weather model has a visibility parameter that sets how quickly the LiDAR ret
 
 ### Ablations (commit 59)
 
-The three control switches, their scenario keys, loader and canonical text support, brain tests per switch, and the ablation experiment file. The scenario format version stays 1 because the new keys are optional.
+The two control switches (fallback and separation), their scenario keys, loader and canonical text support, brain tests per switch, and the ablation and baseline experiment files. The scenario format version stays 1 because the new keys are optional.
 
 ### Analysis (commit 60)
 

@@ -451,3 +451,34 @@ TEST(ScenarioLoader, CommandsRoundTripThroughCanonicalText) {
   ASSERT_EQ(second.scenario.commands.size(), 2U);
   EXPECT_EQ(second.scenario.commands[1].kind, swarm::CommandKind::kResume);
 }
+
+TEST(ScenarioLoader, TheAblationSwitchesAreReadAndRoundTripAndAreAbsentWhenOn) {
+  const LoadResult defaults = load_scenario(kMinimal);
+  ASSERT_TRUE(defaults.ok()) << describe(defaults);
+  EXPECT_TRUE(defaults.scenario.fallback_enabled);
+  EXPECT_TRUE(defaults.scenario.separation_enabled);
+  const std::string plain = swarm::canonical_text(defaults.scenario);
+  EXPECT_EQ(plain.find("fallback"), std::string::npos);  // existing canonical text is unchanged
+  EXPECT_EQ(plain.find("separation"), std::string::npos);
+
+  const LoadResult off =
+      load_scenario(std::string(kMinimal) + "control:\n  fallback: false\n  separation: false\n");
+  ASSERT_TRUE(off.ok()) << describe(off);
+  EXPECT_FALSE(off.scenario.fallback_enabled);
+  EXPECT_FALSE(off.scenario.separation_enabled);
+  const std::string text = swarm::canonical_text(off.scenario);
+  EXPECT_NE(text.find("  fallback: false"), std::string::npos);
+  EXPECT_NE(text.find("  separation: false"), std::string::npos);
+  const LoadResult again = load_scenario(text);
+  ASSERT_TRUE(again.ok()) << describe(again);
+  EXPECT_FALSE(again.scenario.fallback_enabled);
+  EXPECT_FALSE(again.scenario.separation_enabled);
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+
+  const LoadResult explicit_on =
+      load_scenario(std::string(kMinimal) + "control:\n  fallback: true\n  separation: true\n");
+  ASSERT_TRUE(explicit_on.ok());
+  EXPECT_EQ(swarm::canonical_text(explicit_on.scenario), plain);
+
+  EXPECT_FALSE(load_scenario(std::string(kMinimal) + "control:\n  fallback: maybe\n").ok());
+}

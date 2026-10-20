@@ -81,6 +81,9 @@ struct Scenario {
   ChannelConfig channel;
 
   PredictorChoice predictor = PredictorChoice::kKalman;
+  // Ablation switches (see BrainConfig). Written to the canonical text only when off.
+  bool fallback_enabled = true;
+  bool separation_enabled = true;
   std::uint64_t report_period_ticks = 5;
   std::uint64_t staleness_ticks = 50;
 

@@ -164,6 +164,12 @@ std::string canonical_text(const Scenario& s) {
 
   line("control:");
   line(std::string("  predictor: ") + predictor_name(s.predictor));
+  if (!s.fallback_enabled) {
+    line("  fallback: false");
+  }
+  if (!s.separation_enabled) {
+    line("  separation: false");
+  }
   line("  report_period_ticks: " + uint(s.report_period_ticks));
   line("  staleness_ticks: " + uint(s.staleness_ticks));
 
