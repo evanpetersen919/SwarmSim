@@ -1,6 +1,6 @@
 # Phase 7: Batch runs and analysis
 
-Status: planned. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 5](phase-05-scenarios-and-metrics.md).
+Status: complete. Parent documents: [PLAN.md](../PLAN.md), [PHASES.md](../PHASES.md), [DETERMINISM.md](../DETERMINISM.md), [MODELS.md](../MODELS.md), [phase 5](phase-05-scenarios-and-metrics.md).
 
 ## Goal
 
@@ -121,3 +121,30 @@ MODELS.md sections for the experiment format, the driver, the ablations, the sta
 - The analysis tests pass on known inputs, and the figures regenerate from one command on a fixture.
 - The fog check is written up with its source and outcome.
 - MODELS.md, the decision record, DETERMINISM.md, and DEVELOPMENT.md updated; PLAN.md change log and README status updated.
+
+## Outcome
+
+Phase 7 was completed in six commits (57 to 62). One command, `swarm_batch`, expands an experiment file and runs every cell for every seed on a pool of workers; `python -m swarmsim_analysis` turns the table into summaries and figures.
+
+What was verified, by tests: the planned matrix expands to 432 cells; the results table is byte-identical for 1, 2, 3, 6, and 40 jobs, in the unit tests and through the command line; a failed run is a row with a status; each ablation variant differs from the full controller in one setting only; the statistics match hand-computed Student t intervals; figures are valid PNGs of the fixed size and the same table gives the same bytes; and the fog model reproduces a published relation when its constant is set to the published value.
+
+Changes from the design above:
+
+- Axis levels are fragments in the scenario format merged over the base, not typed patches in code (see the decision above).
+- Two ablation switches were added (fallback and separation). Prediction is the hold-last predictor and needs none.
+- `swarm_batch` is a separate tool and not a `swarm_sim` subcommand.
+- `weather.fog_constant` was added so that the fog relation can be set to the published value. The default is unchanged.
+- An axis cannot be named like a column of the results table. A first smoke experiment had an axis named `drones`, which made two columns of that name; the loader now rejects it.
+
+Findings:
+
+- At 45 m altitude the LiDAR position fix finds no ground returns, the drones enter safe hold, and the settled formation error in a 60 s run is over 100 m. The experiments fly at 20 m. This is a limit of the sensor model that the evaluation does not exercise.
+- The default fog constant (3.912, 2 percent contrast) is 1.304 times the value in the one published relation checked (3, which matches the 5 percent convention). In the base scenario the position fix is lost between 200 m and 150 m visibility by default, and between 150 m and 120 m with the published constant.
+- In a first three-seed look at the ablation experiment (a pulsed jammer, one drone failing), removing prediction raised the settled error from about 0.75 m to about 5.3 m, removing separation lowered the closest approach from about 4 m to about 1.2 m, and removing the fallback changed nothing measurable. These are preliminary; the five-seed run is in the release phase.
+
+Open items:
+
+- The full runs (matrix, ablation, baselines at five seeds, and the 30-seed rerun) and the results table in the README belong to Phase 9.
+- Rain constants are still placeholders; the fog check covers one sensor type and one fog type.
+- The statistics use t intervals that assume roughly normal values, which several metrics are not; see MODELS.md.
+- No continuous-integration run has exercised the new Python job yet at the time of writing.

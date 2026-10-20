@@ -126,7 +126,7 @@ Goal: reproducible result tables and figures.
 | 59 | Ablation configurations | Each ablation disables exactly one component |
 | 60 | Python analysis: aggregation and confidence intervals (pytest) | Known inputs give known intervals |
 | 61 | Figure scripts | Run on a small fixture and produce the expected files |
-| 62 | Fog visibility fit against published numbers | Model output within tolerance of the cited curve |
+| 62 | Fog relation checked against a published one; `weather.fog_constant` | Model reproduces the published extinction relation exactly at the published constant; the default differs by the ratio of the constants |
 
 ## Phase 8: Unreal viewer
 
