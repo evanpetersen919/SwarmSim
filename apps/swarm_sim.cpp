@@ -45,6 +45,9 @@ void print_usage() {
          "      --transport simulated|sockets          carry messages over real UDP and TCP\n"
          "                                             on loopback (default simulated)\n"
          "      --receive-timeout-ms N                 wait for a socket message (1000)\n"
+         "  swarm_sim export-scene LOG --out FILE      write the log's terrain and obstacles for "
+         "the\n"
+         "                                             Unreal viewer\n"
          "  swarm_sim metrics LOG [--csv FILE]         compute metrics from a scenario log and\n"
          "                                             write a CSV header and row (stdout if\n"
          "                                             no file is given)\n"
@@ -328,6 +331,77 @@ int run_scenario_command(int argc, char** argv) {
   return kExitOk;
 }
 
+// swarm_sim export-scene LOG --out FILE
+//
+// Writes the terrain and obstacles of a scenario log as a scene file (swarm/format/scene.hpp), for
+// the Unreal viewer. The scene is generated from the scenario in the log's header, so the file and
+// the log always match.
+int run_export_scene_command(int argc, char** argv) {
+  std::string log_path;
+  std::string out_path;
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--out") {
+      if (i + 1 >= argc) {
+        std::cerr << "swarm_sim: missing value for --out\n";
+        return kExitUsage;
+      }
+      out_path = argv[++i];
+    } else if (log_path.empty() && arg.rfind("--", 0) != 0) {
+      log_path = arg;
+    } else {
+      std::cerr << "swarm_sim: unexpected argument " << arg << "\n";
+      return kExitUsage;
+    }
+  }
+  if (log_path.empty() || out_path.empty()) {
+    std::cerr << "swarm_sim: export-scene needs a log file and --out FILE\n";
+    return kExitUsage;
+  }
+
+  std::vector<std::uint8_t> bytes;
+  if (!read_file(log_path, bytes)) {
+    std::cerr << "cannot read " << log_path << "\n";
+    return kExitUsage;
+  }
+  swarm::LogReader reader(bytes.data(), bytes.size());
+  const swarm::LogStatus status = reader.read_header();
+  if (status != swarm::LogStatus::kOk) {
+    std::cerr << log_path << ": " << swarm::to_string(status) << "\n";
+    return kExitUsage;
+  }
+  if (!swarm::is_scenario_log(reader.header())) {
+    std::cerr << log_path << ": not a scenario log\n";
+    return kExitUsage;
+  }
+  const std::string tag = swarm::kScenarioLogTag;
+  const swarm::LoadResult loaded =
+      swarm::load_scenario(reader.header().config.substr(tag.size()), "scenario");
+  if (!loaded.ok()) {
+    std::cerr << log_path << ": the scenario in the header does not load: "
+              << swarm::to_string(loaded.errors.front()) << "\n";
+    return kExitUsage;
+  }
+
+  const swarm::ScenarioWorld world = swarm::build_world(loaded.scenario);
+  const swarm::SceneData& scene = world.scene->data();
+  std::vector<std::uint8_t> out;
+  const swarm::SceneStatus scene_status = swarm::serialize_scene(scene, out);
+  if (scene_status != swarm::SceneStatus::kOk) {
+    std::cerr << "cannot serialize the scene: " << swarm::to_string(scene_status) << "\n";
+    return kExitUsage;
+  }
+  if (!write_file(out_path, out)) {
+    std::cerr << "cannot write " << out_path << "\n";
+    return kExitUsage;
+  }
+  std::cout << "wrote scene for " << loaded.scenario.name << ": " << scene.terrain.cells_x << " x "
+            << scene.terrain.cells_y << " cells, " << scene.obstacles.size()
+            << " obstacles, hash=" << hex16(swarm::scene_hash(scene)) << ", file " << out_path
+            << "\n";
+  return kExitOk;
+}
+
 // swarm_sim metrics LOG [--csv FILE]
 int run_metrics_command(int argc, char** argv) {
   std::string log_path;
@@ -387,6 +461,14 @@ int main(int argc, char** argv) {
   if (argc >= 2 && std::string(argv[1]) == "metrics") {
     try {
       return run_metrics_command(argc, argv);
+    } catch (const std::exception& e) {
+      std::cerr << "swarm_sim: " << e.what() << "\n";
+      return kExitUsage;
+    }
+  }
+  if (argc >= 2 && std::string(argv[1]) == "export-scene") {
+    try {
+      return run_export_scene_command(argc, argv);
     } catch (const std::exception& e) {
       std::cerr << "swarm_sim: " << e.what() << "\n";
       return kExitUsage;

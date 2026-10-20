@@ -161,3 +161,33 @@ run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport s
         --receive-timeout-ms abc)
 run_sim(2 run "${SCENARIOS}/minimal.yaml" --out "${WORKDIR}/x.log" --transport sockets
         --receive-timeout-ms -5)
+
+# export-scene: the terrain and obstacles of a scenario log as a scene file for the Unreal viewer.
+set(SCENE "${WORKDIR}/cli_scene.swscene")
+file(REMOVE "${SCENE}")
+run_sim(0 export-scene "${SLOG}" --out "${SCENE}")
+if(NOT EXISTS "${SCENE}")
+  message(FATAL_ERROR "no scene file was written")
+endif()
+if(NOT last_out MATCHES "wrote scene for formation_jam: 125 x 125 cells, 0 obstacles, hash=[0-9a-f]+")
+  message(FATAL_ERROR "unexpected export-scene output:
+${last_out}")
+endif()
+file(READ "${SCENE}" scene_head LIMIT 4)
+if(NOT scene_head STREQUAL "SWSC")
+  message(FATAL_ERROR "the scene file does not start with the scene magic")
+endif()
+# The same log gives the same scene file.
+set(SCENE2 "${WORKDIR}/cli_scene2.swscene")
+run_sim(0 export-scene "${SLOG}" --out "${SCENE2}")
+execute_process(COMMAND ${CMAKE_COMMAND} -E compare_files "${SCENE}" "${SCENE2}" RESULT_VARIABLE same)
+if(NOT same EQUAL 0)
+  message(FATAL_ERROR "two exports of the same log differ")
+endif()
+run_sim(2 export-scene "${WORKDIR}/does_not_exist.log" --out "${SCENE}")
+run_sim(2 export-scene "${WORKDIR}/not_a_log.bin" --out "${SCENE}")
+run_sim(2 export-scene "${LOG}" --out "${SCENE}")
+run_sim(2 export-scene "${SLOG}")
+run_sim(2 export-scene --out "${SCENE}")
+run_sim(2 export-scene "${SLOG}" --out)
+run_sim(2 export-scene "${SLOG}" --out "${SCENE}" --bogus)

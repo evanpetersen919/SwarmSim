@@ -1,6 +1,6 @@
 # swarm_format: log schema and hashing. No Eigen or yaml-cpp. These sources are also
 # compiled directly into the Unreal plugin (see docs/decisions/0002-unreal-integration.md).
-add_library(swarm_format STATIC format/src/hash.cpp format/src/log.cpp format/src/scene.cpp format/src/snapshot.cpp)
+add_library(swarm_format STATIC format/src/hash.cpp format/src/log.cpp format/src/scene.cpp format/src/snapshot.cpp format/src/replay.cpp)
 add_library(swarm::format ALIAS swarm_format)
 target_include_directories(swarm_format PUBLIC format/include)
 swarm_configure_target(swarm_format)
