@@ -6,6 +6,8 @@
 
 class UMaterialInterface;
 class ULandscapeLayerInfoObject;
+class UMaterialParameterCollection;
+class UStaticMesh;
 
 // Which assets the viewer uses. Every entry is a soft reference, and every entry may be empty or
 // point at an asset that is not installed: the viewer then falls back to what it can build from
@@ -49,6 +51,40 @@ class SWARMSIM_API USwarmSimSettings : public UDeveloperSettings {
   UPROPERTY(Config, EditAnywhere, Category = "Terrain",
             meta = (ClampMin = "0.01", ClampMax = "2.0"))
   float RockBlendWidth = 0.25f;
+
+  // Meshes for the scene's cylinder obstacles (trees) and box obstacles (rocks). A tree is the mesh
+  // whose height is closest to the obstacle's. When a list is empty or none of its assets can be
+  // loaded, the viewer uses a cone for a tree and a cube for a rock.
+  UPROPERTY(Config, EditAnywhere, Category = "Obstacles")
+  TArray<TSoftObjectPtr<UStaticMesh>> TreeMeshes;
+
+  UPROPERTY(Config, EditAnywhere, Category = "Obstacles")
+  TArray<TSoftObjectPtr<UStaticMesh>> RockMeshes;
+
+  // Material parameter collections that the pack's foliage and ground materials read. The viewer
+  // sets their scalar parameters; a collection that is missing is skipped.
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  TSoftObjectPtr<UMaterialParameterCollection> WindCollection;
+
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  TSoftObjectPtr<UMaterialParameterCollection> SnowCollection;
+
+  // Scalar parameter names in those collections, and the wind and snow the scene starts with.
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  float WindIntensity = 2.0f;
+
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  float WindXSpeed = 12.5f;
+
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  float WindYSpeed = 5.0f;
+
+  UPROPERTY(Config, EditAnywhere, Category = "Weather")
+  float WindVariationTiling = 5.0f;
+
+  // Fraction of the ground and plants covered in snow, from 0 (summer) to 1.
+  UPROPERTY(Config, EditAnywhere, Category = "Weather", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+  float SnowCoverage = 0.0f;
 
   virtual FName GetCategoryName() const override { return FName(TEXT("Plugins")); }
 };

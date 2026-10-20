@@ -1,7 +1,9 @@
 #include "SwarmSimSettings.h"
 
 #include "Engine/Engine.h"
+#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialParameterCollection.h"
 
 namespace {
 constexpr const TCHAR* kPack = TEXT("/Game/ProceduralNtr_vol2");
@@ -30,4 +32,21 @@ USwarmSimSettings::USwarmSimSettings() {
       Pack +
       TEXT(
           "/maps/Landscape_Layer_Info/L6_Forest_Ground_b_LayerInfo.L6_Forest_Ground_b_LayerInfo")));
+  const auto Mesh = [&Pack](const TCHAR* Path) {
+    return TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(Pack + Path));
+  };
+  TreeMeshes = {
+      Mesh(TEXT("/pnp_v2_assets/Assets/pine_trees_full/pine_tree_full_a.pine_tree_full_a")),
+      Mesh(TEXT(
+          "/pnp_v2_assets/Assets/pine_trees_full/pine_tree_tall_full_b.pine_tree_tall_full_b")),
+      Mesh(TEXT(
+          "/pnp_v2_assets/Assets/pine_trees_full/pine_tree_tall_full_a.pine_tree_tall_full_a")),
+  };
+  RockMeshes = {
+      Mesh(TEXT("/pnp_v2_assets/Assets/rocks/rock_a/rock_a.rock_a")),
+  };
+  WindCollection = TSoftObjectPtr<UMaterialParameterCollection>(FSoftObjectPath(
+      Pack + TEXT("/pnp_v2_assets/Materials/wind_function/global_wind.global_wind")));
+  SnowCollection = TSoftObjectPtr<UMaterialParameterCollection>(FSoftObjectPath(
+      Pack + TEXT("/pnp_v2_assets/Materials/snow/master_snow_adjustment.master_snow_adjustment")));
 }
