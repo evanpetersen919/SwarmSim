@@ -50,3 +50,11 @@ results/
 
 # Local
 .env
+
+# Licensed asset packs installed into the Unreal host project. They are not redistributable, so
+# nothing under Content is committed except the placeholder.
+UnrealHost/Content/*
+!UnrealHost/Content/.gitkeep
+# Editor-generated project settings for the host. They hold a per-machine token, so they are not
+# committed; settings the viewer needs are set in code.
+UnrealHost/Config/

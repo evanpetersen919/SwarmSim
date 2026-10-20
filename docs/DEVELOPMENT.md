@@ -46,6 +46,8 @@ To build from a command line without opening the editor (adjust the engine path;
 F:\UE_5.4\Engine\Build\BatchFiles\Build.bat UnrealHostEditor Win64 Development -Project=F:\vscode\Drone\UnrealHost\UnrealHost.uproject -WaitMutex -MaxParallelActions=4
 ```
 
+Asset packs for the viewer are installed into `UnrealHost/Content` with the editor's Fab window (Window, Fab, Add to Project). Fab's licence does not allow redistributing the raw files, so everything under `UnrealHost/Content` except the placeholder is ignored by git, and so is `UnrealHost/Config`. Which packs the author used is listed in the viewer's documentation, not in the repository. A pack's assets can be inspected without opening the editor, with a Python script run by `UnrealEditor-Cmd.exe UnrealHost.uproject -run=pythonscript -script=FILE -nullrhi -unattended -EnablePlugins=PythonScriptPlugin`.
+
 The Unreal build is not covered by CI. Check it by hand before tagging a release. It was last built with Unreal Engine 5.4.4, Visual Studio 2022 (MSVC 14.38), and the Windows 10.0.26100 SDK, with no errors.
 
 ## Python analysis
