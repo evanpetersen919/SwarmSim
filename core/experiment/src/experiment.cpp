@@ -7,6 +7,8 @@
 #include <set>
 #include <utility>
 
+#include "swarm/scenario/metrics_csv.hpp"
+
 namespace swarm {
 
 std::string to_string(const ExperimentError& error) {
@@ -153,6 +155,26 @@ class Mapping {
   std::set<std::string> used_;
 };
 
+// Names of the results table's own columns: an axis with one of these would give the table two
+// columns of the same name.
+bool is_reserved_column(const std::string& name) {
+  static const std::set<std::string> reserved = [] {
+    std::set<std::string> names = {"experiment", "cell", "replicate", "status", "verified"};
+    const std::string header = metrics_csv_header();
+    std::size_t start = 0;
+    while (start < header.size()) {
+      std::size_t end = header.find_first_of(",\n", start);
+      if (end == std::string::npos) {
+        end = header.size();
+      }
+      names.insert(header.substr(start, end - start));
+      start = end + 1;
+    }
+    return names;
+  }();
+  return reserved.count(name) != 0;
+}
+
 std::string emit(const YAML::Node& node) {
   YAML::Emitter out;
   out << node;
@@ -283,6 +305,9 @@ LoadedExperiment load_experiment(const std::string& text, const ReadFile& read_f
           if (!valid_name(axis.name, kMaxLabel, false)) {
             am.add(apath + ".name", line_of(am.find("name")),
                    "must be 1 to 32 lowercase letters, digits or '_'");
+          } else if (is_reserved_column(axis.name)) {
+            am.add(apath + ".name", line_of(am.find("name")),
+                   axis.name + " is a column of the results table; choose another name");
           } else if (!axis_names.insert(axis.name).second) {
             am.add(apath + ".name", line_of(am.find("name")), "duplicate axis " + axis.name);
           }

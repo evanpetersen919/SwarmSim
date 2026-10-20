@@ -46,7 +46,7 @@ axes:
     levels:
       - {label: p00, set: {comms: {loss: 0.0}}}
       - {label: p30, set: {comms: {loss: 0.3}}}
-  - name: drones
+  - name: size
     levels:
       - {label: n04, set: {}}
       - {label: n06, set: {swarm: {drones: 6, start: {columns: 3}}}}
@@ -222,7 +222,7 @@ TEST(Batch, ProgressDoesNotChangeTheTable) {
 TEST(Batch, TheHeaderAndRowsHaveTheDocumentedColumns) {
   const Fixture f = make();
   const std::string header = swarm::batch_csv_header(f.experiment);
-  EXPECT_EQ(header.rfind("experiment,cell,loss,drones,replicate,status,verified,scenario,seed,", 0),
+  EXPECT_EQ(header.rfind("experiment,cell,loss,size,replicate,status,verified,scenario,seed,", 0),
             0U)
       << header;
   const BatchResult r = swarm::run_batch(f.experiment, f.expansion, BatchOptions{});

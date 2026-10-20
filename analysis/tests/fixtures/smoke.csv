@@ -1,0 +1,9 @@
+experiment,cell,loss,size,length,replicate,status,verified,scenario,seed,drones,dt_s,ticks,duration_s,formation_rmse_m,formation_rmse_settled_m,alive_at_end,min_separation_m,collision_episodes,recovery_count,recovery_longest_s,recovery_censored,messages_sent,messages_delivered,messages_in_flight,dropped_loss,dropped_rate,dropped_jam,delivery_ratio,latency_p50_s,latency_p95_s
+smoke,0,p00,n04,s04,0,ok,0,smoke.p00-n04-s04,1,4,0.02,200,4,22.3605516,16.8331792,4,9.62285405,0,0,,,480,480,0,0,0,0,1,0.04,0.06
+smoke,0,p00,n04,s04,1,ok,0,smoke.p00-n04-s04,2,4,0.02,200,4,21.4019013,15.2831504,4,7.91575484,0,0,,,480,480,0,0,0,0,1,0.04,0.06
+smoke,1,p00,n06,s04,0,ok,0,smoke.p00-n06-s04,1,6,0.02,200,4,32.7703922,26.5275552,6,5.22240619,0,0,,,1200,1200,0,0,0,0,1,0.04,0.06
+smoke,1,p00,n06,s04,1,ok,0,smoke.p00-n06-s04,2,6,0.02,200,4,34.6038389,28.0309876,6,5.87533901,0,0,,,1200,1200,0,0,0,0,1,0.04,0.06
+smoke,2,p30,n04,s04,0,ok,0,smoke.p30-n04-s04,1,4,0.02,200,4,22.3609556,16.8334849,4,9.59505215,0,0,,,480,344,0,136,0,0,0.716666667,0.06,0.06
+smoke,2,p30,n04,s04,1,ok,0,smoke.p30-n04-s04,2,4,0.02,200,4,21.3934682,15.254581,4,8.02435915,0,0,,,480,345,0,135,0,0,0.71875,0.04,0.06
+smoke,3,p30,n06,s04,0,ok,0,smoke.p30-n06-s04,1,6,0.02,200,4,32.7785936,26.5353253,6,5.23692267,0,0,,,1200,847,0,353,0,0,0.705833333,0.04,0.06
+smoke,3,p30,n06,s04,1,ok,0,smoke.p30-n06-s04,2,6,0.02,200,4,34.6062144,28.0312358,6,5.83214451,0,0,,,1200,848,0,352,0,0,0.706666667,0.04,0.06

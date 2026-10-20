@@ -80,7 +80,7 @@ axes:
     levels:
       - {label: p00, set: {comms: {loss: 0.0}}}
       - {label: p30, set: {comms: {loss: 0.3}}}
-  - name: drones
+  - name: size
     levels:
       - {label: n04, set: {}}
       - {label: n06, set: {swarm: {drones: 6, start: {columns: 3}}}}
@@ -428,4 +428,14 @@ TEST(ExperimentFiles, TheBaselinesDifferOnlyInThePredictor) {
       EXPECT_EQ(swarm::canonical_text(s), swarm::canonical_text(ref));
     }
   }
+}
+
+TEST(ExperimentLoad, AnAxisCannotBeNamedLikeAColumnOfTheResultsTable) {
+  for (const char* name : {"drones", "seed", "status", "cell", "replicate", "scenario", "ticks"}) {
+    const std::string axis =
+        std::string("axes: [{name: ") + name + ", levels: [{label: a, set: {}}]}]\n";
+    EXPECT_TRUE(has_error(load(kHead + axis), "is a column of the results table")) << name;
+  }
+  EXPECT_FALSE(has_error(load(kHead + "axes: [{name: size, levels: [{label: a, set: {}}]}]\n"),
+                         "is a column"));
 }

@@ -30,7 +30,7 @@ axes:
           comms:
             jammers:
               - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
-  - name: drones
+  - name: size
     levels:
       - {label: n05, set: {swarm: {drones: 5, start: {columns: 3}}}}
       - {label: n10, set: {swarm: {drones: 10, start: {columns: 4}}}}

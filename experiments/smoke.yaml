@@ -9,7 +9,7 @@ axes:
     levels:
       - {label: p00, set: {comms: {loss: 0.0}}}
       - {label: p30, set: {comms: {loss: 0.3}}}
-  - name: drones
+  - name: size
     levels:
       - {label: n04, set: {swarm: {drones: 4, start: {columns: 2}}}}
       - {label: n06, set: {swarm: {drones: 6, start: {columns: 3}}}}

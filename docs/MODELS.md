@@ -760,3 +760,18 @@ Both default to true. `control.fallback: false` makes a drone behave as in the n
 The canonical scenario text, which is stored in each log header, writes a switch only when it is false, so logs of scenarios that leave the switches alone are byte-identical to what earlier builds wrote. `experiments/ablation.yaml` compares the full controller with each variant under loss, jamming, and a drone failure, and `experiments/baselines.yaml` compares the four predictors, hold-last, dead reckoning, Kalman, and the oracle.
 
 Limits: an ablation measures what the component does in these scenarios, not what it would do in others. With fallback off there is no safe hold, so a drone that has lost its position fixes keeps flying on a drifting estimate.
+
+## Analysis statistics
+
+Source: `analysis/swarmsim_analysis/`. Status: tested in `analysis/tests/` on inputs whose answers are known by hand, and on a small table written by `swarm_batch`.
+
+The table is read as `swarm_batch` writes it. The axes are the columns between `cell` and `replicate`. A metric cell that is empty means the value does not exist for that run and is read as NaN; it is never turned into zero. A run whose status is not `ok` is counted in the group's `failed` column and kept out of every statistic.
+
+For each group (the runs sharing the levels of the chosen axes) and metric the summary has: `n`, the number of runs that have the value; `missing`, the number that do not; the mean; the standard deviation with n - 1 in the denominator; a two-sided 95 percent Student t interval for the mean, `mean +- t(0.975, n - 1) * std / sqrt(n)`; the median; and the minimum and maximum. With one value the standard deviation and interval are NaN, because one value says nothing about spread; with none, everything is NaN.
+
+Choices and limits:
+
+- The t interval assumes the per-seed values are roughly normal. Several metrics are not (collision episodes are counts, recovery time is censored), so the median and range are reported next to the interval, and the interval for such a metric is a rough guide.
+- Recovery time exists only for runs with a disturbance, and only the runs that recovered contribute a time. `recovery_censored` is 1 when any recovery result in the run was censored; its mean over a group is the fraction of runs with a censored recovery, which belongs beside any recovery time that is quoted.
+- Replicates of a cell use consecutive seeds and are treated as independent. The same seed is used in every cell, so runs of different cells are not independent. A comparison between two levels of an axis therefore uses `paired_difference`: runs are matched when they agree on every other axis and on the replicate, only pairs in which both runs succeeded and both have the metric are used, and the differences are summarized in the same way. The number of pairs is the summary's `n`.
+- No significance test is run across the matrix. With hundreds of comparisons, a count of "significant" cells would mostly measure the number of comparisons.

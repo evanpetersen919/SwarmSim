@@ -47,3 +47,21 @@ python -m venv .venv
 .venv/Scripts/activate        # Windows; use .venv/bin/activate elsewhere
 pip install -r analysis/requirements.txt
 ```
+
+Run the tests from the `analysis` directory:
+
+```sh
+cd analysis
+python -m pytest -q
+```
+
+Run an experiment and summarize it (build the `swarm_batch` tool first):
+
+```sh
+build/release/apps/swarm_batch experiments/ablation.yaml --out results/ablation.csv --jobs 4
+cd analysis
+python -m swarmsim_analysis summarize ../results/ablation.csv --by variant,loss \
+    --metrics formation_rmse_settled_m,min_separation_m --out ../results/ablation_summary.csv
+```
+
+The package versions are pinned in `analysis/requirements.txt`; CI installs the same ones.
