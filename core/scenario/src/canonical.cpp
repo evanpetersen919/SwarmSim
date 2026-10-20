@@ -124,6 +124,9 @@ std::string canonical_text(const Scenario& s) {
   line("weather:");
   line("  visibility_m: " + num(s.weather.visibility_m));
   line("  rain_mm_h: " + num(s.weather.rain_rate_mm_h));
+  if (s.weather.fog_constant != kKoschmiederConstant) {
+    line("  fog_constant: " + num(s.weather.fog_constant));
+  }
 
   line("sensors:");
   line("  lidar:");

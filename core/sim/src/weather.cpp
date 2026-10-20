@@ -7,7 +7,7 @@
 namespace swarm {
 
 namespace {
-constexpr double kKoschmieder = 3.912;
+constexpr double kMaxFogConstant = 20.0;
 }
 
 Weather Weather::fog(double visibility_m) {
@@ -28,6 +28,9 @@ void Weather::validate() const {
   if (!finite(visibility_m) || !(visibility_m > 0.0)) {
     throw std::invalid_argument("Weather: visibility must be finite and positive");
   }
+  if (!finite(fog_constant) || !(fog_constant > 0.0) || fog_constant > kMaxFogConstant) {
+    throw std::invalid_argument("Weather: fog constant must be positive and at most 20");
+  }
   if (!finite(rain_rate_mm_h) || rain_rate_mm_h < 0.0) {
     throw std::invalid_argument("Weather: rain rate must be finite and non-negative");
   }
@@ -40,7 +43,7 @@ void Weather::validate() const {
 }
 
 double Weather::extinction_per_m() const {
-  const double fog = kKoschmieder / visibility_m;
+  const double fog = fog_constant / visibility_m;
   const double rain =
       rain_rate_mm_h > 0.0 ? rain_coefficient * std::pow(rain_rate_mm_h, rain_exponent) : 0.0;
   return fog + rain;

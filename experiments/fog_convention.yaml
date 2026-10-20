@@ -1,0 +1,20 @@
+# Where the position fix is lost in fog, under the two visibility conventions: the default fog
+# constant 3.912 (2 percent contrast) and 3.0 (5 percent, the value used by Rasshofer et al. 2011).
+# 2 conventions x 6 visibilities = 12 cells, 3 seeds.
+version: 1
+name: fog_convention
+base: base.yaml
+seeds: {first: 1, count: 3}
+axes:
+  - name: convention
+    levels:
+      - {label: c3912, set: {weather: {fog_constant: 3.912}}}
+      - {label: c3000, set: {weather: {fog_constant: 3.0}}}
+  - name: fog
+    levels:
+      - {label: v250, set: {weather: {visibility_m: 250}}}
+      - {label: v200, set: {weather: {visibility_m: 200}}}
+      - {label: v150, set: {weather: {visibility_m: 150}}}
+      - {label: v120, set: {weather: {visibility_m: 120}}}
+      - {label: v100, set: {weather: {visibility_m: 100}}}
+      - {label: v80, set: {weather: {visibility_m: 80}}}

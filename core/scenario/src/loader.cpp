@@ -510,6 +510,7 @@ void read_weather(Section& root, Scenario& s) {
   }
   read_double(sec, "visibility_m", s.weather.visibility_m, greater_than(0.0));
   read_double(sec, "rain_mm_h", s.weather.rain_rate_mm_h, at_least(0.0));
+  read_double(sec, "fog_constant", s.weather.fog_constant, Bounds{0.0, 20.0, true, false});
   sec.finish();
 }
 

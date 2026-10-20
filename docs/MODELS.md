@@ -136,12 +136,12 @@ Limitations: no beam divergence, no multiple returns, no incidence-angle depende
 
 ## Weather
 
-Source: `core/sim/include/swarm/weather.hpp`. Status: unit-tested. Fog relation standard but not yet validated against data; rain constants are placeholders.
+Source: `core/sim/include/swarm/weather.hpp`. Status: unit-tested. The fog relation was checked against one published relation (see below); rain constants are placeholders.
 
 Weather sets an extinction coefficient `alpha` in 1/m:
 
 ```
-alpha_fog  = 3.912 / visibility                    (Koschmieder, 2% contrast threshold)
+alpha_fog  = fog_constant / visibility              (default 3.912: Koschmieder, 2% contrast threshold)
 alpha_rain = rain_coefficient * rate^rain_exponent  (rate in mm/h)
 alpha      = alpha_fog + alpha_rain
 intensity  = reflectivity * exp(-2 * alpha * range)  (out and back)
@@ -150,6 +150,20 @@ intensity  = reflectivity * exp(-2 * alpha * range)  (out and back)
 A return is detected when its intensity reaches `intensity_threshold`, so the maximum detectable range of a surface is `ln(reflectivity / threshold) / (2 * alpha)`. With the default reflectivity of 0.6 for obstacles, a threshold of 0.05, and a visibility of 200 m, that is about 63 m.
 
 The rain constants (`rain_coefficient = 4e-4`, `rain_exponent = 0.6`) are placeholders chosen to give an extinction of a few per kilometer in moderate rain. They are not from a cited source and have not been checked against data. With them, rain has a modest effect on strong targets within 100 m (100 mm/h pushes the detection limit of a 0.6-reflectivity target to roughly 190 m), while fog is the dominant effect. Do not draw conclusions about rain until the constants are replaced with sourced values.
+
+### Fog check against a published relation
+
+Source: R. H. Rasshofer, M. Spies, and H. Spies, "Influences of weather phenomena on automotive laser radar systems", Advances in Radio Science 9, 49-60 (2011), [doi:10.5194/ars-9-49-2011](https://doi.org/10.5194/ars-9-49-2011). Test: `tests/unit/test_fog_fit.cpp`.
+
+The paper compares laser radar return signals measured in fog at visibilities of 50, 100, 145, and 205 m with a simulation at 50, 100, 150, and 200 m, over 0 to 30 m, for a sensor whose droplet refractive index is given for 905 nm. The caption of its Fig. 7 states that the simulation assumed `alpha = 3 / visibility` (and a backscatter coefficient of 0.046 / visibility per steradian). The text reports "very good agreement" between measurement and simulation and gives no numeric error, so no numeric tolerance is claimed here.
+
+What was found:
+
+- The constant 3 is the 5 percent convention (`ln(1/0.05) = 2.996`), and this project's default 3.912 is the 2 percent one (`ln(1/0.02)`). The two conventions define visibility differently; the paper does not say which it used, so this is an inference from the number. The default extinction is 1.304 times the published one at every visibility, and returns are weaker by `exp(-2 * (3.912 - 3) * range / visibility)`. At 200 m visibility the detection limit of a 0.6-reflectivity surface at threshold 0.05 is 63.5 m by default and 82.8 m with the published constant.
+- The model reproduces the published relation exactly when `fog_constant` is set to 3.0 (`weather.fog_constant` in a scenario, a value in (0, 20]). The test checks the extinction and the two-way transmission at the four visibilities and ranges of the figure. The default is unchanged, so all existing results stand; the constant is the setting to use for a sensitivity check.
+- Effect on the results: `experiments/fog_convention.yaml` runs the base scenario (ten drones, 20 m altitude) at six visibilities under both constants, three seeds. The position fix is lost, and the settled formation error rises from under 1 m to over 90 m, between 200 m and 150 m visibility with the default constant and between 150 m and 120 m with 3.0.
+
+This is one sourced relation for one sensor type and one fog type. It does not validate the rain constants, the detection threshold, the reflectivities, or the sensor model, and a single paper's measurements do not settle which visibility convention a given deployment would use.
 
 Limitations: weather is uniform in space and time, there is no backscatter clutter or false returns from rain or fog, and it does not affect the IMU or communications.
 

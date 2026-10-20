@@ -90,7 +90,7 @@ The two control switches (fallback and separation), their scenario keys, loader 
 
 ### Fog fit (commit 62)
 
-A test and a short document section: the cited curve, the points, the tolerance, the model's values, and the outcome.
+A test (`tests/unit/test_fog_fit.cpp`) and a section in MODELS.md. The source is Rasshofer et al. (2011), whose Fig. 7 caption gives `alpha = 3 / visibility` for fog measured at 50 to 205 m with a 905 nm sensor. The paper reports qualitative agreement and no numeric error, so the check is not a tolerance on a curve: it shows that the model reproduces the published relation exactly with a fog constant of 3.0, and that the default 3.912 differs from it by a factor of 1.304, which is the difference between the 2 percent and 5 percent visibility conventions. The commit adds `weather.fog_constant` (default unchanged, written to the canonical text only when it differs) and `experiments/fog_convention.yaml`, which shows where the position fix is lost under each constant. The outcome: the default model stands, the difference is documented, and the setting exists for a sensitivity check.
 
 ## Tests
 
