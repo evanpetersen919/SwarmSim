@@ -775,3 +775,20 @@ Choices and limits:
 - Recovery time exists only for runs with a disturbance, and only the runs that recovered contribute a time. `recovery_censored` is 1 when any recovery result in the run was censored; its mean over a group is the fraction of runs with a censored recovery, which belongs beside any recovery time that is quoted.
 - Replicates of a cell use consecutive seeds and are treated as independent. The same seed is used in every cell, so runs of different cells are not independent. A comparison between two levels of an axis therefore uses `paired_difference`: runs are matched when they agree on every other axis and on the replicate, only pairs in which both runs succeeded and both have the metric are used, and the differences are summarized in the same way. The number of pairs is the summary's `n`.
 - No significance test is run across the matrix. With hundreds of comparisons, a count of "significant" cells would mostly measure the number of comparisons.
+
+## Figures
+
+Source: `analysis/swarmsim_analysis/figures.py`, `make.py`. Status: tested on synthetic tables and on a real batch table; no test compares pixels.
+
+`python -m swarmsim_analysis figures TABLE --out DIR [--where axis=level,...]` writes the figures that the table's axes support, as PNG files of 640 by 400 pixels with a fixed font, palette (Okabe and Ito), and layout, so the same table gives the same bytes:
+
+| File | Needs | Shows |
+|---|---|---|
+| `error_vs_loss.png`, `delivery_vs_loss.png` | a `loss` axis | settled formation error and delivery ratio against loss level |
+| `separation_vs_jamming.png`, `recovery_vs_jamming.png` | a `jamming` axis | closest approach and longest recovery time against jamming level |
+| `ablation_error.png`, `ablation_separation.png` | `variant` and `loss` axes | the controller variants as bars per loss level |
+| `baselines_error.png`, `baselines_separation.png` | `predictor` and `loss` axes | the same for the four predictors |
+
+A figure whose metric has no value in any run is skipped and reported, not drawn empty. Rules every figure follows: a point is the mean over its group with a 95 percent Student t interval, a point with one run has no interval, a group with no value is left out so a line joins only neighbouring levels that were measured, series are shifted slightly sideways so equal values stay visible, and axes that the figure does not show are pooled. The subtitle states the axes that are fixed with `--where`, the axes pooled over, and the number of runs. Pooling mixes conditions, so a figure from a full matrix should be made with the other axes fixed.
+
+Limits: level labels are placed at equal spacing in table order, not at their numeric value. Intervals inherit the limits of the statistics above.

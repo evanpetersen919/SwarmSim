@@ -65,3 +65,10 @@ python -m swarmsim_analysis summarize ../results/ablation.csv --by variant,loss 
 ```
 
 The package versions are pinned in `analysis/requirements.txt`; CI installs the same ones.
+
+Figures from the same table:
+
+```sh
+python -m swarmsim_analysis figures ../results/ablation.csv --out ../results/figures \
+    --where faults=one
+```

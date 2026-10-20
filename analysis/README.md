@@ -9,3 +9,5 @@ Reads the results table written by `swarm_batch` and computes summaries. It does
 | `aggregate.py` | Groups runs by axis levels, summarizes metrics, and computes paired differences between two levels of an axis |
 
 `python -m swarmsim_analysis summarize TABLE --by AXES --metrics NAMES --out FILE` writes one row per group.
+
+`python -m swarmsim_analysis figures TABLE --out DIR [--where axis=level]` writes the figures the table supports (`figures.py`, `make.py`).
