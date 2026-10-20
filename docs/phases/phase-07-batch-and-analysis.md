@@ -72,7 +72,7 @@ The weather model has a visibility parameter that sets how quickly the LiDAR ret
 
 ### Batch driver (commit 58)
 
-`core/experiment`: `run_batch(experiment, jobs, options)` returning the rows in task order, and the `swarm_sim batch EXPERIMENT --out FILE --jobs N` subcommand (or a separate `swarm_batch` tool if the subcommand makes `swarm_sim` too large). `--keep-logs`, `--verify-all`, `--seeds N` to override the count for a quick run. Progress goes to standard error and nothing in it enters the table.
+`core/experiment`: `run_batch(experiment, jobs, options)` returning the rows in task order, and the `swarm_batch EXPERIMENT --out FILE --jobs N` tool (separate from `swarm_sim`, which stays a single-run program). `--keep-logs`, `--verify-all`, `--seeds N` to override the count for a quick run. Progress goes to standard error and nothing in it enters the table.
 
 ### Ablations (commit 59)
 
@@ -96,7 +96,7 @@ Counts and order of the matrix; each unknown or empty or duplicate case rejected
 
 ## Documentation produced
 
-MODELS.md sections for the experiment format, the driver, the ablations, the statistics, and the fog fit; an ADR for the typed-patch axes and the shared seeds; DETERMINISM.md on why batch output is independent of job count; DEVELOPMENT.md on setting up the Python environment and regenerating the tables and figures; PLAN.md change log and README status at the end of the phase.
+MODELS.md sections for the experiment format, the driver, the ablations, the statistics, and the fog fit; an ADR for the merged-fragment axes and the shared seeds; DETERMINISM.md on why batch output is independent of job count; DEVELOPMENT.md on setting up the Python environment and regenerating the tables and figures; PLAN.md change log and README status at the end of the phase.
 
 ## Risks
 

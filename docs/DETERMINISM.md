@@ -50,3 +50,7 @@ The socket channel (`net/`) carries messages over real UDP and TCP sockets on th
 - Wall-clock time is used only for that timeout, and only in `net/` and the apps. `core/` never includes anything from `net/` or any socket header, and `scripts/check_core_invariants.sh` fails the build if it does.
 
 What is not guaranteed: that the operating system delivers every datagram. On loopback it almost always does; under heavy load it may not.
+
+## Batch runs
+
+`swarm_batch` runs many scenarios at once, on worker threads that take tasks from a shared counter. The results do not depend on that: each task runs its own simulation on one thread with no shared state, writes its row to its own slot, and the table is written in task order after all tasks finish. Which worker ran which task, and in what order the tasks finished, is not visible in the output. The progress callback and the log sink are the only code that runs concurrently with other tasks, and neither can change a row. Tests compare the table for 1, 2, 3, 6, and 40 jobs byte for byte, and the command-line script does the same through the tool.

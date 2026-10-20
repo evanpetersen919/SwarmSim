@@ -10,3 +10,8 @@ swarm_configure_target(swarm_bench)
 add_executable(swarm_netcmp swarm_netcmp.cpp)
 target_link_libraries(swarm_netcmp PRIVATE swarm::net swarm::core swarm::format)
 swarm_configure_target(swarm_netcmp)
+
+add_executable(swarm_batch swarm_batch.cpp)
+target_link_libraries(swarm_batch PRIVATE swarm::experiment swarm::scenario swarm::core swarm::format)
+target_compile_definitions(swarm_batch PRIVATE SWARM_VERSION="${PROJECT_VERSION}")
+swarm_configure_target(swarm_batch)

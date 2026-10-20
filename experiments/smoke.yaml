@@ -1,0 +1,18 @@
+# A small experiment for checking the tools: 2 loss levels x 2 drone counts x one short length,
+# 2 seeds, 8 runs of 4 seconds each.
+version: 1
+name: smoke
+base: base.yaml
+seeds: {first: 1, count: 2}
+axes:
+  - name: loss
+    levels:
+      - {label: p00, set: {comms: {loss: 0.0}}}
+      - {label: p30, set: {comms: {loss: 0.3}}}
+  - name: drones
+    levels:
+      - {label: n04, set: {swarm: {drones: 4, start: {columns: 2}}}}
+      - {label: n06, set: {swarm: {drones: 6, start: {columns: 3}}}}
+  - name: length
+    levels:
+      - {label: s04, set: {duration_s: 4, metrics: {settle_s: 2}}}

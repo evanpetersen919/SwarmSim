@@ -738,3 +738,15 @@ Rejected with a path and, where there is one, a line: unknown keys, a wrong vers
 `experiments/matrix.yaml` is the planned matrix: 4 loss levels (0, 10, 30, 50 percent, independent), 3 weather (clear, fog at 200 m visibility, rain at 8 mm/h), 3 jamming (none, constant, pulsed), 3 drone counts (5, 10, 20), 2 fault settings (none, drone 2 fails at 30 s), and 2 scenes (field, hills): 432 cells, 2,160 runs at five seeds. The level values are assumptions chosen for this study, not measurements.
 
 Limits: the cells are not run by this library; the batch driver does that. Because seeds are shared, replicates of different cells are not independent of each other.
+
+## Batch driver
+
+Source: `core/experiment/include/swarm/experiment/batch.hpp`, `apps/swarm_batch.cpp`. Status: unit-tested and covered by a command-line script.
+
+`swarm_batch EXPERIMENT --out FILE` expands the experiment and runs every cell for every seed (task index = cell x seeds + replicate). Each task builds its scenario with the replicate's seed, runs it on one thread over the deterministic channel, optionally verifies the log by re-execution, and computes the metrics from the log. `--jobs N` sets the worker threads, `--seeds N` overrides the seed count, `--verify-every N` re-executes the log of every Nth task by index (default 10; 0 none, 1 all), and `--keep-logs DIR` writes each log. Progress goes to standard error.
+
+The table has one row per task, in task order: `experiment, cell, <one column per axis>, replicate, status, verified`, then the 23 columns of the metrics CSV. The axis columns hold the level labels. A task that fails becomes a row whose status says what failed (`run failed`, `verification failed`, or `metrics failed`) and whose metric cells are empty; the other tasks still run, and the exit status is 1. A text file `FILE.meta` records the platform, compiler, counts, and the experiment text. The table contains no timing or host information.
+
+The table is identical for any number of jobs: tasks share no state, each writes its own slot, and rows are written in index order. A unit test and the command-line script compare 1 job with several, byte for byte.
+
+Limits: logs are held in memory per running task. Sampled verification checks the determinism of the sampled tasks only; the determinism tests cover the rest.
