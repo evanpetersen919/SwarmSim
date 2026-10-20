@@ -135,7 +135,7 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 | # | Commit | New tests or checks |
 |---|---|---|
 | 63 | Replay reader in `core/format`, `swarm_sim export-scene`, plugin builds with it | Core tests: bad logs, ordering, trailer hash, interpolation exact at logged frames, scene file round trip |
-| 64 | Plugin settings, log and scene loading, terrain mesh | Automation test: terrain vertices equal the core's heights. Manual: looks like the heightfield |
+| 64 | Plugin settings, scene loading, terrain as a Landscape with the asset pack | Automation tests: layout, height encoding, orientation, ground weights, Landscape heights equal the scene's. Manual: looks like the heightfield |
 | 65 | Drones, obstacles, grass and trees spawned from code, with stand-ins when assets are missing | Automation tests: counts match the log and scene; stand-ins used; scatter repeatable. Manual: foliage moves |
 | 66 | Playback, cameras, derived attitude, rotor spin, state indicators, heads-up display | Automation test: last-tick hash equals the trailer's. Manual: cameras, rotors, colours |
 | 67 | Atmosphere, fog from visibility, jamming zones, message arcs (optional) | Manual |

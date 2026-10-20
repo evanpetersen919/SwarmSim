@@ -48,6 +48,16 @@ F:\UE_5.4\Engine\Build\BatchFiles\Build.bat UnrealHostEditor Win64 Development -
 
 Asset packs for the viewer are installed into `UnrealHost/Content` with the editor's Fab window (Window, Fab, Add to Project). Fab's licence does not allow redistributing the raw files, so everything under `UnrealHost/Content` except the placeholder is ignored by git, and so is `UnrealHost/Config`. Which packs the author used is listed in the viewer's documentation, not in the repository. A pack's assets can be inspected without opening the editor, with a Python script run by `UnrealEditor-Cmd.exe UnrealHost.uproject -run=pythonscript -script=FILE -nullrhi -unattended -EnablePlugins=PythonScriptPlugin`.
 
+The plugin's automation tests run without a window and without a GPU:
+
+```
+F:\UE_5.4\Engine\Binaries\Win64\UnrealEditor-Cmd.exe F:\vscode\Drone\UnrealHost\UnrealHost.uproject -ExecCmds="Automation RunTests SwarmSim; Quit" -unattended -nullrhi -nosplash -stdout -log -DisablePlugins=Fab
+```
+
+`-DisablePlugins=Fab` is needed because Unreal's Fab plugin crashes in a windowless editor when it restores its browser tab. The tests that use an asset pack report "skipped" when the pack is not installed. They are not part of CI, which cannot build Unreal.
+
+The terrain is built from a scene file, which `swarm_sim export-scene LOG --out FILE` writes. In the editor's Python, `unreal.SwarmSceneLibrary.build_terrain_from_scene_file(world, path)` builds it.
+
 The Unreal build is not covered by CI. Check it by hand before tagging a release. It was last built with Unreal Engine 5.4.4, Visual Studio 2022 (MSVC 14.38), and the Windows 10.0.26100 SDK, with no errors.
 
 ## Python analysis

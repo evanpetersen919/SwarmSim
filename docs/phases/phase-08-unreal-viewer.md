@@ -38,7 +38,7 @@ For the presentation the drone, trees, grass, and terrain material come from ass
 
 ### Everything in the scene comes from code
 
-- **Terrain.** One procedural mesh from the heightfield with the fixed triangulation (cell split into `(a, b, c)` and `(a, c, d)`), in the core's meters and +z up converted to Unreal's centimeters and its own axes in one place. Vertex normals are computed from that mesh. The material is the terrain material setting.
+- **Terrain.** An Unreal Landscape actor built from the heightfield, one Landscape vertex per heightfield sample, with the material and ground layers of the terrain asset pack (see the decision below). The simulation's meters and right-handed frame are converted to Unreal's centimeters and left-handed frame in one place, by negating y. A grid that is not a size a Landscape allows is padded by repeating its edge heights, outside the simulation's world. Ground layers (grass, rock, mud, two forest floors) are weighted from slope, height, and seeded noise, so the same log gives the same ground.
 - **Obstacles.** A cylinder obstacle becomes a tree (the tree mesh scaled to the obstacle's height and radius, or the cone stand-in) and a box obstacle becomes a building or rock (scaled to its extents). The count equals the scene's obstacle count.
 - **Grass and extra trees.** Scattered over the terrain with a deterministic generator seeded from the run's seed, on the mesh's surface, avoiding obstacles, as instanced meshes, so that the same log always shows the same field. The density and the maximum number are settings with limits, because a scene of millions of instances is slow.
 - **Wind.** The trees and grass move because the asset materials animate vertices from a wind parameter. The viewer sets the direction and speed on the wind parameter collection from code, with a gentle variation in time. If the assets have no such material, they stand still, and the documentation says what the viewer needs from an asset for it to move.
@@ -68,7 +68,9 @@ CI cannot build Unreal, but a headless editor can run automation tests on this m
 
 ### Load and terrain (commit 64)
 
-The plugin settings object, loading of a log and a scene from paths, the conversion between the core's coordinates and Unreal's, and the terrain mesh. Automation test: sampled vertices equal the core's heights.
+The plugin settings object (soft paths to the terrain material and the ground layers, with the pack's assets as defaults), scene file loading, the coordinate conversion, and the Landscape builder (editor only, because `ALandscape::Import` exists only in the editor). Terrain is a Landscape and not a procedural mesh because the chosen asset pack is built for Landscapes: its materials use landscape layers, and its grass and bushes are landscape grass types that Unreal scatters, with wind, on its own. The cost is that a Landscape triangulates its quads its own way, so inside a cell its surface differs slightly from the simulation's `(a, b, c)`, `(a, c, d)` split; at the grid points the heights are equal. A procedural mesh with the exact triangulation remains the fallback for a build without the pack and for the exact-geometry claim.
+
+Automation tests, run without a window: the layout choice, the height encoding and the orientation rule, the ground weights, the Landscape against a synthetic scene, and the Landscape with the pack's assets when they are installed. The Landscape's stored heights are compared at every vertex through the editor's data interface, and its placement in the world through the engine's own height query at the interior samples, with a spike placed at a known sample and checked at numbers written out in the test, not through the conversion helpers, so a mirrored or transposed terrain fails.
 
 ### Spawn from code (commit 65)
 

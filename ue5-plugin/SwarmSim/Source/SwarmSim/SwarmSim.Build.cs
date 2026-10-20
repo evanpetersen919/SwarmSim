@@ -13,7 +13,20 @@ public class SwarmSim : ModuleRules
         bUseUnity = false;
 
         PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
-        PrivateDependencyModuleNames.AddRange(new string[] { "Projects" });
+        PrivateDependencyModuleNames.AddRange(new string[]
+        {
+            "Projects",
+            "DeveloperSettings",
+            "Landscape",
+            "Foliage",  // LandscapeEdit.h includes the foliage actor header
+        });
+
+        // Building a Landscape from code (ALandscape::Import) exists only in the editor, and the
+        // automation tests create a test world with the editor's helpers.
+        if (Target.bBuildEditor)
+        {
+            PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
+        }
 
         // core/format is compiled into this module as sources. scripts/link_ue.ps1 creates
         // the junction Private/swarm_format -> <repo>/core/format. It must stay free of
