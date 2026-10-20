@@ -130,15 +130,15 @@ Goal: reproducible result tables and figures.
 
 ## Phase 8: Unreal viewer
 
-Goal: replay a recorded run in Unreal 5.4. CI cannot build Unreal, so each row has a manual check in addition to a C++ test where one applies.
+Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fly the logged paths, generated terrain, and trees and grass that move in the wind. CI cannot build Unreal, so the core parts are tested in CI, the plugin parts by Unreal automation tests run locally without a window, and what only the eye can judge by a manual check. Detailed design: [phases/phase-08-unreal-viewer.md](phases/phase-08-unreal-viewer.md).
 
 | # | Commit | New tests or checks |
 |---|---|---|
-| 63 | Log reader used from the plugin | Same reader sources pass a core test; plugin builds |
-| 64 | Terrain mesh from the scenario heightfield | Manual: matches core geometry at sampled points |
-| 65 | Obstacles and drones spawned from code | Manual: counts match the log |
-| 66 | Replay playback and camera | Manual: playback state hash matches the log at the final tick |
-| 67 | Weather and jamming visuals (optional) | Manual |
+| 63 | Replay reader in `core/format`, `swarm_sim export-scene`, plugin builds with it | Core tests: bad logs, ordering, trailer hash, interpolation exact at logged frames, scene file round trip |
+| 64 | Plugin settings, log and scene loading, terrain mesh | Automation test: terrain vertices equal the core's heights. Manual: looks like the heightfield |
+| 65 | Drones, obstacles, grass and trees spawned from code, with stand-ins when assets are missing | Automation tests: counts match the log and scene; stand-ins used; scatter repeatable. Manual: foliage moves |
+| 66 | Playback, cameras, derived attitude, rotor spin, state indicators, heads-up display | Automation test: last-tick hash equals the trailer's. Manual: cameras, rotors, colours |
+| 67 | Atmosphere, fog from visibility, jamming zones, message arcs (optional) | Manual |
 
 ## Phase 9: Release
 
