@@ -17,4 +17,4 @@ If the plugin later needs the full simulation, build it as a static library with
 - No second build system inside Unreal and no CRT mismatch.
 - `core/format` must stay free of Eigen and yaml-cpp and must compile as C++20.
 - Windows macros such as `check`, `verify`, `min`, `max` can clash with core headers. Include core headers only from `.cpp` files in the plugin, never from headers.
-- The junction approach is unverified against UBT 5.4. If UBT does not follow the junction, replace it with a copy step in the script.
+- The junction approach was checked against UBT 5.4.4: it follows the junction and compiles the sources. Compiling them in Unreal showed that the module must not use unity builds (`bUseUnity = false`), because `log.cpp` and `scene.cpp` define `kMagic` in anonymous namespaces and collide when merged, so `core/format` must stay buildable as separate translation units.

@@ -38,7 +38,15 @@ Requirements: Unreal Engine 5.4 and Visual Studio 2022 with the "Game developmen
 
 The plugin compiles `core/format` as sources. Keep that directory free of Eigen, yaml-cpp, and wall-clock calls, and make sure it builds as C++20 (CI has a job for this).
 
-The Unreal build is not covered by CI. Check it by hand before tagging a release.
+The plugin module is built without unity builds (`bUseUnity = false` in `SwarmSim.Build.cs`). The `core/format` sources are written to compile one at a time, as CMake builds them, and use the same names in anonymous namespaces; merged into one translation unit they collide.
+
+To build from a command line without opening the editor (adjust the engine path; 4 parallel jobs keeps the load low):
+
+```
+F:\UE_5.4\Engine\Build\BatchFiles\Build.bat UnrealHostEditor Win64 Development -Project=F:\vscode\Drone\UnrealHost\UnrealHost.uproject -WaitMutex -MaxParallelActions=4
+```
+
+The Unreal build is not covered by CI. Check it by hand before tagging a release. It was last built with Unreal Engine 5.4.4, Visual Studio 2022 (MSVC 14.38), and the Windows 10.0.26100 SDK, with no errors.
 
 ## Python analysis
 

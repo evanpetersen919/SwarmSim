@@ -7,6 +7,11 @@ public class SwarmSim : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+        // The core/format sources are written to compile one at a time, as CMake builds them, and
+        // use the same names in anonymous namespaces (kMagic in log.cpp and scene.cpp). A unity
+        // build would merge them into one translation unit and fail.
+        bUseUnity = false;
+
         PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
         PrivateDependencyModuleNames.AddRange(new string[] { "Projects" });
 
