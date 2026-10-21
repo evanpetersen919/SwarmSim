@@ -35,6 +35,10 @@ METRIC_LABELS = {
     "delivery_ratio": "Delivery ratio",
     "latency_p50_s": "Median message latency (s)",
     "latency_p95_s": "95th percentile message latency (s)",
+    "orbit_radial_rmse_m": "Orbit radial error (m)",
+    "orbit_altitude_rmse_m": "Orbit altitude error (m)",
+    "orbit_phase_rmse_m": "Orbit phase error, arc length (m)",
+    "time_on_station": "Fraction of time on station",
 }
 
 AXIS_LABELS = {

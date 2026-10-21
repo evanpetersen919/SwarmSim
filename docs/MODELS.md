@@ -953,3 +953,22 @@ The Kalman and dead-reckoning predictors assume straight flight, which is wrong 
 Checked against a neighbor on a true circle (radius 150 m, speed 17 m/s) after 4 seconds of reports every 0.1 s: with exact reports the predicted position stays within 0.5 m of the circle for 10 seconds, while dead reckoning is off by more than ten times that. By calculation a straight-line prediction of that circle is about 93 m off after 10 seconds. With noisy reports (position 2 m, velocity 0.3 m/s) the turning prediction is closer than dead reckoning at 5 and 10 seconds, but the error is larger than with exact reports, because the turn rate from noisy headings is itself noisy.
 
 Limits. The turn rate is a single constant over the prediction; an aircraft that changes its turn rate (leaving an orbit, avoiding a neighbor) is mispredicted, and the uncertainty term is not calibrated against such changes. The predictor has not yet been compared with the others inside a swarm run; the benchmark does that.
+
+## Orbit metrics
+
+Source: `core/scenario/src/metrics.cpp`, `metrics.hpp`. Status: tested on real runs and on the CSV layout. Computed from the log alone, like every other metric.
+
+For a fixed-wing scenario the formation error is measured against each aircraft's point on the orbit at the time of the state, not against a slot on the mission path, because a quad's formation slots mean nothing for aircraft on circles. The columns `formation_rmse_m` and `formation_rmse_settled_m` keep their names and now hold that error, and the recovery metrics use the same error, so a recovery after a jam or a failure is the time for the swarm to get back within the threshold of its orbit references. Four columns are added at the end of the CSV and are empty for a quad scenario:
+
+| Column | Meaning |
+|---|---|
+| `orbit_radial_rmse_m` | RMS of the horizontal distance from the center minus the aircraft's orbit radius |
+| `orbit_altitude_rmse_m` | RMS of the altitude minus the aircraft's slot altitude |
+| `orbit_phase_rmse_m` | RMS of the arc length of the phase error, radius times the angle from the aircraft to its reference; positive means behind |
+| `time_on_station` | The fraction of (aircraft, record) samples within 30 m of the orbit reference point |
+
+All four are over every alive aircraft and every record with state. The 30 m station radius is a constant, not a scenario setting, and is an assumption. `min_separation_m` and `collision_episodes` are the same for both vehicles. Failed aircraft are excluded from the error, as for a quad, but a failed aircraft is frozen where it stopped and still counts in the separation, which is the stated simple failure model and not what a real aircraft would do.
+
+The first columns of the CSV are unchanged, so existing tables still parse; code that reads columns by position past `latency_p95_s` is the only thing affected. The batch tables and the Python analysis package (`swarmsim_analysis`) carry the new columns, and the figure labels know their names.
+
+What the first runs show (`scenarios/fixed_wing_orbit.yaml`, 60 seconds, from the tests): an established swarm has formation error under 30 m, radial and altitude errors under 20 m, phase error under 30 m, and is on station more than 90 percent of the time; dense fog that blinds the camera raises the phase error. These are the thresholds the tests assert, not measured benchmark results.

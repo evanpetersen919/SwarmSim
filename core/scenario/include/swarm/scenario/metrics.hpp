@@ -19,6 +19,9 @@ enum class MetricsStatus {
 
 const char* to_string(MetricsStatus status);
 
+// An aircraft is on station when it is within this distance of its orbit reference point.
+inline constexpr double kStationRadiusM = 30.0;
+
 enum class DisturbanceKind {
   kJamEnd,  // the end of a finite jammer window
   kFault,   // a drone failing
@@ -49,11 +52,26 @@ struct MetricsResult {
   // Formation error: the root mean square, over alive drones and over the records considered, of
   // the distance from a drone's true position to its slot on the mission reference. The state
   // after the step of tick k is at time (k + 1) * dt, and the reference is evaluated there.
+  // For a fixed-wing scenario the reference of a drone is its point on the orbit at that time
+  // (orbit.hpp), and the recovery metrics below use the same error.
   // `formation_rmse` covers every record with drone state; `formation_rmse_settled` only those at
   // or after `metrics.settle_s`. Failed drones are excluded.
   std::optional<double> formation_rmse;
   std::optional<double> formation_rmse_settled;
   std::uint32_t alive_at_end = 0;  // alive drones in the last record with drone state
+
+  // Orbit metrics, for a fixed-wing scenario only; empty for a quad. Over every alive drone and
+  // every record with drone state, with R_i, z_i, and theta_i the radius, altitude, and angle of
+  // the drone's orbit reference at the time of the state:
+  //   orbit_radial_rmse    RMS of (horizontal distance from the center - R_i), meters
+  //   orbit_altitude_rmse  RMS of (altitude - z_i), meters
+  //   orbit_phase_rmse     RMS of R_i * wrap(theta_i - own angle), the arc length of the phase
+  //                        error in meters; positive when the drone is behind its reference
+  //   time_on_station      the fraction of samples within kStationRadiusM of the reference
+  std::optional<double> orbit_radial_rmse;
+  std::optional<double> orbit_altitude_rmse;
+  std::optional<double> orbit_phase_rmse;
+  std::optional<double> time_on_station;
 
   // Smallest true distance between any two drones, alive or failed, over every record with drone
   // state.

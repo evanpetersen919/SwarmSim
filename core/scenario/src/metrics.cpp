@@ -10,6 +10,7 @@
 
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
+#include "swarm/control/orbit.hpp"
 #include "swarm/format/log.hpp"
 #include "swarm/format/snapshot.hpp"
 #include "swarm/scenario/run.hpp"
@@ -74,6 +75,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   const std::vector<Vec3> offsets =
       make_formation(scenario.formation_shape, n, scenario.formation_spacing_m);
   const double radius = scenario.metrics.collision_radius_m;
+  const bool fixed_wing = scenario.vehicle.kind == VehicleKind::kFixedWing;
+  const OrbitParams orbit = fixed_wing ? orbit_params(scenario) : OrbitParams{};
 
   MetricsOutcome outcome;
   MetricsResult& out = outcome.result;
@@ -86,6 +89,11 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   std::uint64_t count_all = 0;
   double sum_settled = 0.0;
   std::uint64_t count_settled = 0;
+  double sum_radial = 0.0;
+  double sum_altitude = 0.0;
+  double sum_phase = 0.0;
+  std::uint64_t count_on_station = 0;
+  std::uint64_t count_orbit = 0;
   std::vector<std::uint64_t> latencies_ticks;  // delivery tick - send tick, per delivered message
   std::vector<std::uint64_t> delivery_ticks_pending;    // scheduled messages, checked at the end
   std::vector<std::pair<std::uint64_t, double>> trace;  // (tick, formation RMSE), where defined
@@ -147,6 +155,17 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     const double time = static_cast<double>(record.tick + 1) * scenario.dt;
     const Vec3 center = path.at(time).position;
     const bool settled = time >= scenario.metrics.settle_s;
+    // Where each drone should be: its slot on the mission reference, or its point on the orbit.
+    std::vector<OrbitReference> orbit_refs;
+    std::vector<Vec3> targets(n);
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (fixed_wing) {
+        orbit_refs.push_back(orbit_reference(i, n, time, orbit));
+        targets[i] = orbit_refs.back().position;
+      } else {
+        targets[i] = center + offsets[i];
+      }
+    }
     std::uint32_t alive = 0;
     for (std::uint32_t i = 0; i < n; ++i) {
       const AgentSnapshot& a = snapshot.agents[i];
@@ -154,7 +173,21 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         continue;
       }
       ++alive;
-      const double e2 = norm_squared(to_vec(a.position) - (center + offsets[i]));
+      const double e2 = norm_squared(to_vec(a.position) - targets[i]);
+      if (fixed_wing) {
+        const OrbitReference& ref = orbit_refs[i];
+        const Vec3 p = to_vec(a.position);
+        const double dx = p.x - orbit.center.x;
+        const double dy = p.y - orbit.center.y;
+        const double radial = std::hypot(dx, dy) - ref.radius;
+        const double altitude = p.z - ref.position.z;
+        const double phase = ref.radius * wrap_angle(ref.angle - std::atan2(dy, dx));
+        sum_radial += radial * radial;
+        sum_altitude += altitude * altitude;
+        sum_phase += phase * phase;
+        count_on_station += e2 <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        ++count_orbit;
+      }
       sum_all += e2;
       ++count_all;
       if (settled) {
@@ -167,7 +200,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
       double sum = 0.0;
       for (std::uint32_t i = 0; i < n; ++i) {
         if (snapshot.agents[i].alive) {
-          sum += norm_squared(to_vec(snapshot.agents[i].position) - (center + offsets[i]));
+          sum += norm_squared(to_vec(snapshot.agents[i].position) - targets[i]);
         }
       }
       trace.emplace_back(record.tick, std::sqrt(sum / static_cast<double>(alive)));
@@ -199,6 +232,13 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   if (count_settled > 0) {
     out.formation_rmse_settled = std::sqrt(sum_settled / static_cast<double>(count_settled));
+  }
+  if (count_orbit > 0) {
+    const double samples = static_cast<double>(count_orbit);
+    out.orbit_radial_rmse = std::sqrt(sum_radial / samples);
+    out.orbit_altitude_rmse = std::sqrt(sum_altitude / samples);
+    out.orbit_phase_rmse = std::sqrt(sum_phase / samples);
+    out.time_on_station = static_cast<double>(count_on_station) / samples;
   }
 
   // Messages. The last tick in the log is out.ticks - 1; anything scheduled after it is in flight.

@@ -267,6 +267,12 @@ TEST(EndToEnd, AFullScenarioWithLossAJamAndAFailureRecordsVerifiesAndFillsEveryC
   const std::vector<std::string> header = cells(swarm::metrics_csv_header());
   ASSERT_EQ(row.size(), header.size());
   for (std::size_t i = 0; i < row.size(); ++i) {
-    EXPECT_FALSE(row[i].empty()) << "empty cell: " << header[i];
+    // The orbit columns exist only for a fixed-wing scenario; this one is a quad.
+    const bool orbit_column = header[i].rfind("orbit_", 0) == 0 || header[i] == "time_on_station";
+    if (orbit_column) {
+      EXPECT_TRUE(row[i].empty()) << "a quad has a value in: " << header[i];
+    } else {
+      EXPECT_FALSE(row[i].empty()) << "empty cell: " << header[i];
+    }
   }
 }
