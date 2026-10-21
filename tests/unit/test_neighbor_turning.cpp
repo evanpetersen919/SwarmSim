@@ -105,7 +105,7 @@ TEST(TurningPredictor, StraightFlightIsPredictedLikeDeadReckoning) {
   for (std::uint64_t tick = 5; tick <= 200; tick += 5) {
     NeighborReport r;
     r.send_tick = tick;
-    r.position = {10.0 + 17.0 * tick * kDt, -5.0, 80.0};
+    r.position = {10.0 + 17.0 * static_cast<double>(tick) * kDt, -5.0, 80.0};
     r.velocity = {17.0, 0.0, 0.5};
     r.position_sigma = 1.0;
     turning->on_report(r, tick + 1);
@@ -175,7 +175,7 @@ TEST(TurningPredictor, TheTurnRateIsLimited) {
     NeighborReport r;
     r.send_tick = tick;
     r.position = {0.0, 0.0, 0.0};
-    const double heading = 3.0 * tick * kDt;  // 3 rad/s
+    const double heading = 3.0 * static_cast<double>(tick) * kDt;  // 3 rad/s
     r.velocity = {17.0 * std::cos(heading), 17.0 * std::sin(heading), 0.0};
     r.position_sigma = 1.0;
     turning->on_report(r, tick);
