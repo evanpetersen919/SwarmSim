@@ -42,7 +42,7 @@ For the presentation the drone, trees, grass, and terrain material come from ass
 - **Obstacles.** A cylinder obstacle becomes a tree and a box obstacle becomes a rock. A tree is the mesh whose height is closest to the cylinder's, scaled uniformly to that height (limited to 0.4 to 3 times), standing on the cylinder's base, turned to a yaw that depends on its position and the seed. A rock is scaled in each axis until the mesh's bounds are exactly the box, and it is not turned, because the box is aligned with the axes; a box much taller than it is wide is a stack of rocks that together fill it, because one stretched rock looks like a pillar (found in the first render). Each mesh gets one instanced component. The count equals the scene's obstacle count. The simulation's cylinders are thin (up to 1.5 m in radius) and a pine's crown is wider, so a pine looks bulkier than the cylinder the sensor sees; the viewer does not change that.
 - **Grass and bushes.** The asset pack's landscape material scatters them itself, as landscape grass types, on the parts of the terrain painted as grass, within a few tens of meters of the camera. A close-up render with the pack confirmed this, so the viewer adds no scatter code of its own; it only paints the ground layers. (An earlier design scattered them from code with a seeded generator. That is only needed if a terrain asset has no such grass.)
 - **Wind and snow.** The trees, grass, and bushes move because the pack's materials read a material parameter collection (`global_wind`: `Wind_Intensity`, `Wind_X_Speed`, `Wind_Y_Speed`, `Wind_Variation_Tiling`). The viewer sets those scalars from code from its settings, and `ASwarmScene::SetWind` changes them. The same pack's `master_snow_adjustment` collection has `Snow_Coverage`, which `ASwarmScene::SetSnowCoverage` sets from 0 (summer) to 1. A collection that is not installed is skipped, and assets whose materials do not read these parameters stand still.
-- **Light and sky.** A sun, sky atmosphere, sky light, height fog, and exposure, created by the viewer. The fog density follows the scenario's visibility, so a foggy scenario looks foggy (commit 67).
+- **Light and sky.** A sun, sky atmosphere, sky light, height fog, and exposure, created by the viewer. The fog density follows the scenario's visibility, so a foggy scenario looks foggy (commit 70).
 
 ### Playback is driven by the log, and the hash on screen is the log's
 
@@ -80,9 +80,19 @@ Automation tests, run without a window: the layout choice, the height encoding a
 
 The playback actor, interpolation, derived attitude, rotor spin, the cameras, the heads-up display, and the state indicators. Automation test: playback to the last tick shows the trailer hash.
 
-### Atmosphere and overlays (commit 67, optional)
+### Atmosphere and overlays (commit 70, optional)
 
 Sun and sky, fog from the scenario's visibility, jamming zones, rain, and message arcs. Reading the scenario's weather and jammers from the log header needs a reader for the canonical text in the plugin (no yaml-cpp), so that commit either adds a small reader of the canonical text to `core/format` or has the export step also write a viewer manifest; the choice is made when the commit is designed.
+
+### Premade-environment showcase (commits 67 to 69)
+
+Decided in [decision 0009](../decisions/0009-showcase-in-a-premade-environment.md). The reason is a finding of the first renders: the asset pack gives a scene that does not read as a recent game, while Epic's Electric Dreams Environment sample does, and it runs as a standalone game on the development machine.
+
+- **Commit 67, scenario scene from a file** (core). A scenario may say `scene: {source: file, path: ...}`. The runner reads the scene file (the existing format) instead of generating terrain and obstacles, puts the file's content hash into the canonical scenario text, and refuses to run or verify a log whose file is missing or whose hash differs.
+- **Commit 68, a world subsystem that plays a replay in any level** (plugin). It reads `-SwarmLog=` and the anchor from the command line, and spawns the playback actor in the loaded level at world start, without editing the level. The anchor is the level's x and y of the simulation's origin; heights are absolute.
+- **Commit 69, the scene exporter** (plugin). In a running level it samples the terrain heights over the scenario's area at the grid's spacing, and collects the instanced meshes inside the area (by name patterns and a minimum height) as cylinders for trees and boxes for rocks, then writes the scene file. Tested against a synthetic world in an automation test, and checked by eye against the real level.
+
+The Electric Dreams project is not modified except for a link to the plugin. Its content is not redistributable and is kept out of the repository. The drone model is chosen separately.
 
 ## Tests and checks
 
@@ -113,3 +123,7 @@ MODELS.md sections for the replay reader and the interpolation, the scene export
 - The automation tests pass locally and the manual checks are done by the author.
 - The hash on screen at the last tick equals the one the command line prints.
 - MODELS.md, the decision record, and DEVELOPMENT.md written; PLAN.md change log and README status updated.
+
+### What was tried for the generated scene and not kept
+
+A lighting rig prototype (low sun, sky atmosphere, volumetric clouds, height fog, exposure, bloom, Lumen, and the pack's mountain ring as a backdrop) improved depth and mood in the renders, but not the quality of the vegetation and ground, which is the pack's own. It was not ported into the plugin. City Sample (Epic's urban sample) looked photographic and ran as a game, but a city is a poor setting for what the simulation models (see decision 0009). The Electric Dreams project's `SP_HoverDrone` plugin is a flyable camera pawn with no drone model.

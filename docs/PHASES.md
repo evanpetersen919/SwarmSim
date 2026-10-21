@@ -138,13 +138,16 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 | 64 | Plugin settings, scene loading, terrain as a Landscape with the asset pack | Automation tests: layout, height encoding, orientation, ground weights, Landscape heights equal the scene's. Manual: looks like the heightfield |
 | 65 | Drones, obstacles, grass and trees spawned from code, with stand-ins when assets are missing | Automation tests: counts match the log and scene; stand-ins used; scatter repeatable. Manual: foliage moves |
 | 66 | Playback, cameras, derived attitude, rotor spin, state indicators, heads-up display | Automation test: last-tick hash equals the trailer's. Manual: cameras, rotors, colours |
-| 67 | Atmosphere, fog from visibility, jamming zones, message arcs (optional) | Manual |
+| 67 | Showcase in a premade environment, part 1: scenario scene from a file | Core tests: a scenario that names a scene file runs on its terrain and obstacles, the file's hash is in the log header, a changed file fails verification |
+| 68 | Showcase part 2: a world subsystem that plays a replay in any level, and the anchor | Automation tests against a synthetic world: drones at the anchored positions, no level changes. Manual: flies in Electric Dreams |
+| 69 | Showcase part 3: scene exporter from a running level | Automation test: exported heights and obstacles equal a synthetic world's. Manual: the export of Electric Dreams matches the forest |
+| 70 | Atmosphere, fog from visibility, jamming zones, message arcs (optional) | Manual |
 
 ## Phase 9: Release
 
 | # | Commit | Check |
 |---|---|---|
-| 68 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
-| 69 | 30-seed run if time allows | Same command, config change only |
-| 70 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
-| 71 | Tag `v0.1.0` | CI green on the tagged commit |
+| 71 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
+| 72 | 30-seed run if time allows | Same command, config change only |
+| 73 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
+| 74 | Tag `v0.1.0` | CI green on the tagged commit |
