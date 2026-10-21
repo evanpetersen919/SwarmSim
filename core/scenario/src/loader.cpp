@@ -558,6 +558,36 @@ void read_mission(Section& root, Scenario& s) {
   sec.finish();
 }
 
+// `vehicle:` is read only from a version 2 file. `type: quad` takes no other key; `type:
+// fixed_wing` takes overrides of the ALTIUS-class defaults, in the units shown by the key names.
+void read_vehicle(Section& root, Scenario& s) {
+  const YAML::Node node = root.find("vehicle");
+  if (!node.IsDefined()) {
+    return;
+  }
+  Section sec(root.ctx(), node, "vehicle");
+  if (!sec.valid()) {
+    return;
+  }
+  read_choice<VehicleKind>(sec, "type", s.vehicle.kind,
+                           {{"quad", VehicleKind::kQuad}, {"fixed_wing", VehicleKind::kFixedWing}});
+  if (s.vehicle.kind == VehicleKind::kFixedWing) {
+    FixedWingParams& p = s.vehicle.fixed_wing;
+    read_double(sec, "min_speed_mps", p.min_speed, greater_than(0.0));
+    read_double(sec, "max_speed_mps", p.max_speed, greater_than(0.0));
+    read_double(sec, "max_accel_mps2", p.max_accel, greater_than(0.0));
+    read_double(sec, "max_decel_mps2", p.max_decel, greater_than(0.0));
+    double bank_deg = p.max_bank * 180.0 / kPi;
+    if (read_double(sec, "max_bank_deg", bank_deg, Bounds{0.0, 89.0, true, false})) {
+      p.max_bank = bank_deg * kPi / 180.0;
+    }
+    read_double(sec, "max_climb_rate_mps", p.max_climb_rate, greater_than(0.0));
+    read_double(sec, "max_descent_rate_mps", p.max_descent_rate, greater_than(0.0));
+    read_double(sec, "max_vertical_accel_mps2", p.max_vertical_accel, greater_than(0.0));
+  }
+  sec.finish();
+}
+
 void read_weather(Section& root, Scenario& s) {
   const YAML::Node node = root.find("weather");
   if (!node.IsDefined()) {
@@ -825,6 +855,9 @@ void cross_validate(Context& ctx, const Scenario& s) {
     validate_with(ctx, "scene.obstacles", 0, [&] { validate(s.obstacles); });
   }
   validate_with(ctx, "weather", 0, [&] { s.weather.validate(); });
+  if (s.vehicle.kind == VehicleKind::kFixedWing) {
+    validate_with(ctx, "vehicle", 0, [&] { validate(s.vehicle.fixed_wing); });
+  }
   validate_with(ctx, "mission", 0, [&] { MissionPath path(s.mission); });
   validate_with(ctx, "comms", 0, [&] {
     ChannelConfig c = s.channel;
@@ -863,9 +896,9 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   Section root(ctx, doc, "");
   std::uint64_t version = 0;
   if (read_uint(root, "version", version, 0, std::numeric_limits<std::uint64_t>::max(), true) &&
-      version != kScenarioVersion) {
+      (version < 1 || version > kScenarioVersion)) {
     ctx.add("version", line_of(root.find("version")),
-            "unsupported version " + std::to_string(version) + "; this build reads version " +
+            "unsupported version " + std::to_string(version) + "; this build reads versions 1 to " +
                 std::to_string(kScenarioVersion));
   }
   read_text(root, "name", s.name);
@@ -887,6 +920,12 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   read_scene(root, s);
   read_swarm(root, s);
   read_mission(root, s);
+  if (version >= kScenarioVehicleVersion) {
+    read_vehicle(root, s);
+  } else if (root.find("vehicle").IsDefined()) {
+    ctx.add("vehicle", line_of(root.find("vehicle")),
+            "needs version " + std::to_string(kScenarioVehicleVersion));
+  }
   read_weather(root, s);
   read_sensors(root, s);
   read_comms(root, s, clock);

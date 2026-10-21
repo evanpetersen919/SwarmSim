@@ -1,5 +1,6 @@
 #include "swarm/scenario/world.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -106,6 +107,21 @@ ScenarioWorld build_world(const Scenario& s) {
     c.brain.staleness_ticks = s.staleness_ticks;
     c.start = starts[i];
     c.vehicle.max_accel = c.brain.separation.max_accel;
+    c.vehicle_kind = s.vehicle.kind;
+    c.fixed_wing = s.vehicle.fixed_wing;
+    if (s.vehicle.kind == VehicleKind::kFixedWing) {
+      // An aircraft starts flying: toward the first waypoint, at the mission speed within its
+      // limits. At rest it would be at minimum speed along its heading after one step, and the
+      // pose estimator would start with the wrong velocity.
+      const Vec3 toward = s.mission.waypoints.front() - starts[i];
+      const double horizontal = std::hypot(toward.x, toward.y);
+      const FixedWingParams& wing = s.vehicle.fixed_wing;
+      const double speed = std::clamp(s.mission.speed, wing.min_speed, wing.max_speed);
+      c.start_velocity = Vec3{speed, 0.0, 0.0};
+      if (horizontal > 1e-9) {
+        c.start_velocity = Vec3{speed * toward.x / horizontal, speed * toward.y / horizontal, 0.0};
+      }
+    }
     c.lidar.beams = s.lidar_beams;
     c.lidar.azimuth_samples = s.lidar_azimuth_samples;
     c.weather = s.weather;

@@ -93,7 +93,8 @@ std::string canonical_text(const Scenario& s) {
   std::string o;
   const auto line = [&](const std::string& text) { o += text + "\n"; };
 
-  line("version: " + uint(kScenarioVersion));
+  // A scenario that uses no version 2 feature is written as version 1, as it always was.
+  line("version: " + uint(s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion));
   line("name: " + quoted(s.name));
   line("seed: " + uint(s.seed));
   line("dt: " + num(s.dt));
@@ -136,6 +137,19 @@ std::string canonical_text(const Scenario& s) {
   line("  speed_mps: " + num(s.mission.speed));
   line(std::string("  loop: ") + (s.mission.loop ? "true" : "false"));
 
+  if (s.vehicle.kind == VehicleKind::kFixedWing) {
+    const FixedWingParams& p = s.vehicle.fixed_wing;
+    line("vehicle:");
+    line("  type: fixed_wing");
+    line("  min_speed_mps: " + num(p.min_speed));
+    line("  max_speed_mps: " + num(p.max_speed));
+    line("  max_accel_mps2: " + num(p.max_accel));
+    line("  max_decel_mps2: " + num(p.max_decel));
+    line("  max_bank_deg: " + num(p.max_bank * 180.0 / kPi));
+    line("  max_climb_rate_mps: " + num(p.max_climb_rate));
+    line("  max_descent_rate_mps: " + num(p.max_descent_rate));
+    line("  max_vertical_accel_mps2: " + num(p.max_vertical_accel));
+  }
   line("weather:");
   line("  visibility_m: " + num(s.weather.visibility_m));
   line("  rain_mm_h: " + num(s.weather.rain_rate_mm_h));

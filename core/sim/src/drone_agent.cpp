@@ -6,9 +6,19 @@
 
 namespace swarm {
 
+std::unique_ptr<const IVehicle> DroneAgent::make_vehicle(const DroneAgentConfig& config) {
+  if (config.vehicle_kind == VehicleKind::kFixedWing) {
+    return std::make_unique<FixedWingVehicle>(config.fixed_wing);
+  }
+  return std::make_unique<QuadVehicle>(config.vehicle);
+}
+
 DroneAgentConfig DroneAgent::prepared(DroneAgentConfig config) {
   if (config.fix_period_ticks == 0) {
     throw std::invalid_argument("DroneAgentConfig: fix_period_ticks must be positive");
+  }
+  if (config.vehicle_kind == VehicleKind::kFixedWing) {
+    validate(config.fixed_wing);
   }
   config.brain.launch.position = config.start;
   config.brain.launch.velocity = config.start_velocity;
@@ -21,7 +31,7 @@ DroneAgentConfig DroneAgent::prepared(DroneAgentConfig config) {
 DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
     : config_(prepared(config)),
       scene_(scene),
-      vehicle_(std::make_unique<QuadVehicle>(config_.vehicle)),
+      vehicle_(make_vehicle(config_)),
       imu_(config_.imu, config_.brain.dt, config_.seed, config_.brain.id),
       lidar_(config_.lidar, config_.seed, config_.brain.id),
       fixer_(config_.fix, config_.seed, config_.brain.id),

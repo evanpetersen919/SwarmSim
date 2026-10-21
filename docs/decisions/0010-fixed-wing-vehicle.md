@@ -19,7 +19,7 @@ ADR 0005 already separates a drone's brain from its vehicle. The brain sees esti
 5. **Add orbit-based control for the fixed-wing vehicle:** a loiter circle per drone with slot-dependent radius, speed adjustment to hold phase spacing, and a priority-and-speed-corridor separation rule. The fallback state machine keeps its states; safe hold becomes an orbit. This version stops there: no path planning, no wind estimation, no area-search planner.
 6. **Keep the quadrotor** as a second vehicle in the benchmark. The comparison is a result, and it shows the interface is real.
 7. **Out of scope:** warheads, seekers, targeting, and strike behavior. The study is about coordination, communication, and navigation under degradation.
-8. **The log header records the vehicle type and a hash of its parameters.** This is a format change: a version bump and an update to the byte-exact layout test.
+8. **The vehicle is recorded through the scenario text, not through a new log field.** The log header already stores the canonical scenario text, which now includes the vehicle type and every parameter, so the binary log format does not change. The scenario format goes to version 2, which adds the `vehicle` section. A scenario that does not use it is written as version 1 in canonical text, so every log written before version 2 existed still verifies.
 
 ## Consequences
 

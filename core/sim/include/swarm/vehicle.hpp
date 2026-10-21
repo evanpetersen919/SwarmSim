@@ -1,9 +1,17 @@
 #pragma once
 
+#include <cstdint>
+
 #include "swarm/drone_command.hpp"
 #include "swarm/dynamics.hpp"
 
 namespace swarm {
+
+// Which vehicle a drone is. The agent builds the vehicle from this and the matching parameters.
+enum class VehicleKind : std::uint8_t {
+  kQuad = 0,
+  kFixedWing = 1,
+};
 
 // The truth-side half of a drone that turns a command into motion (ADR 0005, ADR 0010). A vehicle
 // owns its limits and nothing else; the state stays with the agent. Controllers never see this

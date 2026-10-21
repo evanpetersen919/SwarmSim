@@ -7,6 +7,7 @@
 #include "swarm/agent.hpp"
 #include "swarm/control/drone_brain.hpp"
 #include "swarm/dynamics.hpp"
+#include "swarm/fixed_wing.hpp"
 #include "swarm/imu.hpp"
 #include "swarm/lidar.hpp"
 #include "swarm/position_fix.hpp"
@@ -23,7 +24,11 @@ struct DroneAgentConfig {
   Vec3 start;
   Vec3 start_velocity;
 
+  // Which vehicle this drone is. `vehicle` holds the limits of a quad and `fixed_wing` those of a
+  // fixed-wing aircraft; the one that does not match `vehicle_kind` is not used.
+  VehicleKind vehicle_kind = VehicleKind::kQuad;
   DroneParams vehicle;
+  FixedWingParams fixed_wing;
   ImuParams imu = ImuParams::typical_mems();
   LidarConfig lidar;
   PositionFixConfig fix;
@@ -72,6 +77,7 @@ class DroneAgent : public IAgent {
 
  private:
   static DroneAgentConfig prepared(DroneAgentConfig config);
+  static std::unique_ptr<const IVehicle> make_vehicle(const DroneAgentConfig& config);
 
   DroneAgentConfig config_;
   const IScene& scene_;

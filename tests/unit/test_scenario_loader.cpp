@@ -185,8 +185,8 @@ TEST(ScenarioLoader, EveryRequiredKeyIsRequired) {
 }
 
 TEST(ScenarioLoader, AnUnsupportedVersionIsRejected) {
-  const LoadResult r = load_scenario(with("version: 1", "version: 2"));
-  EXPECT_TRUE(has_error(r, "version", "unsupported version 2"));
+  const LoadResult r = load_scenario(with("version: 1", "version: 3"));
+  EXPECT_TRUE(has_error(r, "version", "unsupported version 3"));
 }
 
 TEST(ScenarioLoader, WrongTypesAreErrors) {

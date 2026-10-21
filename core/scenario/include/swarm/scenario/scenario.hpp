@@ -9,8 +9,10 @@
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/deterministic_channel.hpp"
+#include "swarm/fixed_wing.hpp"
 #include "swarm/obstacles.hpp"
 #include "swarm/terrain.hpp"
+#include "swarm/vehicle.hpp"
 #include "swarm/weather.hpp"
 
 namespace swarm {
@@ -67,6 +69,13 @@ struct MetricsSettings {
   double recovery_hold_s = 2.0;
 };
 
+// The vehicle every drone of the swarm flies. Written to the canonical text only when it is not a
+// quad, which needs scenario version 2.
+struct VehicleSettings {
+  VehicleKind kind = VehicleKind::kQuad;
+  FixedWingParams fixed_wing;  // used when `kind` is kFixedWing
+};
+
 // Everything that defines a run except the thread count, which must never matter. Times are in
 // ticks; the file states them in seconds and the loader converts them.
 struct Scenario {
@@ -84,6 +93,8 @@ struct Scenario {
   double formation_spacing_m = 20.0;
   StartLayout start;
   Mission mission;
+
+  VehicleSettings vehicle;
 
   Weather weather;
 
@@ -125,8 +136,11 @@ struct LoadResult {
   bool ok() const { return errors.empty(); }
 };
 
-// Version of the scenario file format this build reads.
-inline constexpr std::uint64_t kScenarioVersion = 1;
+// Versions of the scenario file format this build reads. Version 2 adds the `vehicle` section; a
+// file that does not use it is the same in both, and the canonical text of such a scenario says
+// version 1, so logs written before version 2 existed still verify.
+inline constexpr std::uint64_t kScenarioVersion = 2;
+inline constexpr std::uint64_t kScenarioVehicleVersion = 2;
 
 // Parses and validates scenario text. Never throws: every problem, including malformed YAML, comes
 // back as an entry in `errors`, in file order where there is one. Unknown keys are errors.
