@@ -446,6 +446,17 @@ Source: `core/scenario/include/swarm/scenario/world.hpp`. Status: unit-tested.
 
 `build_world` turns a scenario into a runnable world: the scene, the simulation configuration, and one drone configuration per drone. The scene is generated from the scenario seed (terrain, then obstacles). The obstacle-free area is centered on the first waypoint, so `scene.obstacles.spawn_clear_radius_m` clears the area where the swarm assembles. Terrain and obstacles do not depend on the number of drones.
 
+A scenario can take its scene from a file instead of generating it:
+
+```
+scene:
+  source: file
+  path: scenes/level.swscene
+  hash: 0123456789abcdef   # optional in the file
+```
+
+The file is in the scene format (`swarm/format/scene.hpp`), for example one written by `swarm_sim export-scene` or by the Unreal exporter. A file defines the whole scene, so `type`, `size_m`, `cell_m`, `amplitude_m`, and `obstacles` are errors with `source: file`. The path is relative to the directory the program runs in. `build_world` reads the file, checks it, and takes its content hash (`scene_hash`). If the scenario gives a hash and it differs, building fails. The returned world's scenario has the hash filled in, and `run_scenario` writes that scenario into the log header, so the header always names the exact scene the run used. `verify_scenario_log` builds the world from the header, so verifying a log whose file is missing, invalid, or changed fails with a configuration error that names the hash. A scenario that generates its scene has the same canonical text as before, so existing logs and golden files do not change. Heights in a scene file are absolute: mission waypoints and the start altitude are heights in the file's own coordinates, so a scenario that uses a level exported at an elevation of several hundred meters needs waypoints at that elevation. Nothing keeps the drones above the ground except the mission's heights and the brain's separation; the simulation has no terrain-following. A run on a file that holds the scene `build_world` generated for a scenario has the same final hash as the run that generated it (tested).
+
 Start positions are a grid of `start.columns` columns centered on the first waypoint, with each drone moved by a random amount up to `jitter_m` in x and y and up to `altitude_jitter_m` in z. The draws come from their own stream (`kStreamStart`), three per drone in drone order regardless of the jitter amounts, so changing the jitter changes the positions but never the draws. Two drones in adjacent cells start at least `spacing_m - 2 * jitter_m` apart; the test checks this over 100 seeds.
 
 `build_world` rejects a formation whose slots are not farther apart than the separation margin (12 m by default), with a message in terms of `swarm.formation.spacing_m`, and rejects the oracle predictor until it is implemented. `make_simulation(threads)` returns a fresh simulation at tick 0 that refers to the world's scene; the world must outlive it. The hashes of a built simulation are identical for 1, 2, 4, and 8 threads.

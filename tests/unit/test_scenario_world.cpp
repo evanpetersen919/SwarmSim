@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -11,6 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "swarm/format/log.hpp"
+#include "swarm/format/scene.hpp"
+#include "swarm/scenario/run.hpp"
 #include "swarm/scenario/scenario.hpp"
 #include "swarm/scenario/world.hpp"
 
@@ -271,4 +276,117 @@ TEST(ScenarioWorld, ASwarmThatIsToldToHoldIsCommandedThroughTheBuiltSimulation) 
     const auto& d = dynamic_cast<const swarm::DroneAgent&>(sim->agent(i));
     EXPECT_TRUE(d.brain().holding_commanded()) << "drone " << i;
   }
+}
+
+// ---- scenes from files ----------------------------------------------------------------------
+
+namespace {
+
+std::string scene_path(const std::string& name) {
+  return (std::filesystem::temp_directory_path() / ("swarmsim_test_" + name + ".swscene")).string();
+}
+
+void write_scene_file(const std::string& path, const swarm::SceneData& scene) {
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::serialize_scene(scene, bytes), swarm::SceneStatus::kOk);
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out.write(reinterpret_cast<const char*>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+}
+
+// A short scenario on the generated scene, and the same scenario reading that scene from a file.
+struct FileScenes {
+  Scenario generated;
+  Scenario from_file;
+  std::string path;
+  std::uint64_t hash = 0;
+};
+
+FileScenes make_file_scenes(const std::string& name) {
+  FileScenes f;
+  f.generated = with_obstacles();
+  f.generated.duration_ticks = 100;
+  const ScenarioWorld w = swarm::build_world(f.generated);
+  f.hash = swarm::scene_hash(w.scene->data());
+  f.path = scene_path(name);
+  write_scene_file(f.path, w.scene->data());
+  f.from_file = f.generated;
+  f.from_file.scene_file.used = true;
+  f.from_file.scene_file.path = f.path;
+  return f;
+}
+
+}  // namespace
+
+TEST(SceneFromFile, TheWorldHasTheFilesSceneAndRecordsItsHash) {
+  const FileScenes f = make_file_scenes("world");
+  const ScenarioWorld w = swarm::build_world(f.from_file);
+  EXPECT_EQ(scene_hash_of(w), f.hash);
+  EXPECT_FALSE(f.from_file.scene_file.hash.has_value());
+  ASSERT_TRUE(w.scenario.scene_file.hash.has_value());
+  EXPECT_EQ(*w.scenario.scene_file.hash, f.hash);
+}
+
+TEST(SceneFromFile, AMatchingHashIsAccepted) {
+  FileScenes f = make_file_scenes("match");
+  f.from_file.scene_file.hash = f.hash;
+  EXPECT_NO_THROW(swarm::build_world(f.from_file));
+}
+
+TEST(SceneFromFile, AWrongHashAMissingFileAndAnInvalidFileAreRefused) {
+  FileScenes f = make_file_scenes("refused");
+  Scenario wrong = f.from_file;
+  wrong.scene_file.hash = f.hash ^ 1U;
+  EXPECT_THROW(swarm::build_world(wrong), std::invalid_argument);
+
+  Scenario missing = f.from_file;
+  missing.scene_file.path = scene_path("does_not_exist");
+  EXPECT_THROW(swarm::build_world(missing), std::invalid_argument);
+
+  const std::string junk = scene_path("junk");
+  std::ofstream(junk, std::ios::binary) << "not a scene";
+  Scenario invalid = f.from_file;
+  invalid.scene_file.path = junk;
+  EXPECT_THROW(swarm::build_world(invalid), std::invalid_argument);
+}
+
+TEST(SceneFromFile, ARunOnTheFileIsTheRunOnTheGeneratedScene) {
+  const FileScenes f = make_file_scenes("same_run");
+  std::vector<std::uint8_t> generated_log;
+  std::vector<std::uint8_t> file_log;
+  std::uint64_t generated_hash = 0;
+  std::uint64_t file_hash = 0;
+  ASSERT_EQ(swarm::run_scenario(f.generated, 1, generated_log, &generated_hash),
+            swarm::LogStatus::kOk);
+  ASSERT_EQ(swarm::run_scenario(f.from_file, 1, file_log, &file_hash), swarm::LogStatus::kOk);
+  EXPECT_EQ(file_hash, generated_hash);
+}
+
+TEST(SceneFromFile, TheLogHeaderHoldsTheHashAndTheLogVerifies) {
+  FileScenes f = make_file_scenes("verify");
+  std::vector<std::uint8_t> log;
+  ASSERT_EQ(swarm::run_scenario(f.from_file, 1, log), swarm::LogStatus::kOk);
+
+  swarm::LogReader reader(log.data(), log.size());
+  ASSERT_EQ(reader.read_header(), swarm::LogStatus::kOk);
+  char hex[20];
+  std::snprintf(hex, sizeof(hex), "%016llx", static_cast<unsigned long long>(f.hash));
+  EXPECT_NE(reader.header().config.find(std::string("hash: ") + hex), std::string::npos);
+
+  EXPECT_EQ(swarm::verify_run_log(log.data(), log.size(), 1).status, swarm::VerifyStatus::kOk);
+
+  // A different scene in the same file: the log no longer belongs to it.
+  swarm::SceneData other = swarm::build_world(f.generated).scene->data();
+  other.terrain.heights[0] += 1.0;
+  write_scene_file(f.path, other);
+  const swarm::VerifyResult changed = swarm::verify_run_log(log.data(), log.size(), 1);
+  EXPECT_EQ(changed.status, swarm::VerifyStatus::kBadConfig);
+  EXPECT_NE(changed.message.find("hash"), std::string::npos);
+}
+
+TEST(SceneFromFile, AGeneratedScenarioKeepsItsCanonicalText) {
+  // Nothing about the scene source may change the text of a scenario that generates its scene,
+  // because logs and golden files hold that text.
+  const Scenario s = load("formation_jam.yaml");
+  EXPECT_EQ(swarm::canonical_text(s).find("source:"), std::string::npos);
 }

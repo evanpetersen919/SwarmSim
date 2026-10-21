@@ -191,3 +191,47 @@ run_sim(2 export-scene "${SLOG}")
 run_sim(2 export-scene --out "${SCENE}")
 run_sim(2 export-scene "${SLOG}" --out)
 run_sim(2 export-scene "${SLOG}" --out "${SCENE}" --bogus)
+
+# A scenario whose scene comes from that file: it runs, its log holds the scene's hash, the log
+# verifies, and exporting the scene from that log gives back the same file.
+set(FILE_SCENARIO "${WORKDIR}/cli_scene_scenario.yaml")
+file(WRITE "${FILE_SCENARIO}"
+  "version: 1
+seed: 3
+duration_s: 10
+scene:
+  source: file
+  path: \"${SCENE}\"
+"
+  "swarm:
+  drones: 4
+mission:
+  waypoints:
+    - [0, 0, 20]
+")
+set(FLOG "${WORKDIR}/cli_scene_file.log")
+file(REMOVE "${FLOG}")
+run_sim(0 run "${FILE_SCENARIO}" --out "${FLOG}" --threads 1)
+run_sim(0 --replay "${FLOG}" --verify --threads 4)
+set(SCENE3 "${WORKDIR}/cli_scene3.swscene")
+run_sim(0 export-scene "${FLOG}" --out "${SCENE3}")
+execute_process(COMMAND ${CMAKE_COMMAND} -E compare_files "${SCENE}" "${SCENE3}" RESULT_VARIABLE same)
+if(NOT same EQUAL 0)
+  message(FATAL_ERROR "the scene exported from a run on a scene file differs from that file")
+endif()
+# The file is the scene: a missing file is a usage error.
+file(WRITE "${WORKDIR}/cli_scene_missing.yaml"
+  "version: 1
+seed: 3
+duration_s: 10
+scene:
+  source: file
+  path: \"${WORKDIR}/no_such.swscene\"
+"
+  "swarm:
+  drones: 4
+mission:
+  waypoints:
+    - [0, 0, 20]
+")
+run_sim(2 run "${WORKDIR}/cli_scene_missing.yaml" --out "${FLOG}")

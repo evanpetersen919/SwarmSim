@@ -116,6 +116,27 @@ bool parse_number(const std::string& text, double& out) {
   return true;
 }
 
+// Exactly sixteen hexadecimal digits, as scene hashes are written.
+bool parse_hash(const std::string& text, std::uint64_t& out) {
+  if (text.size() != 16) {
+    return false;
+  }
+  std::uint64_t v = 0;
+  for (char c : text) {
+    std::uint64_t digit = 0;
+    if (c >= '0' && c <= '9') {
+      digit = static_cast<std::uint64_t>(c - '0');
+    } else if (c >= 'a' && c <= 'f') {
+      digit = static_cast<std::uint64_t>(c - 'a') + 10U;
+    } else {
+      return false;
+    }
+    v = (v << 4U) | digit;
+  }
+  out = v;
+  return true;
+}
+
 bool parse_uint(const std::string& text, std::uint64_t& out) {
   if (text.empty() || text.size() > 20) {
     return false;
@@ -383,6 +404,38 @@ class Clock {
   double dt_;
 };
 
+// `scene: {source: file, path: ..., hash: ...}`. The terrain and obstacle keys belong to a
+// generated scene and are errors here, because a file defines the whole scene.
+void read_scene_file(Section& sec, Scenario& s) {
+  s.scene_file.used = true;
+  std::string path;
+  if (read_text(sec, "path", path)) {
+    s.scene_file.path = path;
+  } else if (!sec.find("path").IsDefined()) {
+    sec.require("path");
+  }
+  const YAML::Node hash = sec.find("hash");
+  if (hash.IsDefined()) {
+    std::string text;
+    std::uint64_t value = 0;
+    if (scalar_text(sec, "hash", hash, text)) {
+      if (parse_hash(text, value)) {
+        s.scene_file.hash = value;
+      } else {
+        sec.ctx().add(sec.sub("hash"), line_of(hash),
+                      "must be sixteen lowercase hexadecimal digits, got " + text);
+      }
+    }
+  }
+  for (const char* key : {"type", "size_m", "cell_m", "amplitude_m", "obstacles"}) {
+    const YAML::Node node = sec.find(key);
+    if (node.IsDefined()) {
+      sec.ctx().add(sec.sub(key), line_of(node), "is not used when the scene comes from a file");
+    }
+  }
+  sec.finish();
+}
+
 void read_scene(Section& root, Scenario& s) {
   const YAML::Node node = root.find("scene");
   if (!node.IsDefined()) {
@@ -390,6 +443,12 @@ void read_scene(Section& root, Scenario& s) {
   }
   Section sec(root.ctx(), node, "scene");
   if (!sec.valid()) {
+    return;
+  }
+  bool from_file = false;
+  read_choice<bool>(sec, "source", from_file, {{"generated", false}, {"file", true}});
+  if (from_file) {
+    read_scene_file(sec, s);
     return;
   }
   read_choice<TerrainType>(sec, "type", s.terrain.type,
@@ -761,8 +820,10 @@ void validate_with(Context& ctx, const std::string& path, int line, Check&& chec
 }
 
 void cross_validate(Context& ctx, const Scenario& s) {
-  validate_with(ctx, "scene", 0, [&] { validate(s.terrain); });
-  validate_with(ctx, "scene.obstacles", 0, [&] { validate(s.obstacles); });
+  if (!s.scene_file.used) {
+    validate_with(ctx, "scene", 0, [&] { validate(s.terrain); });
+    validate_with(ctx, "scene.obstacles", 0, [&] { validate(s.obstacles); });
+  }
   validate_with(ctx, "weather", 0, [&] { s.weather.validate(); });
   validate_with(ctx, "mission", 0, [&] { MissionPath path(s.mission); });
   validate_with(ctx, "comms", 0, [&] {

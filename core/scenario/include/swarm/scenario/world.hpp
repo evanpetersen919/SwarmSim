@@ -27,7 +27,7 @@ using ChannelFactory =
 // and one agent configuration per drone. The world owns the scene, and every simulation made from
 // it refers to that scene, so the world must outlive them.
 struct ScenarioWorld {
-  Scenario scenario;
+  Scenario scenario;  // as given, with a scene file's hash filled in
   std::unique_ptr<Scene> scene;
   SimConfig sim;
   std::vector<Vec3> offsets;  // formation slot offsets, one per drone
@@ -48,9 +48,12 @@ struct ScenarioWorld {
 // jitter amounts are.
 std::vector<Vec3> start_positions(const Scenario& scenario);
 
-// Generates the scene (terrain, then obstacles, both from the scenario seed) and configures the
-// simulation and the drones. Throws std::invalid_argument for a combination the loader cannot see
-// on its own: formation slots not farther apart than the separation margin.
+// Generates the scene (terrain, then obstacles, both from the scenario seed), or reads it from the
+// scenario's scene file, and configures the simulation and the drones. Throws std::invalid_argument
+// for a combination the loader cannot see on its own: formation slots not farther apart than the
+// separation margin; a scene file that cannot be read or is not valid; a scene file whose hash is
+// not the one the scenario gives. With a scene file, the returned world's scenario has the file's
+// hash set, and that scenario, not the argument, is the one to write to a log.
 ScenarioWorld build_world(const Scenario& scenario);
 
 }  // namespace swarm

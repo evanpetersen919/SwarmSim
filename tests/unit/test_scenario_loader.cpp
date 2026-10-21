@@ -482,3 +482,43 @@ TEST(ScenarioLoader, TheAblationSwitchesAreReadAndRoundTripAndAreAbsentWhenOn) {
 
   EXPECT_FALSE(load_scenario(std::string(kMinimal) + "control:\n  fallback: maybe\n").ok());
 }
+
+TEST(ScenarioLoader, ASceneCanComeFromAFile) {
+  const std::string text = std::string(kMinimal) +
+                           "scene:\n"
+                           "  source: file\n"
+                           "  path: scenes/forest.swscene\n"
+                           "  hash: 00112233445566ff\n";
+  const LoadResult r = load_scenario(text);
+  ASSERT_TRUE(r.ok()) << (r.ok() ? "" : swarm::to_string(r.errors.front()));
+  EXPECT_TRUE(r.scenario.scene_file.used);
+  EXPECT_EQ(r.scenario.scene_file.path, "scenes/forest.swscene");
+  ASSERT_TRUE(r.scenario.scene_file.hash.has_value());
+  EXPECT_EQ(*r.scenario.scene_file.hash, 0x00112233445566ffULL);
+
+  // The canonical text reads back to the same scenario and holds the hash.
+  const std::string canonical = swarm::canonical_text(r.scenario);
+  EXPECT_NE(canonical.find("hash: 00112233445566ff"), std::string::npos);
+  const LoadResult again = load_scenario(canonical);
+  ASSERT_TRUE(again.ok());
+  EXPECT_EQ(swarm::canonical_text(again.scenario), canonical);
+}
+
+TEST(ScenarioLoader, ASceneFileNeedsAPathAndAcceptsNoGeneratorKeys) {
+  const std::string head = std::string(kMinimal) + "scene:\n  source: file\n";
+  EXPECT_TRUE(has_error(load_scenario(head), "scene.path", "required"));
+
+  const std::string with_path = head + "  path: a.swscene\n";
+  EXPECT_TRUE(load_scenario(with_path).ok());
+  EXPECT_TRUE(has_error(load_scenario(with_path + "  type: hills\n"), "scene.type", "file"));
+  EXPECT_TRUE(has_error(load_scenario(with_path + "  size_m: [100, 100]\n"), "scene.size_m"));
+  EXPECT_TRUE(has_error(load_scenario(with_path + "  obstacles:\n    density_per_m2: 0.1\n"),
+                        "scene.obstacles"));
+  EXPECT_TRUE(has_error(load_scenario(with_path + "  hash: nothex\n"), "scene.hash", "sixteen"));
+  EXPECT_TRUE(has_error(load_scenario(with_path + "  hash: 00112233445566FF\n"), "scene.hash"));
+}
+
+TEST(ScenarioLoader, TheSceneSourceMustBeKnown) {
+  const std::string text = std::string(kMinimal) + "scene:\n  source: cloud\n";
+  EXPECT_TRUE(has_error(load_scenario(text), "scene.source", "one of"));
+}

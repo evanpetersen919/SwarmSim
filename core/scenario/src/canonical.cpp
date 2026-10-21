@@ -23,6 +23,13 @@ std::string num(double v) {
 
 std::string uint(std::uint64_t v) { return std::to_string(v); }
 
+// Sixteen lowercase hexadecimal digits, as `swarm_sim` prints hashes.
+std::string hash_text(std::uint64_t v) {
+  char buf[20];
+  std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(v));
+  return buf;
+}
+
 std::string quoted(const std::string& text) {
   std::string out = "\"";
   for (char c : text) {
@@ -93,13 +100,21 @@ std::string canonical_text(const Scenario& s) {
   line("duration_s: " + seconds(s.duration_ticks));
 
   line("scene:");
-  line(std::string("  type: ") + (s.terrain.type == TerrainType::kHills ? "hills" : "field"));
-  line("  size_m: [" + num(s.terrain.size_x) + ", " + num(s.terrain.size_y) + "]");
-  line("  cell_m: " + num(s.terrain.cell_size));
-  line("  amplitude_m: " + num(s.terrain.amplitude));
-  line("  obstacles:");
-  line("    density_per_m2: " + num(s.obstacles.density_per_m2));
-  line("    spawn_clear_radius_m: " + num(s.obstacles.spawn_clear_radius));
+  if (s.scene_file.used) {
+    line("  source: file");
+    line("  path: " + quoted(s.scene_file.path));
+    if (s.scene_file.hash) {
+      line("  hash: " + hash_text(*s.scene_file.hash));
+    }
+  } else {
+    line(std::string("  type: ") + (s.terrain.type == TerrainType::kHills ? "hills" : "field"));
+    line("  size_m: [" + num(s.terrain.size_x) + ", " + num(s.terrain.size_y) + "]");
+    line("  cell_m: " + num(s.terrain.cell_size));
+    line("  amplitude_m: " + num(s.terrain.amplitude));
+    line("  obstacles:");
+    line("    density_per_m2: " + num(s.obstacles.density_per_m2));
+    line("    spawn_clear_radius_m: " + num(s.obstacles.spawn_clear_radius));
+  }
 
   line("swarm:");
   line("  drones: " + uint(s.drones));

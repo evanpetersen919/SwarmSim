@@ -84,7 +84,7 @@ LogStatus run_scenario(const Scenario& scenario, std::size_t threads,
   sim->set_event_sink(&events);
 
   LogWriter writer;
-  LogStatus status = writer.begin(make_header(scenario));
+  LogStatus status = writer.begin(make_header(world.scenario));
   if (status != LogStatus::kOk) {
     return status;
   }

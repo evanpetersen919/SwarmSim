@@ -1,11 +1,13 @@
 #include "swarm/scenario/world.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 #include "swarm/rng.hpp"
+#include "swarm/scenario/scene_file.hpp"
 #include "swarm/streams.hpp"
 
 namespace swarm {
@@ -33,15 +35,41 @@ std::vector<Vec3> start_positions(const Scenario& s) {
   return starts;
 }
 
+namespace {
+
+std::string hash_text(std::uint64_t v) {
+  char buf[20];
+  std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(v));
+  return buf;
+}
+
+}  // namespace
+
 ScenarioWorld build_world(const Scenario& s) {
   ScenarioWorld world;
   world.scenario = s;
 
-  SceneData data = generate_terrain(s.terrain, s.seed);
-  ObstacleConfig obstacles = s.obstacles;
-  obstacles.spawn_x = s.mission.waypoints.front().x;  // keep the start area clear
-  obstacles.spawn_y = s.mission.waypoints.front().y;
-  place_obstacles(data, obstacles, s.seed);
+  SceneData data;
+  if (s.scene_file.used) {
+    std::string error;
+    if (!read_scene_file(s.scene_file.path, data, error)) {
+      throw std::invalid_argument("build_world: " + error);
+    }
+    // The world's scenario records the file's hash, so a log's header names the exact scene.
+    const std::uint64_t hash = scene_hash(data);
+    if (s.scene_file.hash && *s.scene_file.hash != hash) {
+      throw std::invalid_argument("build_world: the scene file " + s.scene_file.path +
+                                  " has hash " + hash_text(hash) + " but the scenario expects " +
+                                  hash_text(*s.scene_file.hash));
+    }
+    world.scenario.scene_file.hash = hash;
+  } else {
+    data = generate_terrain(s.terrain, s.seed);
+    ObstacleConfig obstacles = s.obstacles;
+    obstacles.spawn_x = s.mission.waypoints.front().x;  // keep the start area clear
+    obstacles.spawn_y = s.mission.waypoints.front().y;
+    place_obstacles(data, obstacles, s.seed);
+  }
   world.scene = std::make_unique<Scene>(std::move(data));
 
   world.sim.dt = s.dt;

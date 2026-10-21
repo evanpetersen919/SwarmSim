@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,18 @@ struct ScenarioCommand {
   CommandKind kind = CommandKind::kHold;
 };
 
+// A scene read from a file in the scene format (swarm/format/scene.hpp) instead of generated from
+// the terrain and obstacle settings. The file is named by `path`, relative to the working directory
+// of the program that runs the scenario. `hash` is the scene's content hash (scene_hash). A
+// scenario file may leave it out; the world builder checks it when it is given, and the canonical
+// text, and so the log header, always holds it, so a log can be checked against the file it was run
+// on.
+struct SceneFileSource {
+  bool used = false;
+  std::string path;
+  std::optional<std::uint64_t> hash;
+};
+
 struct MetricsSettings {
   double settle_s = 20.0;  // formation error is also reported from this time on
   double collision_radius_m = 1.0;
@@ -64,6 +77,7 @@ struct Scenario {
 
   TerrainConfig terrain;
   ObstacleConfig obstacles;
+  SceneFileSource scene_file;  // when used, `terrain` and `obstacles` are not
 
   std::uint32_t drones = 0;
   FormationShape formation_shape = FormationShape::kWedge;
