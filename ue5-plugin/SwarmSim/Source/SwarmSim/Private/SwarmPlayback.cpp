@@ -193,16 +193,18 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
     Drone.Root->RegisterComponent();
     AddInstanceComponent(Drone.Root);
     Drone.Root->SetWorldScale3D(FVector(DroneScale));
-    if (Basic != nullptr) {
-      Drone.Paint = UMaterialInstanceDynamic::Create(Basic, this);
-    }
 
     if (!ModelMeshes.IsEmpty()) {
+      // No Paint here: FDrone is not a UPROPERTY, so a material that no component holds is
+      // collected, and the first state change would write through the freed object.
       for (UStaticMesh* Mesh : ModelMeshes) {
         AddPart(Drone.Root, Mesh, ModelOffset, ModelTurn, FVector(ModelScale), nullptr);
       }
       Drone.Color = FLinearColor::Black;
       continue;
+    }
+    if (Basic != nullptr) {
+      Drone.Paint = UMaterialInstanceDynamic::Create(Basic, this);
     }
 
     // A stand-in quadcopter from the engine's shapes, about 60 cm across at scale 1: a flat body,
