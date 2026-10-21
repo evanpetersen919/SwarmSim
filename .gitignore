@@ -62,3 +62,7 @@ UnrealHost/Config/
 # Local renders and screenshots of the Unreal viewer. They show licensed asset packs, so they are
 # kept out of git; copy the few chosen for the README into docs/images/ deliberately.
 screenshots/
+
+# Local research notes and raw downloaded models
+docs/research-private/
+assets/drone_raw/
