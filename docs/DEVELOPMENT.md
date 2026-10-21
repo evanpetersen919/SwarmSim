@@ -100,3 +100,12 @@ UnrealEditor.exe PROJECT.uproject /Game/Levels/MAP -game -windowed -EnablePlugin
 ```
 
 Add `-SwarmShotDir=DIR -SwarmShotDelay=30 -SwarmShotCount=2` to save renders of the game and quit. The options are listed in `docs/MODELS.md`, under the Unreal viewer: playback.
+
+To write the scene file of a level for a scenario, run the game with the export options and the same anchor the playback will use:
+
+```
+UnrealEditor.exe PROJECT.uproject /Game/Levels/MAP -game -windowed -EnablePlugins=SwarmSim -SwarmAnchor=X,Y -SwarmExportScene=level.swscene -SwarmExportTrees=NAME -SwarmExportRocks=NAME -SwarmExportGround=NAME
+```
+
+The log lists the static meshes in the area with their counts (`survey` lines), which is how the names are chosen. The scene file is derived from the level's content and is not committed.
+

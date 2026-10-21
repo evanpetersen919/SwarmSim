@@ -12,6 +12,7 @@ class ASwarmPlayback;
 //   -SwarmSpeed=N         playback speed
 //   -SwarmScale=N         how much larger than life the drones are drawn
 //   -SwarmSceneFile=PATH  a scene file to build the terrain, trees and rocks from (editor only)
+//   -SwarmExportScene=PATH  instead of playing, write the level's scene file (SwarmExportPlan.h)
 // Without -SwarmLog it is not created and does nothing. The level is not edited: the playback
 // actor is spawned when play begins.
 UCLASS()

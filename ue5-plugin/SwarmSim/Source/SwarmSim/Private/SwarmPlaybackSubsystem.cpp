@@ -2,10 +2,12 @@
 
 #include "Engine/World.h"
 #include "Misc/CommandLine.h"
+#include "SwarmExportPlan.h"
 #include "SwarmLog.h"
 #include "SwarmPlayback.h"
 #include "SwarmPlaybackMath.h"
 #include "SwarmScene.h"
+#include "SwarmSceneExporter.h"
 
 bool USwarmPlaybackSubsystem::ShouldCreateSubsystem(UObject* Outer) const {
   const UWorld* World = Cast<UWorld>(Outer);
@@ -13,11 +15,20 @@ bool USwarmPlaybackSubsystem::ShouldCreateSubsystem(UObject* Outer) const {
     return false;
   }
   return FParse::Param(FCommandLine::Get(), TEXT("SwarmLog")) ||
-         !SwarmSim::ParseLaunchOptions(FCommandLine::Get()).LogPath.IsEmpty();
+         !SwarmSim::ParseLaunchOptions(FCommandLine::Get()).LogPath.IsEmpty() ||
+         !SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty();
 }
 
 void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
   Super::OnWorldBeginPlay(InWorld);
+  if (!SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty()) {
+    ASwarmSceneExporter* Exporter = InWorld.SpawnActor<ASwarmSceneExporter>();
+    FString ExportError;
+    if (Exporter == nullptr || !Exporter->Configure(FCommandLine::Get(), ExportError)) {
+      UE_LOG(LogSwarmSim, Error, TEXT("scene export: %s"), *ExportError);
+    }
+    return;
+  }
   const SwarmSim::FLaunchOptions Options = SwarmSim::ParseLaunchOptions(FCommandLine::Get());
   if (!Options.bValid) {
     UE_LOG(LogSwarmSim, Error, TEXT("%s"), *Options.Problem);
