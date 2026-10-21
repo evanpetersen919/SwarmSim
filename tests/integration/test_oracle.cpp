@@ -88,11 +88,12 @@ bool identical(const std::vector<std::vector<Pose>>& a, const std::vector<std::v
 
 }  // namespace
 
-TEST(Oracle, TheScenarioSelectsEachOfTheFourPredictorKinds) {
-  const char* names[] = {"kalman", "dead_reckoning", "hold_last", "oracle"};
+TEST(Oracle, TheScenarioSelectsEachOfTheFivePredictorKinds) {
+  const char* names[] = {"kalman", "dead_reckoning", "hold_last", "oracle", "turning"};
   const PredictorChoice kinds[] = {PredictorChoice::kKalman, PredictorChoice::kDeadReckoning,
-                                   PredictorChoice::kHoldLast, PredictorChoice::kOracle};
-  for (int k = 0; k < 4; ++k) {
+                                   PredictorChoice::kHoldLast, PredictorChoice::kOracle,
+                                   PredictorChoice::kTurning};
+  for (int k = 0; k < 5; ++k) {
     const std::string text =
         std::string("version: 1\nseed: 1\nduration_s: 2\nswarm: {drones: 3}\n") +
         "mission: {waypoints: [[0, 0, 20]]}\ncontrol: {predictor: " + names[k] + "}\n";

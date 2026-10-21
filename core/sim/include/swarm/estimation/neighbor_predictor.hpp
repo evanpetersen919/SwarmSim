@@ -39,6 +39,7 @@ enum class PredictorKind {
   kHoldLast,       // reports the last received state unchanged
   kDeadReckoning,  // extrapolates the last report at its reported velocity
   kKalman,         // constant-velocity Kalman filter with delay compensation
+  kTurning,        // extrapolates the last report along a circle of the estimated turn rate
 };
 
 struct NeighborPredictorConfig {
@@ -52,6 +53,17 @@ struct NeighborPredictorConfig {
   double process_noise_density = 1.0;
   // Kalman only: extrapolate each report forward by its delivery delay before fusing it.
   bool compensate_delay = true;
+  // Turning only. The turn rate is the change of the reported heading (the direction of the
+  // horizontal velocity) over the reports of the last `turn_window_s` seconds, and is used once
+  // the reports span at least `turn_min_span_s`; until then the neighbor is assumed to fly
+  // straight. A heading is not defined below `turn_min_speed` m/s of horizontal speed. The turn
+  // rate is limited to +-`turn_max_rate`, and its uncertainty `turn_rate_sigma` (rad/s) grows
+  // the position uncertainty with the square of the prediction time. All five are assumptions.
+  double turn_window_s = 3.0;
+  double turn_min_span_s = 1.0;
+  double turn_min_speed = 1.0;
+  double turn_max_rate = 0.8;
+  double turn_rate_sigma = 0.03;
 };
 
 // Throws std::invalid_argument for an invalid configuration.

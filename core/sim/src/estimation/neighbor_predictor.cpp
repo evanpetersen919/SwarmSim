@@ -1,6 +1,8 @@
 #include "swarm/estimation/neighbor_predictor.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <deque>
 #include <optional>
 #include <stdexcept>
 
@@ -22,6 +24,28 @@ void validate(const NeighborPredictorConfig& c) {
     throw std::invalid_argument(
         "NeighborPredictorConfig: process_noise_density must be finite and >= 0");
   }
+  const auto positive = [](double v) { return std::isfinite(v) && v > 0.0; };
+  if (!positive(c.turn_window_s) || !positive(c.turn_min_span_s) ||
+      c.turn_min_span_s > c.turn_window_s) {
+    throw std::invalid_argument(
+        "NeighborPredictorConfig: turn_min_span_s must be positive and at most turn_window_s");
+  }
+  if (!positive(c.turn_min_speed) || !positive(c.turn_max_rate) ||
+      !(std::isfinite(c.turn_rate_sigma) && c.turn_rate_sigma >= 0.0)) {
+    throw std::invalid_argument(
+        "NeighborPredictorConfig: turn_min_speed and turn_max_rate must be positive and "
+        "turn_rate_sigma not negative");
+  }
+}
+
+constexpr double kPi = 3.14159265358979323846;
+
+double wrap_angle(double angle) {
+  double wrapped = std::fmod(angle + kPi, 2.0 * kPi);
+  if (wrapped <= 0.0) {
+    wrapped += 2.0 * kPi;
+  }
+  return wrapped - kPi;
 }
 
 // Shared bookkeeping for the predictors that keep only the latest accepted report.
@@ -96,6 +120,90 @@ class DeadReckoningPredictor final : public LatestReport {
 
  private:
   NeighborPredictorConfig config_;
+};
+
+// Constant speed and constant turn rate. The reports carry no turn rate, so it is taken from how
+// the reported heading changed over the recent reports. An aircraft on a circle is predicted along
+// that circle; a straight flight (no measurable turn) is predicted as dead reckoning does.
+class TurningPredictor final : public INeighborPredictor {
+ public:
+  explicit TurningPredictor(const NeighborPredictorConfig& config) : config_(config) {}
+
+  void on_report(const NeighborReport& report, std::uint64_t receipt_tick) override {
+    if (!history_.empty()) {
+      if (receipt_tick < receipt_tick_) {
+        throw std::invalid_argument("on_report: receipt ticks must not decrease");
+      }
+      if (report.send_tick <= history_.back().send_tick) {
+        return;  // stale or duplicate
+      }
+    }
+    history_.push_back(report);
+    receipt_tick_ = receipt_tick;
+    const double window = config_.turn_window_s / config_.dt;
+    while (history_.size() > 2 &&
+           static_cast<double>(report.send_tick - history_.front().send_tick) > window) {
+      history_.pop_front();
+    }
+    turn_rate_ = estimate_turn_rate();
+  }
+
+  NeighborEstimate predict(std::uint64_t now_tick) const override {
+    NeighborEstimate e;
+    if (history_.empty()) {
+      return e;
+    }
+    if (now_tick < receipt_tick_) {
+      throw std::invalid_argument("predict: now_tick is earlier than the latest receipt");
+    }
+    const NeighborReport& r = history_.back();
+    const std::uint64_t since_send = now_tick > r.send_tick ? now_tick - r.send_tick : 0;
+    const double tau = static_cast<double>(since_send) * config_.dt;
+    const double speed = std::hypot(r.velocity.x, r.velocity.y);
+    const double heading = std::atan2(r.velocity.y, r.velocity.x);
+    const double omega = turn_rate_;
+
+    e.valid = true;
+    e.age = now_tick - receipt_tick_;
+    if (speed < config_.turn_min_speed || std::abs(omega) < 1e-9) {
+      e.position = r.position + r.velocity * tau;
+      e.velocity = r.velocity;
+    } else {
+      const double turned = heading + omega * tau;
+      e.position = {r.position.x + speed / omega * (std::sin(turned) - std::sin(heading)),
+                    r.position.y + speed / omega * (std::cos(heading) - std::cos(turned)),
+                    r.position.z + r.velocity.z * tau};
+      e.velocity = {speed * std::cos(turned), speed * std::sin(turned), r.velocity.z};
+    }
+    const double drift = config_.report_velocity_sigma * tau;
+    const double bend = 0.5 * speed * config_.turn_rate_sigma * tau * tau;
+    e.position_sigma = std::sqrt(r.position_sigma * r.position_sigma + drift * drift + bend * bend);
+    return e;
+  }
+
+ private:
+  // The heading change from the oldest report in the window to the newest, over their time apart.
+  double estimate_turn_rate() const {
+    const NeighborReport& newest = history_.back();
+    const NeighborReport& oldest = history_.front();
+    const double span = static_cast<double>(newest.send_tick - oldest.send_tick) * config_.dt;
+    if (span < config_.turn_min_span_s) {
+      return 0.0;
+    }
+    const double s_new = std::hypot(newest.velocity.x, newest.velocity.y);
+    const double s_old = std::hypot(oldest.velocity.x, oldest.velocity.y);
+    if (s_new < config_.turn_min_speed || s_old < config_.turn_min_speed) {
+      return 0.0;
+    }
+    const double change = wrap_angle(std::atan2(newest.velocity.y, newest.velocity.x) -
+                                     std::atan2(oldest.velocity.y, oldest.velocity.x));
+    return std::clamp(change / span, -config_.turn_max_rate, config_.turn_max_rate);
+  }
+
+  NeighborPredictorConfig config_;
+  std::deque<NeighborReport> history_;
+  std::uint64_t receipt_tick_ = 0;
+  double turn_rate_ = 0.0;
 };
 
 class KalmanNeighborPredictor final : public INeighborPredictor {
@@ -193,6 +301,8 @@ std::unique_ptr<INeighborPredictor> make_neighbor_predictor(PredictorKind kind,
       return std::make_unique<DeadReckoningPredictor>(config);
     case PredictorKind::kKalman:
       return std::make_unique<KalmanNeighborPredictor>(config);
+    case PredictorKind::kTurning:
+      return std::make_unique<TurningPredictor>(config);
   }
   throw std::invalid_argument("make_neighbor_predictor: unknown predictor kind");
 }

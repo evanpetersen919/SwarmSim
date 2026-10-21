@@ -64,6 +64,8 @@ const char* predictor_name(PredictorChoice p) {
   switch (p) {
     case PredictorChoice::kDeadReckoning:
       return "dead_reckoning";
+    case PredictorChoice::kTurning:
+      return "turning";
     case PredictorChoice::kHoldLast:
       return "hold_last";
     case PredictorChoice::kOracle:

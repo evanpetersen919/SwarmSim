@@ -103,8 +103,8 @@ MeanErrors dropout_errors(int trials, std::uint64_t gap, double pos_sigma, doubl
 }  // namespace
 
 TEST(NeighborPredictors, EveryKindCanBeCreatedAndSatisfiesTheSameContract) {
-  for (PredictorKind kind :
-       {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning, PredictorKind::kKalman}) {
+  for (PredictorKind kind : {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning,
+                             PredictorKind::kKalman, PredictorKind::kTurning}) {
     auto p = swarm::make_neighbor_predictor(kind, config());
     EXPECT_FALSE(p->predict(10).valid);  // nothing received yet
 
@@ -125,8 +125,8 @@ TEST(NeighborPredictors, EveryKindCanBeCreatedAndSatisfiesTheSameContract) {
 }
 
 TEST(NeighborPredictors, StaleAndDuplicateReportsAreIgnoredByEveryKind) {
-  for (PredictorKind kind :
-       {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning, PredictorKind::kKalman}) {
+  for (PredictorKind kind : {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning,
+                             PredictorKind::kKalman, PredictorKind::kTurning}) {
     auto p = swarm::make_neighbor_predictor(kind, config());
     NeighborReport fresh;
     fresh.send_tick = 10;
@@ -150,8 +150,8 @@ TEST(NeighborPredictors, StaleAndDuplicateReportsAreIgnoredByEveryKind) {
 }
 
 TEST(NeighborPredictors, DecreasingReceiptTicksAreRejected) {
-  for (PredictorKind kind :
-       {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning, PredictorKind::kKalman}) {
+  for (PredictorKind kind : {PredictorKind::kHoldLast, PredictorKind::kDeadReckoning,
+                             PredictorKind::kKalman, PredictorKind::kTurning}) {
     auto p = swarm::make_neighbor_predictor(kind, config());
     NeighborReport r;
     r.send_tick = 1;

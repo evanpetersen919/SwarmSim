@@ -113,6 +113,9 @@ ScenarioWorld build_world(const Scenario& s) {
       case PredictorChoice::kDeadReckoning:
         c.brain.predictor = PredictorKind::kDeadReckoning;
         break;
+      case PredictorChoice::kTurning:
+        c.brain.predictor = PredictorKind::kTurning;
+        break;
       case PredictorChoice::kHoldLast:
         c.brain.predictor = PredictorKind::kHoldLast;
         break;

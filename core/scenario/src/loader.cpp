@@ -779,6 +779,7 @@ void read_control(Section& root, Scenario& s) {
   read_choice<PredictorChoice>(sec, "predictor", s.predictor,
                                {{"kalman", PredictorChoice::kKalman},
                                 {"dead_reckoning", PredictorChoice::kDeadReckoning},
+                                {"turning", PredictorChoice::kTurning},
                                 {"hold_last", PredictorChoice::kHoldLast},
                                 {"oracle", PredictorChoice::kOracle}});
   read_bool(sec, "fallback", s.fallback_enabled);

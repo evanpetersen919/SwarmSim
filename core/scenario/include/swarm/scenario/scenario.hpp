@@ -36,6 +36,7 @@ struct StartLayout {
 enum class PredictorChoice {
   kKalman,
   kDeadReckoning,
+  kTurning,
   kHoldLast,
   kOracle,
 };
