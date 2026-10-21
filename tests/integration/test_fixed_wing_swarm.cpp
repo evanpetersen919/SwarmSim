@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "swarm/control/orbit.hpp"
 #include "swarm/drone_agent.hpp"
 #include "swarm/scenario/metrics.hpp"
 #include "swarm/scenario/run.hpp"
@@ -116,4 +117,55 @@ TEST(FixedWingSwarm, ASeparationAblationChangesNothingWhenNothingGetsClose) {
   const swarm::MetricsOutcome mb = swarm::analyze_log(b.data(), b.size());
   ASSERT_TRUE(ma.ok() && mb.ok());
   EXPECT_EQ(*ma.result.min_separation, *mb.result.min_separation);
+}
+
+TEST(FixedWingSwarm, AFailedAircraftFliesOnStraightAndSilentInsteadOfHangingInTheAir) {
+  const Scenario s = load(scenario_text(), 60.0);
+  Scenario failing = s;
+  failing.faults.push_back({2, 1000});  // 20 s at 50 Hz
+  const swarm::ScenarioWorld world = swarm::build_world(failing);
+  const auto sim = world.make_simulation(1);
+  swarm::Vec3 at_failure;
+  swarm::Vec3 velocity;
+  double heading_at_failure = 0.0;
+  for (std::uint64_t tick = 0; tick < 1500; ++tick) {
+    sim->step();
+    const swarm::DroneAgent& d = dynamic_cast<const swarm::DroneAgent&>(sim->agent(2));
+    if (tick + 1 == 1001) {
+      EXPECT_FALSE(d.alive());
+      at_failure = d.truth().pos;
+      velocity = d.truth().vel;
+      heading_at_failure = std::atan2(velocity.y, velocity.x);
+    }
+    if (tick + 1 > 1001) {
+      EXPECT_FALSE(d.alive());
+      // It moves in a straight line at constant speed: it does not turn, stop, or speed up.
+      EXPECT_NEAR(d.truth().vel.x, velocity.x, 1e-9);
+      EXPECT_NEAR(d.truth().vel.y, velocity.y, 1e-9);
+    }
+  }
+  const swarm::DroneAgent& d = dynamic_cast<const swarm::DroneAgent&>(sim->agent(2));
+  const double seconds = (1500 - 1001) * failing.dt;
+  EXPECT_NEAR(d.truth().pos.x, at_failure.x + velocity.x * seconds, 1e-6);
+  EXPECT_NEAR(d.truth().pos.y, at_failure.y + velocity.y * seconds, 1e-6);
+  // It really left: it covered speed * time, about 170 m in these 10 seconds.
+  EXPECT_NEAR(swarm::distance(d.truth().pos, at_failure), swarm::norm(velocity) * seconds, 1e-6);
+  EXPECT_NEAR(std::atan2(d.truth().vel.y, d.truth().vel.x), heading_at_failure, 1e-9);
+}
+
+TEST(FixedWingSwarm, TheConsensusWeightIsAScenarioSettingAndZeroFliesTheClockAlone) {
+  const swarm::LoadResult clock =
+      swarm::load_scenario(replace(scenario_text(), "    altitude_step_m: 10",
+                                   "    altitude_step_m: 10\n    consensus_weight: 0"));
+  ASSERT_TRUE(clock.ok());
+  EXPECT_EQ(clock.scenario.orbit.consensus_weight, 0.0);
+  const swarm::LoadResult bad =
+      swarm::load_scenario(replace(scenario_text(), "    altitude_step_m: 10",
+                                   "    altitude_step_m: 10\n    consensus_weight: 2"));
+  EXPECT_FALSE(bad.ok());
+  const swarm::LoadResult standard = swarm::load_scenario(scenario_text());
+  ASSERT_TRUE(standard.ok());
+  EXPECT_EQ(standard.scenario.orbit.consensus_weight, swarm::OrbitParams{}.consensus_weight);
+  // The weight is in the canonical text, so it is in the log header.
+  EXPECT_NE(swarm::canonical_text(clock.scenario).find("consensus_weight: 0\n"), std::string::npos);
 }

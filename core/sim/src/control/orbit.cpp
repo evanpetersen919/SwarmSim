@@ -48,6 +48,12 @@ void validate(const OrbitParams& p) {
     throw std::invalid_argument(
         "OrbitParams: speed must be inside the speed limits by more than speed_margin");
   }
+  if (!(std::isfinite(p.consensus_weight) && p.consensus_weight >= 0.0 &&
+        p.consensus_weight <= 1.0) ||
+      !positive(p.consensus_sigma_floor)) {
+    throw std::invalid_argument(
+        "OrbitParams: consensus_weight must be in [0, 1] and consensus_sigma_floor positive");
+  }
   const SeparationParams& s = p.separation;
   if (!positive(s.d_safe) || !non_negative(s.kappa) || !positive(s.max_margin) ||
       !positive(s.gain) || !positive(s.max_accel) || s.max_margin < s.d_safe) {
@@ -132,6 +138,39 @@ Vec3 orbit_guidance(const Vec3& position, const Vec3& velocity, const Vec3& cent
   a.z = gain_scale *
         (params.altitude_gain * (z_ref - position.z) - params.altitude_damping * velocity.z);
   return a;
+}
+
+bool orbit_consensus_phase_error(std::uint32_t self, std::uint32_t n, double time_s,
+                                 const Vec3& position, const std::vector<OrbitNeighbor>& neighbors,
+                                 const OrbitParams& params, double& error) {
+  if (!finite(position)) {
+    throw std::invalid_argument("orbit_consensus_phase_error: position must be finite");
+  }
+  const OrbitReference own = orbit_reference(self, n, time_s, params);  // validates the rest
+  const double own_angle = std::atan2(position.y - params.center.y, position.x - params.center.x);
+  double sum_sin = 0.0;
+  double sum_cos = 0.0;
+  double total = 0.0;
+  for (const OrbitNeighbor& nb : neighbors) {
+    if (nb.slot == self || nb.slot >= n || !finite(nb.position) || !(nb.sigma >= 0.0) ||
+        !std::isfinite(nb.sigma)) {
+      continue;
+    }
+    const OrbitReference ref = orbit_reference(nb.slot, n, time_s, params);
+    const double neighbor_angle =
+        std::atan2(nb.position.y - params.center.y, nb.position.x - params.center.x);
+    const double e = wrap(neighbor_angle - wrap(ref.angle - own.angle) - own_angle);
+    const double floor = params.consensus_sigma_floor;
+    const double w = 1.0 / (nb.sigma * nb.sigma + floor * floor);
+    sum_sin += w * std::sin(e);
+    sum_cos += w * std::cos(e);
+    total += w;
+  }
+  if (!(total > 0.0)) {
+    return false;
+  }
+  error = std::atan2(sum_sin, sum_cos);
+  return true;
 }
 
 Vec3 orbit_separation_accel(std::uint32_t self, const Vec3& position, const Vec3& velocity,

@@ -43,6 +43,13 @@ struct OrbitParams {
   double altitude_damping = 1.5;  // 1/s
   double max_accel = 10.0;        // m/s^2, limit of the combined command
 
+  // Weight in [0, 1] of the neighbors' view of this drone's phase against the shared clock's.
+  // 0 flies the clock alone, as before; 1 trusts the neighbors alone. With no usable neighbor the
+  // clock gets all of the weight. `consensus_sigma_floor` (m) is added in quadrature to every
+  // neighbor's position sigma when weighting.
+  double consensus_weight = 0.5;
+  double consensus_sigma_floor = 5.0;
+
   // Closest-approach separation. The margin of a neighbor is min(d_safe + kappa * sigma,
   // max_margin); `lookahead_s` is how far ahead the closest approach is looked for.
   SeparationParams separation{30.0, 2.0, 60.0, 0.2, 4.0};
@@ -50,8 +57,8 @@ struct OrbitParams {
 };
 
 // Throws std::invalid_argument unless every value is finite, the speeds and radii are positive,
-// the steps are not negative, min_speed < speed < max_speed with the margin inside, and the
-// separation parameters are valid.
+// the steps are not negative, min_speed < speed < max_speed with the margin inside, the consensus
+// weight is in [0, 1], and the separation parameters are valid.
 void validate(const OrbitParams& params);
 
 struct OrbitReference {
@@ -95,6 +102,22 @@ struct OrbitNeighbor {
   Vec3 velocity;
   double sigma = 0.0;  // position uncertainty, meters
 };
+
+// The phase error of this drone that its neighbors imply, in radians, positive when behind.
+//
+// If every other drone were exactly on its reference, a drone off its own reference by delta
+// would see each neighbor j at the angle theta_j + delta' where only the relative angle matters.
+// Neighbor j is expected a fixed angle ahead of this drone, theta_ref_j - theta_ref_self, so
+//   e_j = wrap(angle_j - (theta_ref_j - theta_ref_self) - own angle)
+// is the correction this drone should make, from the neighbor's estimated angle around the
+// center. The result is the circular mean of the e_j weighted by 1 / (sigma_j^2 + floor^2), with
+// sigma_j the neighbor's position uncertainty. Neighbors that are not finite, have a negative
+// sigma, or share this drone's slot are ignored. Returns false, leaving `error` unchanged, when
+// none is usable. Throws std::invalid_argument for a slot not below `n`, a non-finite time or
+// position, or invalid parameters.
+bool orbit_consensus_phase_error(std::uint32_t self, std::uint32_t n, double time_s,
+                                 const Vec3& position, const std::vector<OrbitNeighbor>& neighbors,
+                                 const OrbitParams& params, double& error);
 
 // Avoidance acceleration for the drone in slot `self`.
 //

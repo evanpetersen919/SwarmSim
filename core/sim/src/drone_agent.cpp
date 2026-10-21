@@ -47,8 +47,14 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
 
 void DroneAgent::step(AgentContext& ctx) {
   if (failed_ || ctx.tick >= config_.fail_tick) {
-    if (!failed_) {
-      failed_ = true;
+    const bool first_tick = !failed_;
+    failed_ = true;
+    if (config_.vehicle_kind == VehicleKind::kFixedWing) {
+      // An aircraft cannot hang in the air: with no one controlling it, it flies on with no
+      // command, straight and at constant speed, until the end of the run. It senses and sends
+      // nothing.
+      truth_ = vehicle_->step(truth_, DroneCommand{}, config_.brain.dt);
+    } else if (first_tick) {
       truth_.vel = Vec3{};
       truth_.accel = Vec3{};
       truth_.yaw_rate = 0.0;

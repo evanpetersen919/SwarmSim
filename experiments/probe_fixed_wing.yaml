@@ -1,0 +1,42 @@
+# A probe, not the benchmark: where do the predictors and the ablations of the fixed-wing swarm
+# separate? 4 weather x 2 stacking x 6 variants x 2 jamming x 2 faults x 2 consensus = 384 cells. The results
+# decided which axes the fixed-wing matrix (matrix_fixed_wing.yaml) uses.
+version: 1
+name: probe_fixed_wing
+base: base_fixed_wing.yaml
+seeds: {first: 1, count: 3}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: haze, set: {weather: {visibility_m: 1000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 350, rain_mm_h: 0}}}
+      - {label: blind, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+  - name: stacking
+    levels:
+      - {label: layers, set: {control: {orbit: {altitude_step_m: 10}}}}
+      - {label: flat, set: {control: {orbit: {altitude_step_m: 0}}}}
+  - name: variant
+    levels:
+      - {label: kalman, set: {control: {predictor: kalman}}}
+      - {label: turning, set: {control: {predictor: turning}}}
+      - {label: dead_reckoning, set: {control: {predictor: dead_reckoning}}}
+      - {label: hold_last, set: {control: {predictor: hold_last}}}
+      - {label: no_separation, set: {control: {predictor: kalman, separation: false}}}
+      - {label: no_fallback, set: {control: {predictor: kalman, fallback: false}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: long
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 100], radius_m: 600, mode: constant, from_s: 30, to_s: 90, loss: 0.95, affects: receiver}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 60}]}}
+  - name: consensus
+    levels:
+      - {label: clock, set: {control: {orbit: {consensus_weight: 0.0}}}}
+      - {label: blend, set: {control: {orbit: {consensus_weight: 0.5}}}}

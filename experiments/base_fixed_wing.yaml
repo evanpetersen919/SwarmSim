@@ -1,0 +1,62 @@
+# The scenario that the fixed-wing experiments vary: eight ALTIUS-class aircraft on stacked orbits
+# around a point over hills, in clear air, with no packet loss, no jammers, and no faults. The
+# axes replace parts of it. Its seed is ignored: the experiment sets the seed.
+#
+# The aircraft start on their orbit slots (ADR 0010). They fix their position with a downward
+# camera, so fog shortens the height from which a fix works; the orbit slots are 100 to 170 m up.
+#
+# The recovery threshold, the hold time, and the collision radius are set for aircraft (an error of
+# tens of meters and a near miss of ten meters); the quad experiments use meters and a meter.
+# They are assumptions.
+version: 2
+name: fixed_wing_base
+seed: 1
+dt: 0.02
+duration_s: 120
+
+scene:
+  type: hills
+  size_m: [2000, 2000]
+  cell_m: 10
+  amplitude_m: 12
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 8
+  formation: {shape: grid, spacing_m: 25}
+  start: {columns: 4, spacing_m: 60, jitter_m: 10, altitude_m: 100, altitude_jitter_m: 0}
+
+mission:
+  waypoints:
+    - [0, 0, 100]
+  speed_mps: 17
+
+vehicle:
+  type: fixed_wing
+
+weather: {visibility_m: 20000, rain_mm_h: 0}
+
+comms:
+  latency_ticks: 2
+  jitter_ticks: 1
+  loss_model: independent
+  loss: 0.0
+  jammers: []
+
+control:
+  predictor: kalman
+  report_period_ticks: 5
+  staleness_ticks: 50
+  orbit:
+    radius_m: 150
+    radius_step_m: 12
+    altitude_step_m: 10
+
+faults: []
+
+metrics:
+  settle_s: 20
+  collision_radius_m: 10.0
+  recovery_threshold_m: 40.0
+  recovery_hold_s: 5.0

@@ -28,3 +28,12 @@ ADR 0005 already separates a drone's brain from its vehicle. The brain sees esti
 - Prediction of a neighbor's motion needs a turn-aware predictor, and the earlier finding about Kalman prediction versus dead reckoning may not hold for fixed-wing.
 - The benchmark matrix changes size. The real cell count is computed and recorded before the first run.
 - The viewer model is the CC-BY-4.0 model "Anduril ALTIUS 700M" by KillCaptureDestroy. Its credit line goes in the README. The model is not stored in the repository.
+
+## Addendum, 2026-10-21
+
+The first probe of the controller in item 5 showed two problems, and both were changed.
+
+- Phase came from the shared clock alone, so nothing an aircraft heard entered its control except the separation rule, which rarely engaged, and the neighbor predictors, jamming, and packet loss made no difference to the flight. Item 5 now also includes a phase consensus over the neighbors, blended with the clock by a weight that is a scenario setting (0 is the clock alone, 1 the neighbors alone). The neighbors-alone setting is where the predictors separate. The decision to leave out phase consensus in the first version is withdrawn.
+- A failed aircraft was frozen in the air, as a failed quad is, and the others flew through it. A failed fixed-wing aircraft now flies on straight at its last speed, silent and with no command. The quad's failure model is unchanged.
+
+The results are in docs/phases/fixed-wing-vehicle.md.

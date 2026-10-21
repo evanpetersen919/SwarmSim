@@ -759,6 +759,7 @@ void read_orbit(Section& control, Scenario& s) {
   read_double(o, "phase_gain", p.phase_gain, at_least(0.0));
   read_double(o, "radial_gain", p.radial_gain, at_least(0.0));
   read_double(o, "lookahead_s", p.lookahead_s, greater_than(0.0));
+  read_double(o, "consensus_weight", p.consensus_weight, Bounds{0.0, 1.0, false, false});
   double safe = p.separation.d_safe;
   if (read_double(o, "safe_distance_m", safe, greater_than(0.0))) {
     p.separation.d_safe = safe;

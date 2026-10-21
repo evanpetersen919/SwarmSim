@@ -165,6 +165,8 @@ class DroneBrain {
 
  private:
   void apply_command(const InboundReport& in, const Vec3& position);
+  // The neighbors that have an estimate, as orbit guidance sees them.
+  std::vector<OrbitNeighbor> neighbors_of(double own_sigma) const;
   // Adds the broadcast of the drone's own estimate to the output.
   BrainOutput finish_step(BrainOutput out, const PoseEstimate& pose, double own_sigma,
                           std::uint64_t tick) const;

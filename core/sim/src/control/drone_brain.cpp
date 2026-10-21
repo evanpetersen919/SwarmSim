@@ -239,6 +239,19 @@ BrainOutput DroneBrain::finish_step(BrainOutput out, const PoseEstimate& pose, d
   return out;
 }
 
+// Every neighbor with an estimate counts, silent or not: an aircraft keeps moving, so a
+// prediction that cannot be checked is still the best account of where it is.
+std::vector<OrbitNeighbor> DroneBrain::neighbors_of(double own_sigma) const {
+  std::vector<OrbitNeighbor> others;
+  for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
+    if (j != config_.id && estimates_[j].valid) {
+      others.push_back({j, estimates_[j].position, estimates_[j].velocity,
+                        estimates_[j].position_sigma + own_sigma});
+    }
+  }
+  return others;
+}
+
 Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                const FallbackBehavior& behavior, std::uint64_t tick) {
   const OrbitParams& orbit = config_.orbit;
@@ -260,9 +273,17 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     target_.position = pose.position;
   } else {
     hold_orbit_valid_ = false;
-    const OrbitReference ref = orbit_reference(config_.id, config_.num_drones,
-                                               static_cast<double>(tick) * config_.dt, orbit);
-    const double phase_error = orbit_phase_error(pose.position, orbit.center, ref.angle);
+    const double time = static_cast<double>(tick) * config_.dt;
+    const OrbitReference ref = orbit_reference(config_.id, config_.num_drones, time, orbit);
+    double phase_error = orbit_phase_error(pose.position, orbit.center, ref.angle);
+    // What the neighbors say about this drone's phase, blended with the shared clock's.
+    double consensus = 0.0;
+    if (orbit.consensus_weight > 0.0 &&
+        orbit_consensus_phase_error(config_.id, config_.num_drones, time, pose.position,
+                                    neighbors_of(own_sigma), orbit, consensus)) {
+      phase_error =
+          (1.0 - orbit.consensus_weight) * phase_error + orbit.consensus_weight * consensus;
+    }
     track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed,
                            ref.position.z, phase_error, orbit, behavior.gain_scale);
     target_ = FormationTarget{};
@@ -270,19 +291,10 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     target_.velocity = ref.velocity;
   }
 
-  // Every neighbor with an estimate counts, silent or not: an aircraft keeps moving, so a
-  // prediction that cannot be checked is still the best account of where it is.
   Vec3 push;
   if (config_.separation_enabled) {
-    std::vector<OrbitNeighbor> others;
-    for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
-      if (j != config_.id && estimates_[j].valid) {
-        others.push_back({j, estimates_[j].position, estimates_[j].velocity,
-                          estimates_[j].position_sigma + own_sigma});
-      }
-    }
-    push = orbit_separation_accel(config_.id, pose.position, pose.velocity, others, orbit,
-                                  behavior.margin_scale);
+    push = orbit_separation_accel(config_.id, pose.position, pose.velocity, neighbors_of(own_sigma),
+                                  orbit, behavior.margin_scale);
   }
   return combine_accel(track, push, orbit.max_accel);
 }

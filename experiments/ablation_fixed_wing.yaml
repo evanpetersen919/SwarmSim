@@ -1,0 +1,29 @@
+# The full controller and three variants that each remove one component, with and without the
+# altitude layers: 4 variants x 2 stacking x 3 weather x 2 faults = 48 cells, five seeds. The
+# variants are the full controller, no fallback state machine, no separation rule, and no
+# prediction (hold-last). Without the layers the separation rule is all that keeps aircraft from
+# sharing an altitude.
+version: 1
+name: ablation_fixed_wing
+base: base_fixed_wing.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: variant
+    levels:
+      - {label: full, set: {control: {predictor: kalman}}}
+      - {label: no_fallback, set: {control: {predictor: kalman, fallback: false}}}
+      - {label: no_separation, set: {control: {predictor: kalman, separation: false}}}
+      - {label: no_prediction, set: {control: {predictor: hold_last}}}
+  - name: stacking
+    levels:
+      - {label: layers, set: {control: {orbit: {altitude_step_m: 10}}}}
+      - {label: flat, set: {control: {orbit: {altitude_step_m: 0}}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 350, rain_mm_h: 0}}}
+      - {label: blind, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 60}]}}

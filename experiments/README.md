@@ -10,5 +10,10 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `fog_convention.yaml` | The fog constant 3.912 against 3.0 at six visibilities; where the position fix is lost |
 | `ablation.yaml` | The full controller and three variants that each disable one component; 48 cells |
 | `baselines.yaml` | Hold-last, dead reckoning, Kalman, and the oracle predictors; 48 cells |
+| `base_fixed_wing.yaml` | The fixed-wing scenario (scenario version 2) that the fixed-wing experiments vary |
+| `matrix_fixed_wing.yaml` | Weather, jamming, loss, drone count, and faults for the default fixed-wing controller; 216 cells |
+| `baselines_fixed_wing.yaml` | Four neighbor predictors against three consensus weights, under jamming and loss; 72 cells |
+| `ablation_fixed_wing.yaml` | The full controller and three variants, with and without altitude layers, in three weathers, with and without a failure; 48 cells |
+| `probe_fixed_wing.yaml` | A probe of 384 cells that shaped the fixed-wing matrix; see docs/phases/fixed-wing-vehicle.md |
 
 A `base` path is relative to the experiment file.

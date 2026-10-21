@@ -50,6 +50,8 @@ AXIS_LABELS = {
     "scene": "Scene",
     "variant": "Controller variant",
     "predictor": "Neighbor predictor",
+    "stacking": "Altitude layers",
+    "consensus": "Phase consensus",
 }
 
 

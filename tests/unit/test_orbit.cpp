@@ -281,3 +281,76 @@ TEST(OrbitSeparation, BadInputIsRejectedAndInvalidNeighborsAreIgnored) {
                                           {2, {1, 0, 0}, {}, -1.0}};  // negative sigma
   EXPECT_EQ(swarm::orbit_separation_accel(0, {}, {}, bad, p, 1.0), Vec3{});
 }
+
+TEST(OrbitConsensus, WithoutUsableNeighborsThereIsNoError) {
+  const OrbitParams p = params();
+  double error = 123.0;
+  EXPECT_FALSE(swarm::orbit_consensus_phase_error(0, 4, 5.0, {150.0, 0.0, 100.0}, {}, p, error));
+  EXPECT_EQ(error, 123.0);
+  const std::vector<OrbitNeighbor> unusable = {
+      {0, {1, 0, 0}, {}, 0.0}, {9, {1, 0, 0}, {}, 0.0}, {1, {1, 0, 0}, {}, -1.0}};
+  EXPECT_FALSE(
+      swarm::orbit_consensus_phase_error(0, 4, 5.0, {150.0, 0.0, 100.0}, unusable, p, error));
+}
+
+TEST(OrbitConsensus, NeighborsOnTheirReferencesGiveTheOwnPhaseOffset) {
+  const OrbitParams p = params();
+  const std::uint32_t n = 6;
+  const double t = 12.0;
+  for (const double behind : {0.0, 0.1, -0.2, 0.5}) {
+    const OrbitReference own = swarm::orbit_reference(2, n, t, p);
+    // This drone is `behind` radians behind its reference; every other drone is exactly on its own.
+    const double angle = own.angle - behind;
+    const Vec3 position = {p.center.x + own.radius * std::cos(angle),
+                           p.center.y + own.radius * std::sin(angle), own.position.z};
+    std::vector<OrbitNeighbor> others;
+    for (std::uint32_t j = 0; j < n; ++j) {
+      if (j != 2) {
+        const OrbitReference r = swarm::orbit_reference(j, n, t, p);
+        others.push_back({j, r.position, r.velocity, 1.0});
+      }
+    }
+    double error = 0.0;
+    ASSERT_TRUE(swarm::orbit_consensus_phase_error(2, n, t, position, others, p, error));
+    EXPECT_NEAR(error, behind, 1e-9) << behind;
+    // And the clock says the same thing, so the two agree.
+    EXPECT_NEAR(swarm::orbit_phase_error(position, p.center, own.angle), behind, 1e-9);
+  }
+}
+
+TEST(OrbitConsensus, AnUncertainNeighborCountsForLess) {
+  const OrbitParams p = params();
+  const std::uint32_t n = 4;
+  const double t = 3.0;
+  const OrbitReference own = swarm::orbit_reference(0, n, t, p);
+  const Vec3 position = own.position;  // this drone is exactly on its reference
+  const OrbitReference a = swarm::orbit_reference(1, n, t, p);
+  const OrbitReference b = swarm::orbit_reference(2, n, t, p);
+  // Neighbor 1 is exactly where it should be; neighbor 2 is reported 0.4 rad further around.
+  const double shift = 0.4;
+  const double angle_b = b.angle + shift;
+  const Vec3 b_shifted = {p.center.x + b.radius * std::cos(angle_b),
+                          p.center.y + b.radius * std::sin(angle_b), b.position.z};
+  double sure = 0.0;
+  double unsure = 0.0;
+  ASSERT_TRUE(swarm::orbit_consensus_phase_error(
+      0, n, t, position, {{1, a.position, a.velocity, 1.0}, {2, b_shifted, b.velocity, 1.0}}, p,
+      sure));
+  ASSERT_TRUE(swarm::orbit_consensus_phase_error(
+      0, n, t, position, {{1, a.position, a.velocity, 1.0}, {2, b_shifted, b.velocity, 80.0}}, p,
+      unsure));
+  EXPECT_GT(std::abs(sure), std::abs(unsure));
+  EXPECT_LT(std::abs(unsure), 0.1 * shift);
+}
+
+TEST(OrbitConsensus, TheWeightIsValidated) {
+  OrbitParams p = params();
+  p.consensus_weight = 1.5;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+  p = params();
+  p.consensus_weight = -0.1;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+  p = params();
+  p.consensus_sigma_floor = 0.0;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+}

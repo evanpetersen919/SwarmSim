@@ -62,6 +62,10 @@ struct DroneAgentConfig {
 // with zero velocity and acceleration, samples nothing, ignores its inbox, and sends nothing. It
 // stays in the world as a physical object, so its position still counts for jamming zones and for
 // the separation metric. It does not fall or hover; this is a stated, simple failure model.
+//
+// A failed fixed-wing aircraft cannot hang in the air, so it is not frozen: from `fail_tick` on it
+// flies on with no command, straight at its last horizontal speed and climb rate, still silent and
+// still sensing nothing. It does not descend, turn, or stall; this is also a simple model.
 class DroneAgent : public IAgent {
  public:
   // `scene` must outlive the agent. Throws std::invalid_argument for an invalid configuration.
