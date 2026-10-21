@@ -1,5 +1,6 @@
 #include "SwarmPlayback.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/InputComponent.h"
@@ -25,6 +26,8 @@ DEFINE_LOG_CATEGORY(LogSwarmSim);
 
 namespace {
 const FName kColorParameter(TEXT("Color"));
+// Wingspan of the drone model in centimeters: 12 ft, the figure press reports for the ALTIUS-700.
+constexpr double kModelSpanCm = 366.0;
 // How many ticks back the acceleration is taken over: 5 ticks is 0.1 s at the usual 0.02 s.
 constexpr double kAccelerationWindowTicks = 5.0;
 // Time constant of the display attitude's smoothing, in seconds.
@@ -149,6 +152,39 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
     return Part;
   };
 
+  // A named model is every static mesh in its folder, each kept at the position it was authored
+  // at, so the pieces assemble the aircraft. The model is centered, turned so that its nose (+Y in
+  // the file) points along +X, and scaled so its wingspan (along X in the file) is kModelSpanCm.
+  TArray<UStaticMesh*> ModelMeshes;
+  FBox ModelBox(ForceInit);
+  if (!DroneModelPath.IsEmpty()) {
+    // A game does not scan content folders ahead of time, so scan this one before asking.
+    IAssetRegistry::Get()->ScanPathsSynchronous({DroneModelPath}, /*bForceRescan=*/false);
+    FARFilter Filter;
+    Filter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
+    Filter.PackagePaths.Add(FName(*DroneModelPath));
+    Filter.bRecursivePaths = true;
+    TArray<FAssetData> Assets;
+    IAssetRegistry::Get()->GetAssets(Filter, Assets);
+    Assets.Sort([](const FAssetData& A, const FAssetData& B) {
+      return A.AssetName.LexicalLess(B.AssetName);
+    });
+    for (const FAssetData& Asset : Assets) {
+      if (UStaticMesh* Mesh = Cast<UStaticMesh>(Asset.GetAsset())) {
+        ModelMeshes.Add(Mesh);
+        ModelBox += Mesh->GetBounds().GetBox();
+      }
+    }
+    if (ModelMeshes.IsEmpty() || ModelBox.GetSize().X <= 0.0) {
+      UE_LOG(LogSwarmSim, Warning, TEXT("no static meshes under %s, using the stand-in drone"),
+             *DroneModelPath);
+      ModelMeshes.Reset();
+    }
+  }
+  const double ModelScale = ModelMeshes.IsEmpty() ? 1.0 : kModelSpanCm / ModelBox.GetSize().X;
+  const FRotator ModelTurn(0.0, -90.0, 0.0);
+  const FVector ModelOffset = ModelTurn.RotateVector(-ModelBox.GetCenter() * ModelScale);
+
   Drones.SetNum(Count);
   for (int32 I = 0; I < Count; ++I) {
     FDrone& Drone = Drones[I];
@@ -159,6 +195,14 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
     Drone.Root->SetWorldScale3D(FVector(DroneScale));
     if (Basic != nullptr) {
       Drone.Paint = UMaterialInstanceDynamic::Create(Basic, this);
+    }
+
+    if (!ModelMeshes.IsEmpty()) {
+      for (UStaticMesh* Mesh : ModelMeshes) {
+        AddPart(Drone.Root, Mesh, ModelOffset, ModelTurn, FVector(ModelScale), nullptr);
+      }
+      Drone.Color = FLinearColor::Black;
+      continue;
     }
 
     // A stand-in quadcopter from the engine's shapes, about 60 cm across at scale 1: a flat body,

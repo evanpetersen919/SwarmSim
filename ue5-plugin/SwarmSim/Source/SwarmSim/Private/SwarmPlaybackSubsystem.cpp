@@ -54,6 +54,7 @@ void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
     return;
   }
   Playback->DroneScale = Options.DroneScale;
+  Playback->DroneModelPath = Options.DroneModel;
   Playback->SetAnchor(Options.AnchorCm);
   Playback->SetSpeed(Options.Speed);
   FString Error;

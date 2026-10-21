@@ -54,6 +54,8 @@ FString HashString(uint64 Hash);
 //   -SwarmSceneFile=PATH  a scene file to build the terrain, trees, and rocks from (editor only)
 //   -SwarmScale=N         how much larger than life the drones are drawn
 //   -SwarmCamera=NAME     free, orbit, follow, or cinematic
+//   -SwarmDroneModel=PATH a content folder (for example /Game/Altius) whose static meshes are the
+//                         pieces of one aircraft, drawn in place of the stand-in drone
 //   -SwarmShotDir=DIR     save screenshots of the game's own render here (not of the desktop)
 //   -SwarmShotDelay=S     seconds before the first screenshot (default 30)
 //   -SwarmShotEvery=S     seconds between screenshots (default 20)
@@ -69,6 +71,7 @@ struct FLaunchOptions {
   double Speed = 1.0;
   double DroneScale = 4.0;
   FString Camera = TEXT("free");
+  FString DroneModel;
   FString ShotDir;
   double ShotDelay = 30.0;
   double ShotEvery = 20.0;

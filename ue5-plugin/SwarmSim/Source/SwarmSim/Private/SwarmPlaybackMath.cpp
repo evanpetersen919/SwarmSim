@@ -108,6 +108,7 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
           TEXT("-SwarmCamera must be free, orbit, follow, or cinematic, got '%s'"), *Text);
     }
   }
+  FParse::Value(CommandLine, TEXT("SwarmDroneModel="), Options.DroneModel);
   FParse::Value(CommandLine, TEXT("SwarmShotDir="), Options.ShotDir);
   const auto ReadNumber = [&](const TCHAR* Key, double Low, double High, double& Out) {
     FString Value;

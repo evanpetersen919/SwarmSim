@@ -131,6 +131,11 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   double DroneScale = 4.0;
 
   // The display lean limit, in degrees.
+  // A content folder whose static meshes are the pieces of one aircraft, drawn in place of the
+  // stand-in quadcopter. Empty keeps the stand-in. Takes effect for drones made after it is set.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  FString DroneModelPath;
+
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   double MaxTiltDeg = 22.0;
 
