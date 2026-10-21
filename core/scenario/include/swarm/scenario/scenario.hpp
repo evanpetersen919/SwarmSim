@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "swarm/camera_fix.hpp"
 #include "swarm/control/command.hpp"
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
@@ -101,6 +102,9 @@ struct Scenario {
   std::uint32_t lidar_beams = 8;
   std::uint32_t lidar_azimuth_samples = 36;
   std::uint64_t fix_period_ticks = 5;
+  // The camera fix of a fixed-wing vehicle, which has no LiDAR. Written to the canonical text
+  // only for a fixed-wing vehicle.
+  CameraFixConfig camera;
 
   // `channel.seed` is not part of a scenario: the simulation seeds the channel from `seed`.
   ChannelConfig channel;

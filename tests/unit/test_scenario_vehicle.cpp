@@ -126,3 +126,51 @@ TEST(ScenarioVehicle, AFixedWingRunIsRepeatableAndDiffersFromAQuadRun) {
   EXPECT_EQ(hash_of(wing, 1), hash_of(wing, 3));
   EXPECT_NE(hash_of(wing, 1), hash_of(file(2), 1));
 }
+
+TEST(ScenarioVehicle, ACameraSectionNeedsAFixedWingVehicle) {
+  const std::string camera = "sensors: {camera: {sigma_floor_m: 4}}\n";
+  EXPECT_TRUE(has_error(swarm::load_scenario(file(2, camera)), "sensors.camera",
+                        "needs vehicle type fixed_wing"));
+  const LoadResult r = swarm::load_scenario(
+      file(2, "vehicle: {type: fixed_wing}\nsensors: {camera: {sigma_floor_m: 4, max_agl_m: 900,"
+              " dropout_probability: 0.1}}\n"));
+  ASSERT_TRUE(r.ok());
+  EXPECT_EQ(r.scenario.camera.sigma_floor_m, 4.0);
+  EXPECT_EQ(r.scenario.camera.max_agl_m, 900.0);
+  EXPECT_EQ(r.scenario.camera.dropout_probability, 0.1);
+  EXPECT_EQ(r.scenario.camera.min_transmission, swarm::CameraFixConfig{}.min_transmission);
+}
+
+TEST(ScenarioVehicle, AFixedWingVehicleHasNoLidar) {
+  const LoadResult r = swarm::load_scenario(
+      file(2, "vehicle: {type: fixed_wing}\nsensors: {lidar: {beams: 4}}\n"));
+  EXPECT_TRUE(has_error(r, "sensors.lidar", "a fixed-wing vehicle has no LiDAR"));
+}
+
+TEST(ScenarioVehicle, BadCameraValuesAreRejected) {
+  const std::string wing = "vehicle: {type: fixed_wing}\n";
+  EXPECT_TRUE(has_error(
+      swarm::load_scenario(file(2, wing + "sensors: {camera: {min_agl_m: 2000}}\n")),
+      "sensors.camera", "min_agl_m must be below max_agl_m"));
+  EXPECT_TRUE(has_error(
+      swarm::load_scenario(file(2, wing + "sensors: {camera: {dropout_probability: 1}}\n")),
+      "sensors.camera.dropout_probability", ""));
+}
+
+TEST(ScenarioVehicle, TheCameraRoundTripsThroughTheCanonicalTextAndTheQuadKeepsItsLidar) {
+  const swarm::Scenario wing =
+      swarm::load_scenario(
+          file(2, "vehicle: {type: fixed_wing}\nsensors: {camera: {sigma_floor_m: 4.5}}\n"))
+          .scenario;
+  const std::string text = swarm::canonical_text(wing);
+  EXPECT_NE(text.find("camera:"), std::string::npos);
+  EXPECT_EQ(text.find("lidar:"), std::string::npos);
+  const LoadResult again = swarm::load_scenario(text);
+  ASSERT_TRUE(again.ok());
+  EXPECT_EQ(again.scenario.camera.sigma_floor_m, 4.5);
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+
+  const std::string quad = swarm::canonical_text(swarm::load_scenario(file(2)).scenario);
+  EXPECT_NE(quad.find("lidar:"), std::string::npos);
+  EXPECT_EQ(quad.find("camera:"), std::string::npos);
+}

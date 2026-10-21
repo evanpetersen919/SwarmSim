@@ -158,9 +158,21 @@ std::string canonical_text(const Scenario& s) {
   }
 
   line("sensors:");
-  line("  lidar:");
-  line("    beams: " + uint(s.lidar_beams));
-  line("    azimuth_samples: " + uint(s.lidar_azimuth_samples));
+  if (s.vehicle.kind == VehicleKind::kFixedWing) {
+    const CameraFixConfig& f = s.camera;
+    line("  camera:");
+    line("    sigma_floor_m: " + num(f.sigma_floor_m));
+    line("    sigma_per_m_agl: " + num(f.sigma_per_m_agl));
+    line("    min_agl_m: " + num(f.min_agl_m));
+    line("    max_agl_m: " + num(f.max_agl_m));
+    line("    min_transmission: " + num(f.min_transmission));
+    line("    max_sigma_m: " + num(f.max_sigma_m));
+    line("    dropout_probability: " + num(f.dropout_probability));
+  } else {
+    line("  lidar:");
+    line("    beams: " + uint(s.lidar_beams));
+    line("    azimuth_samples: " + uint(s.lidar_azimuth_samples));
+  }
   line("  fix_period_ticks: " + uint(s.fix_period_ticks));
 
   line("comms:");

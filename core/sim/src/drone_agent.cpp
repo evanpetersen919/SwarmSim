@@ -33,9 +33,13 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
       scene_(scene),
       vehicle_(make_vehicle(config_)),
       imu_(config_.imu, config_.brain.dt, config_.seed, config_.brain.id),
-      lidar_(config_.lidar, config_.seed, config_.brain.id),
-      fixer_(config_.fix, config_.seed, config_.brain.id),
       brain_(config_.brain) {
+  if (config_.vehicle_kind == VehicleKind::kFixedWing) {
+    camera_.emplace(config_.camera, config_.seed, config_.brain.id);
+  } else {
+    lidar_.emplace(config_.lidar, config_.seed, config_.brain.id);
+    fixer_.emplace(config_.fix, config_.seed, config_.brain.id);
+  }
   config_.weather.validate();
   truth_.pos = config_.start;
   truth_.vel = config_.start_velocity;
@@ -56,8 +60,13 @@ void DroneAgent::step(AgentContext& ctx) {
   BrainInput in;
   in.imu = imu_.sample(truth_);
   if (ctx.tick % config_.fix_period_ticks == 0) {
-    const Scan scan = lidar_.scan(truth_.pos, truth_.yaw, scene_, config_.weather);
-    in.fix = fixer_.measure(truth_.pos, scan);
+    if (camera_) {
+      in.fix = camera_->measure(truth_.pos, scene_.ground_height(truth_.pos.x, truth_.pos.y),
+                                config_.weather);
+    } else {
+      const Scan scan = lidar_->scan(truth_.pos, truth_.yaw, scene_, config_.weather);
+      in.fix = fixer_->measure(truth_.pos, scan);
+    }
   }
   in.inbox.reserve(ctx.inbox.size());
   for (Message& m : ctx.inbox) {

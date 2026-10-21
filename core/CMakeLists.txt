@@ -18,6 +18,7 @@ add_library(swarm_core STATIC
   sim/src/run.cpp
   sim/src/dynamics.cpp
   sim/src/fixed_wing.cpp
+  sim/src/camera_fix.cpp
   sim/src/imu.cpp
   sim/src/terrain.cpp
   sim/src/obstacles.cpp

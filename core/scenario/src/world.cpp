@@ -108,6 +108,7 @@ ScenarioWorld build_world(const Scenario& s) {
     c.start = starts[i];
     c.vehicle.max_accel = c.brain.separation.max_accel;
     c.vehicle_kind = s.vehicle.kind;
+    c.camera = s.camera;
     c.fixed_wing = s.vehicle.fixed_wing;
     if (s.vehicle.kind == VehicleKind::kFixedWing) {
       // An aircraft starts flying: toward the first waypoint, at the mission speed within its

@@ -885,3 +885,34 @@ Obstacles. Every static mesh component that touches the area, and every instance
 Limits. A tree's crown is much wider than the cylinder the LiDAR sees; the trunk radius is a fraction of the width and does not come from the mesh. Rocks are boxes of their axis-aligned bounds, so a turned or leaning rock is a larger box than the rock. Vegetation other than trees and rocks (bushes, ferns, leaves) is not exported. The result is only as complete as what the level had streamed in and generated within the wait. The simulation has no terrain following, so a scenario sets its waypoint heights from the exported ground.
 
 Checked: an automation test (`SwarmSim.Export.RoundTrip`) builds a scene into a test level with the viewer, exports it again, and compares the ground heights (within 5 cm), and the position, height, and base of each tree. `SwarmSim.Export.Plan` tests the options, name matching, grid points (with numbers written out), hole filling, the obstacles from bounds, and the assembled scene. On Electric Dreams Environment (UE 5.4.4), with the anchor at (81187, -14778) cm and a 1000 m area, the export found ground at all but 34 of 15 876 samples (ground from 10.2 to 221.8 m), 35 130 trees (hornbeam meshes at least 8 m tall) and 46 063 rocks (boulders and rock formations of at least 3 m), and the file's hash is recorded in the log of a run on it. A six-drone scenario on that file ran for 140 s in 2 s of wall time, verified on 8 threads, and its drones stayed at least 42.8 m above the exported ground and never entered a tree cylinder (nearest pass 2.0 m); both figures come from a script over the log and the scene, sampled every 25 ticks.
+
+## Fixed-wing vehicle and camera position fix
+
+Source: `core/sim/include/swarm/fixed_wing.hpp`, `camera_fix.hpp`. Status: unit-tested; scenario version 2 (ADR 0010). The vehicle is an ALTIUS-class parameter set, not any real aircraft, and the results are for the simulator.
+
+Vehicle. A coordinated-turn point mass that cannot hover. Horizontal speed is held in [min_speed, max_speed]. The command's acceleration is split into along-heading, sideways, and vertical parts; the sideways part is clamped to g * tan(max_bank) and turns the heading at rate a_sideways / speed. The command's yaw rate is ignored. A drone starts already flying toward the first waypoint. There is no wind. A test checks that a constant sideways acceleration traces a circle of radius V^2 / a within 1 percent.
+
+| Parameter | Value | Basis |
+|---|---|---|
+| max_speed | 25 m/s | Published: press reports give the ALTIUS-600 a maximum of 90 km/h |
+| min_speed | 12 m/s | Assumed. Public sources give no stall or minimum speed |
+| max_accel, max_decel | 2 m/s^2 | Assumed |
+| max_bank | 35 degrees | Assumed. Typical of small fixed-wing guidance limits, not from a source for this aircraft |
+| max_climb_rate, max_descent_rate | 3 and 4 m/s | Assumed |
+| max_vertical_accel | 2 m/s^2 | Assumed |
+| gravity | 9.80665 m/s^2 | Standard |
+
+The ALTIUS-600 figures reported in the press (wingspan about 2.5 m, mass about 12 kg, cruise about 60 km/h) were not used as inputs, because the model is a point mass. Figures for the ALTIUS-700M conflict between sources and are not used.
+
+Camera position fix. A fixed-wing aircraft has no LiDAR in this model. Public reports describe an EO/IR camera payload; they do not describe how the aircraft navigates without GPS, so this sensor is a modeling choice and not a description of the aircraft. The fix is the true position plus noise, or no fix. With h the height above ground and alpha the weather's extinction, the one-way transmission straight down is T = exp(-alpha * h). There is no fix when h is outside [min_agl, max_agl], when T is below min_transmission, or when a dropout draw hits. Otherwise sigma = min(max_sigma, max(sigma_floor, sigma_per_m_agl * h) / T) per axis. The extinction is the same fog and rain model the LiDAR uses (Koschmieder for fog; the rain constants are placeholders).
+
+| Parameter | Value | Basis |
+|---|---|---|
+| sigma_floor_m | 3 m | Assumed. Published visual-localization systems report errors of a few meters to under 10 m (AnyVisLoc, arXiv 2503.10692; a 200 m altitude result under 8 m) |
+| sigma_per_m_agl | 0.02 | Assumed. Stands for ground sample size growing with height |
+| min_agl_m, max_agl_m | 10 m, 1500 m | Assumed |
+| min_transmission | 0.2 | Assumed |
+| max_sigma_m | 100 m | Assumed |
+| dropout_probability | 0.05 | Assumed. Published systems fail on some fixes even in clear conditions |
+
+Limits. The failure is independent per fix, not correlated in time, so a long fog bank is not modeled as a persistent bad state. The camera points straight down. There is no latency and no motion blur. No source ties airborne feature matching to visibility in meters, so the transmission threshold is the part with the least support.

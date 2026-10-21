@@ -3,8 +3,10 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "swarm/agent.hpp"
+#include "swarm/camera_fix.hpp"
 #include "swarm/control/drone_brain.hpp"
 #include "swarm/dynamics.hpp"
 #include "swarm/fixed_wing.hpp"
@@ -30,8 +32,11 @@ struct DroneAgentConfig {
   DroneParams vehicle;
   FixedWingParams fixed_wing;
   ImuParams imu = ImuParams::typical_mems();
+  // A quad senses with the LiDAR and fixes its position from the scan (`lidar`, `fix`). A
+  // fixed-wing aircraft has no LiDAR: it fixes its position with a downward camera (`camera`).
   LidarConfig lidar;
   PositionFixConfig fix;
+  CameraFixConfig camera;
   Weather weather;
   std::uint64_t seed = 0;
   std::uint64_t fix_period_ticks = 5;  // a scan, and so a fix attempt, every this many ticks
@@ -83,8 +88,9 @@ class DroneAgent : public IAgent {
   const IScene& scene_;
   std::unique_ptr<const IVehicle> vehicle_;
   Imu imu_;
-  Lidar lidar_;
-  PositionFixSensor fixer_;
+  std::optional<Lidar> lidar_;
+  std::optional<PositionFixSensor> fixer_;
+  std::optional<CameraFixSensor> camera_;
   DroneBrain brain_;
   DroneState truth_;
   bool failed_ = false;

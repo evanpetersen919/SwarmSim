@@ -603,6 +603,30 @@ void read_weather(Section& root, Scenario& s) {
   sec.finish();
 }
 
+void read_camera(Section& sensors, Scenario& s) {
+  const YAML::Node node = sensors.find("camera");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    sensors.ctx().add("sensors.camera", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section c(sensors.ctx(), node, "sensors.camera");
+  if (!c.valid()) {
+    return;
+  }
+  CameraFixConfig& f = s.camera;
+  read_double(c, "sigma_floor_m", f.sigma_floor_m, greater_than(0.0));
+  read_double(c, "sigma_per_m_agl", f.sigma_per_m_agl, greater_than(0.0));
+  read_double(c, "min_agl_m", f.min_agl_m, greater_than(0.0));
+  read_double(c, "max_agl_m", f.max_agl_m, greater_than(0.0));
+  read_double(c, "min_transmission", f.min_transmission, Bounds{0.0, 1.0, true, true});
+  read_double(c, "max_sigma_m", f.max_sigma_m, greater_than(0.0));
+  read_double(c, "dropout_probability", f.dropout_probability, Bounds{0.0, 1.0, false, true});
+  c.finish();
+}
+
 void read_sensors(Section& root, Scenario& s) {
   const YAML::Node node = root.find("sensors");
   if (!node.IsDefined()) {
@@ -613,7 +637,9 @@ void read_sensors(Section& root, Scenario& s) {
     return;
   }
   const YAML::Node lidar = sec.find("lidar");
-  if (lidar.IsDefined()) {
+  if (lidar.IsDefined() && s.vehicle.kind == VehicleKind::kFixedWing) {
+    root.ctx().add("sensors.lidar", line_of(lidar), "a fixed-wing vehicle has no LiDAR");
+  } else if (lidar.IsDefined()) {
     Section l(root.ctx(), lidar, "sensors.lidar");
     if (l.valid()) {
       read_u32(l, "beams", s.lidar_beams, 1, 256);
@@ -621,6 +647,7 @@ void read_sensors(Section& root, Scenario& s) {
       l.finish();
     }
   }
+  read_camera(sec, s);
   read_uint(sec, "fix_period_ticks", s.fix_period_ticks, 1, 1000000);
   sec.finish();
 }
@@ -857,6 +884,7 @@ void cross_validate(Context& ctx, const Scenario& s) {
   validate_with(ctx, "weather", 0, [&] { s.weather.validate(); });
   if (s.vehicle.kind == VehicleKind::kFixedWing) {
     validate_with(ctx, "vehicle", 0, [&] { validate(s.vehicle.fixed_wing); });
+    validate_with(ctx, "sensors.camera", 0, [&] { CameraFixSensor sensor(s.camera, 0, 0); });
   }
   validate_with(ctx, "mission", 0, [&] { MissionPath path(s.mission); });
   validate_with(ctx, "comms", 0, [&] {
