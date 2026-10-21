@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 #include "swarm/agent.hpp"
 #include "swarm/control/drone_brain.hpp"
@@ -10,6 +11,7 @@
 #include "swarm/lidar.hpp"
 #include "swarm/position_fix.hpp"
 #include "swarm/scene.hpp"
+#include "swarm/vehicle.hpp"
 #include "swarm/weather.hpp"
 
 namespace swarm {
@@ -73,6 +75,7 @@ class DroneAgent : public IAgent {
 
   DroneAgentConfig config_;
   const IScene& scene_;
+  std::unique_ptr<const IVehicle> vehicle_;
   Imu imu_;
   Lidar lidar_;
   PositionFixSensor fixer_;

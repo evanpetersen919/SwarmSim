@@ -21,6 +21,7 @@ DroneAgentConfig DroneAgent::prepared(DroneAgentConfig config) {
 DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
     : config_(prepared(config)),
       scene_(scene),
+      vehicle_(std::make_unique<QuadVehicle>(config_.vehicle)),
       imu_(config_.imu, config_.brain.dt, config_.seed, config_.brain.id),
       lidar_(config_.lidar, config_.seed, config_.brain.id),
       fixer_(config_.fix, config_.seed, config_.brain.id),
@@ -67,7 +68,7 @@ void DroneAgent::step(AgentContext& ctx) {
   }
 
   const BrainOutput out = brain_.step(in, ctx.tick);
-  truth_ = swarm::step(truth_, out.command, config_.vehicle, config_.brain.dt);
+  truth_ = vehicle_->step(truth_, out.command, config_.brain.dt);
 
   if (out.has_report) {
     Message m;
