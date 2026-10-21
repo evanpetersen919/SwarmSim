@@ -3,7 +3,7 @@
 
 function(swarm_configure_target target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /permissive- /fp:precise)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /fp:precise /bigobj)
     if(SWARM_WERROR)
       target_compile_options(${target} PRIVATE /WX)
     endif()
