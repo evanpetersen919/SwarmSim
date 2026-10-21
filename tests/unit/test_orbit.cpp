@@ -70,7 +70,8 @@ struct Swarm {
     for (std::uint32_t i = 0; i < n; ++i) {
       min_speed_seen = std::min(min_speed_seen, std::hypot(state[i].vel.x, state[i].vel.y));
       for (std::uint32_t j = i + 1; j < n; ++j) {
-        min_separation_seen = std::min(min_separation_seen, swarm::distance(state[i].pos, state[j].pos));
+        min_separation_seen =
+            std::min(min_separation_seen, swarm::distance(state[i].pos, state[j].pos));
       }
     }
   }
@@ -155,8 +156,8 @@ TEST(Orbit, ASteadyCircleNeedsNoCorrection) {
                                        ref.position.z, 0.0, p, 1.0);
   // Only the centripetal feedforward remains: V^2 / R toward the center.
   EXPECT_NEAR(std::hypot(a.x, a.y), ref.speed * ref.speed / ref.radius, 1e-9);
-  EXPECT_NEAR(a.x * ref.position.x + a.y * ref.position.y,
-              -ref.speed * ref.speed, 1e-6);  // along -e_r times R
+  EXPECT_NEAR(a.x * ref.position.x + a.y * ref.position.y, -ref.speed * ref.speed,
+              1e-6);  // along -e_r times R
   EXPECT_NEAR(a.z, 0.0, 1e-12);
 }
 
@@ -253,11 +254,10 @@ TEST(OrbitSeparation, TwoAircraftHeadOnPassEachOtherOnTheirRight) {
   for (int i = 0; i < 2500; ++i) {
     std::vector<DroneState> next = s.state;
     for (std::uint32_t k = 0; k < 2; ++k) {
-      std::vector<OrbitNeighbor> others = {
-          {1U - k, s.state[1 - k].pos, s.state[1 - k].vel, 0.0}};
+      std::vector<OrbitNeighbor> others = {{1U - k, s.state[1 - k].pos, s.state[1 - k].vel, 0.0}};
       DroneCommand c;
-      c.accel = swarm::orbit_separation_accel(k, s.state[k].pos, s.state[k].vel, others, s.orbit,
-                                              1.0);
+      c.accel =
+          swarm::orbit_separation_accel(k, s.state[k].pos, s.state[k].vel, others, s.orbit, 1.0);
       next[k] = s.vehicle.step(s.state[k], c, kDt);
     }
     s.state = next;

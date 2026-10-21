@@ -22,7 +22,8 @@ const char* kBody =
     "swarm: {drones: 3}\n"
     "mission:\n"
     "  waypoints:\n"
-    "    - [0, 0, 20]\n";
+    "    - [0, 0, 100]\n"
+    "  speed_mps: 17\n";
 
 std::string file(int version, const std::string& vehicle = "") {
   return "version: " + std::to_string(version) + "\n" + kBody + vehicle;
@@ -55,8 +56,9 @@ TEST(ScenarioVehicle, AFixedWingVehicleTakesTheDefaultsWhenNothingIsOverridden) 
 
 TEST(ScenarioVehicle, OverridesAreReadInTheUnitsOfTheirKeys) {
   const LoadResult r = swarm::load_scenario(
-      file(2, "vehicle:\n  type: fixed_wing\n  min_speed_mps: 14\n  max_speed_mps: 30\n"
-              "  max_bank_deg: 45\n"));
+      file(2,
+           "vehicle:\n  type: fixed_wing\n  min_speed_mps: 14\n  max_speed_mps: 30\n"
+           "  max_bank_deg: 45\n"));
   ASSERT_TRUE(r.ok());
   EXPECT_EQ(r.scenario.vehicle.fixed_wing.min_speed, 14.0);
   EXPECT_EQ(r.scenario.vehicle.fixed_wing.max_speed, 30.0);
@@ -72,12 +74,12 @@ TEST(ScenarioVehicle, AVersionOneFileCannotHaveAVehicleSection) {
 TEST(ScenarioVehicle, BadVehicleValuesAreErrorsWithTheirPaths) {
   EXPECT_TRUE(has_error(swarm::load_scenario(file(2, "vehicle: {type: balloon}\n")), "vehicle.type",
                         "must be one of quad, fixed_wing"));
-  EXPECT_TRUE(has_error(
-      swarm::load_scenario(file(2, "vehicle: {type: fixed_wing, max_bank_deg: 90}\n")),
-      "vehicle.max_bank_deg", ""));
-  EXPECT_TRUE(has_error(
-      swarm::load_scenario(file(2, "vehicle: {type: fixed_wing, min_speed_mps: 30}\n")), "vehicle",
-      "min_speed must be below max_speed"));
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(2, "vehicle: {type: fixed_wing, max_bank_deg: 90}\n")),
+                "vehicle.max_bank_deg", ""));
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(2, "vehicle: {type: fixed_wing, min_speed_mps: 30}\n")),
+                "vehicle", "min_speed must be below max_speed"));
   // A quad takes no fixed-wing keys.
   EXPECT_TRUE(has_error(swarm::load_scenario(file(2, "vehicle: {type: quad, min_speed_mps: 5}\n")),
                         "vehicle.min_speed_mps", "unknown key"));
@@ -100,8 +102,7 @@ TEST(ScenarioVehicle, ACanonicalTextRoundTripsAndNamesTheVersionItNeeds) {
 }
 
 TEST(ScenarioVehicle, TheWorldGivesFixedWingDronesAFlyingStart) {
-  const swarm::Scenario s =
-      swarm::load_scenario(file(2, "vehicle: {type: fixed_wing}\n")).scenario;
+  const swarm::Scenario s = swarm::load_scenario(file(2, "vehicle: {type: fixed_wing}\n")).scenario;
   const swarm::ScenarioWorld world = swarm::build_world(s);
   ASSERT_EQ(world.agents.size(), 3U);
   for (const swarm::DroneAgentConfig& a : world.agents) {
@@ -132,8 +133,9 @@ TEST(ScenarioVehicle, ACameraSectionNeedsAFixedWingVehicle) {
   EXPECT_TRUE(has_error(swarm::load_scenario(file(2, camera)), "sensors.camera",
                         "needs vehicle type fixed_wing"));
   const LoadResult r = swarm::load_scenario(
-      file(2, "vehicle: {type: fixed_wing}\nsensors: {camera: {sigma_floor_m: 4, max_agl_m: 900,"
-              " dropout_probability: 0.1}}\n"));
+      file(2,
+           "vehicle: {type: fixed_wing}\nsensors: {camera: {sigma_floor_m: 4, max_agl_m: 900,"
+           " dropout_probability: 0.1}}\n"));
   ASSERT_TRUE(r.ok());
   EXPECT_EQ(r.scenario.camera.sigma_floor_m, 4.0);
   EXPECT_EQ(r.scenario.camera.max_agl_m, 900.0);
@@ -142,16 +144,16 @@ TEST(ScenarioVehicle, ACameraSectionNeedsAFixedWingVehicle) {
 }
 
 TEST(ScenarioVehicle, AFixedWingVehicleHasNoLidar) {
-  const LoadResult r = swarm::load_scenario(
-      file(2, "vehicle: {type: fixed_wing}\nsensors: {lidar: {beams: 4}}\n"));
+  const LoadResult r =
+      swarm::load_scenario(file(2, "vehicle: {type: fixed_wing}\nsensors: {lidar: {beams: 4}}\n"));
   EXPECT_TRUE(has_error(r, "sensors.lidar", "a fixed-wing vehicle has no LiDAR"));
 }
 
 TEST(ScenarioVehicle, BadCameraValuesAreRejected) {
   const std::string wing = "vehicle: {type: fixed_wing}\n";
-  EXPECT_TRUE(has_error(
-      swarm::load_scenario(file(2, wing + "sensors: {camera: {min_agl_m: 2000}}\n")),
-      "sensors.camera", "min_agl_m must be below max_agl_m"));
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(2, wing + "sensors: {camera: {min_agl_m: 2000}}\n")),
+                "sensors.camera", "min_agl_m must be below max_agl_m"));
   EXPECT_TRUE(has_error(
       swarm::load_scenario(file(2, wing + "sensors: {camera: {dropout_probability: 1}}\n")),
       "sensors.camera.dropout_probability", ""));

@@ -49,8 +49,7 @@ class FixedWingVehicle final : public IVehicle {
 
   // Throws std::invalid_argument for a non-positive or non-finite `dt`, a non-finite command or
   // state, or invalid parameters.
-  DroneState step(const DroneState& state, const DroneCommand& command,
-                  double dt) const override;
+  DroneState step(const DroneState& state, const DroneCommand& command, double dt) const override;
 
   const FixedWingParams& params() const { return params_; }
 

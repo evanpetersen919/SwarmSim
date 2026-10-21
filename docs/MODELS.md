@@ -916,3 +916,30 @@ Camera position fix. A fixed-wing aircraft has no LiDAR in this model. Public re
 | dropout_probability | 0.05 | Assumed. Published systems fail on some fixes even in clear conditions |
 
 Limits. The failure is independent per fix, not correlated in time, so a long fog bank is not modeled as a persistent bad state. The camera points straight down. There is no latency and no motion blur. No source ties airborne feature matching to visibility in meters, so the transmission threshold is the part with the least support.
+
+## Fixed-wing orbit guidance
+
+Source: `core/sim/include/swarm/control/orbit.hpp`, `drone_brain.hpp` (`Guidance::kOrbit`). Status: unit and integration tested; scenario version 2 (ADR 0010). A drone's guidance is `kOrbit` when its vehicle is fixed-wing; the formation guidance of a quad is unchanged and every earlier log is byte-identical.
+
+Reference. Every drone flies a circle around a shared center, which is the scenario's one mission waypoint. With omega = speed / radius, slot i of n at time t has radius R_i = radius + (i mod 2) * radius_step, altitude z_i = center altitude + i * altitude_step, angle 2 pi i / n + omega t (counterclockwise), and speed omega * R_i. Every drone has the same angular rate, so the angular spacing does not drift. The reference is a pure function of the tick, as the mission path is, so every drone computes everyone's position without a message and nominal flight needs no communication. This is a shared-clock scheme. It differs from guidance-field methods in which phase comes from communication (for example Garcia de Marina et al., arXiv 1703.07736). No source was found that compares the two under message loss.
+
+Tracking. From its own pose estimate a drone steers toward the tangent of its circle, cut inward or outward in proportion to its radial error (at most 45 degrees), adjusts its speed in proportion to its phase error (behind the reference means faster), and adds the centripetal acceleration of a steady circle as feedforward. Altitude is a damped spring to its slot altitude. The vehicle's own limits clamp the result.
+
+Separation. For vehicles that cannot stop, repulsion is replaced by a closest-approach rule. For each neighbor estimate the closest approach inside the lookahead is predicted, and when the predicted miss distance is inside the margin (the safe distance widened by the neighbor's position uncertainty, capped) the drone is pushed away from it. The higher slot applies the whole push and the lower slot half, so a pair does not both dodge the same way. An exactly head-on encounter is resolved by each aircraft turning right. Every neighbor with an estimate counts, silent or not, because an aircraft keeps moving.
+
+Fallback. The states and thresholds are the quad's. The state's gain scale and margin scale apply; its speed scale and reference boost do not. Safe hold, and a ground-station hold command, fly a circle of the orbit's radius through the aircraft's position at the moment the hold starts, with the center to the left of its heading and the altitude held. A resume returns to the shared orbit.
+
+Start. A fixed-wing scenario starts every aircraft on its orbit slot with the jitter added, flying along the orbit. The grid keys of the `start` section do not apply. Launch and joining the orbit are not studied; a swarm launched in a grid at one altitude had to cross itself to reach its circles and came within 2 m of itself in the first seconds.
+
+| Parameter | Default | Basis |
+|---|---|---|
+| radius | 150 m | Assumed. Must give a sideways acceleration within 80 percent of the bank limit; the loader checks |
+| radius_step | 12 m | Assumed |
+| altitude_step | 10 m | Assumed. Setting it to 0 removes the stacking and is a planned ablation |
+| phase_gain, radial_gain, velocity gain, altitude gains | 0.05, 1, 1, 0.5 and 1.5 | Assumed; not tuned beyond the first working values |
+| safe_distance_m | 30 m | Assumed; the margin cap is twice this |
+| lookahead_s | 8 s | Assumed |
+
+What the first runs show (`scenarios/fixed_wing_orbit.yaml`, eight aircraft, one seed, debug build, not a benchmark). With the swarm on station, minimum separation is about 109 m whether the separation rule is on or off and whichever neighbor predictor is used; the nominal case is separated by construction, so the rule never engages. With 350 m visibility the camera fix is lost above about 165 m of height, the higher layers drift on dead reckoning, and minimum separation falls to about 30 m with the layers and stays about 107 m without them. With 200 m visibility every aircraft is blind, minimum separation falls to 5.8 to 10.6 m depending on the settings, and turning the separation rule off changes nothing: each aircraft judges closeness from its own and its neighbors' reported positions, which have all drifted, and nothing in the model senses a neighbor directly.
+
+Limits. No neighbor consensus on phase; no path planning, wind, or area search; the orbit center does not move; the mission may have only one waypoint. A failed aircraft is frozen where it is, as in the quad model, which an aircraft cannot do. The formation metrics (`formation_rmse_m`) compare positions with quad formation slots and are not meaningful for orbits; metrics for orbits are a later stage.

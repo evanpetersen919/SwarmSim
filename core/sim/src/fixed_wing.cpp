@@ -59,15 +59,13 @@ DroneState FixedWingVehicle::step(const DroneState& state, const DroneCommand& c
   const double a_up =
       std::clamp(command.accel.z, -params_.max_vertical_accel, params_.max_vertical_accel);
 
-  const double next_speed =
-      std::clamp(speed + a_along * dt, params_.min_speed, params_.max_speed);
+  const double next_speed = std::clamp(speed + a_along * dt, params_.min_speed, params_.max_speed);
   const double next_heading = wrap_angle(heading + a_side / speed * dt);
-  const double next_climb = std::clamp(state.vel.z + a_up * dt, -params_.max_descent_rate,
-                                       params_.max_climb_rate);
+  const double next_climb =
+      std::clamp(state.vel.z + a_up * dt, -params_.max_descent_rate, params_.max_climb_rate);
 
   DroneState next;
-  next.vel = {next_speed * std::cos(next_heading), next_speed * std::sin(next_heading),
-              next_climb};
+  next.vel = {next_speed * std::cos(next_heading), next_speed * std::sin(next_heading), next_climb};
   next.accel = (next.vel - state.vel) / dt;
   next.pos = state.pos + next.vel * dt;
   next.yaw = next_heading;

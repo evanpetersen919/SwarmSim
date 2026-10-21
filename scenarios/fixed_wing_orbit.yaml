@@ -1,0 +1,50 @@
+# Eight fixed-wing aircraft of the ALTIUS class orbiting a point over hills, in haze, with a
+# jammer and independent packet loss. A fixed-wing vehicle has no LiDAR and fixes its position with
+# a downward camera. The orbit is around the one waypoint; the speed is the mission speed.
+version: 2
+seed: 7
+dt: 0.02
+duration_s: 300
+
+scene:
+  type: hills
+  size_m: [2000, 2000]
+  cell_m: 10
+  amplitude_m: 12
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 8
+  formation: {shape: grid, spacing_m: 25}
+  start: {columns: 4, spacing_m: 60, jitter_m: 10, altitude_m: 100, altitude_jitter_m: 0}
+
+mission:
+  waypoints:
+    - [0, 0, 100]
+  speed_mps: 17
+
+vehicle:
+  type: fixed_wing
+
+weather: {visibility_m: 3000}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.1
+  jammers:
+    - center: [0, 0, 100]
+      radius_m: 400
+      mode: constant
+      from_s: 100
+      to_s: 160
+      loss: 0.95
+      affects: receiver
+
+control:
+  predictor: kalman
+  orbit:
+    radius_m: 150
+    radius_step_m: 12
+    altitude_step_m: 10

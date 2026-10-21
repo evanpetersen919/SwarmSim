@@ -739,6 +739,34 @@ void read_comms(Section& root, Scenario& s, const Clock& clock) {
   sec.finish();
 }
 
+void read_orbit(Section& control, Scenario& s) {
+  const YAML::Node node = control.find("orbit");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    control.ctx().add("control.orbit", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section o(control.ctx(), node, "control.orbit");
+  if (!o.valid()) {
+    return;
+  }
+  OrbitParams& p = s.orbit;
+  read_double(o, "radius_m", p.radius, greater_than(0.0));
+  read_double(o, "radius_step_m", p.radius_step, at_least(0.0));
+  read_double(o, "altitude_step_m", p.altitude_step, at_least(0.0));
+  read_double(o, "phase_gain", p.phase_gain, at_least(0.0));
+  read_double(o, "radial_gain", p.radial_gain, at_least(0.0));
+  read_double(o, "lookahead_s", p.lookahead_s, greater_than(0.0));
+  double safe = p.separation.d_safe;
+  if (read_double(o, "safe_distance_m", safe, greater_than(0.0))) {
+    p.separation.d_safe = safe;
+    p.separation.max_margin = 2.0 * safe;
+  }
+  o.finish();
+}
+
 void read_control(Section& root, Scenario& s) {
   const YAML::Node node = root.find("control");
   if (!node.IsDefined()) {
@@ -755,6 +783,7 @@ void read_control(Section& root, Scenario& s) {
                                 {"oracle", PredictorChoice::kOracle}});
   read_bool(sec, "fallback", s.fallback_enabled);
   read_bool(sec, "separation", s.separation_enabled);
+  read_orbit(sec, s);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);
   sec.finish();
@@ -885,6 +914,26 @@ void cross_validate(Context& ctx, const Scenario& s) {
   if (s.vehicle.kind == VehicleKind::kFixedWing) {
     validate_with(ctx, "vehicle", 0, [&] { validate(s.vehicle.fixed_wing); });
     validate_with(ctx, "sensors.camera", 0, [&] { CameraFixSensor sensor(s.camera, 0, 0); });
+    if (s.mission.waypoints.size() != 1) {
+      ctx.add("mission.waypoints", 0,
+              "a fixed-wing vehicle orbits the first waypoint, so there must be exactly one");
+    } else {
+      validate_with(ctx, "control.orbit", 0, [&] {
+        const OrbitParams o = orbit_params(s);
+        validate(o);
+        // The aircraft must be able to fly the circle it is asked to: the sideways acceleration
+        // of the outer circle, omega^2 * (radius + step), within 80 percent of the bank limit,
+        // and its speed within the speed limit.
+        const double omega = o.speed / o.radius;
+        const double outer = o.radius + (s.drones > 1 ? o.radius_step : 0.0);
+        if (omega * omega * outer > 0.8 * s.vehicle.fixed_wing.max_lateral_accel()) {
+          throw std::invalid_argument("the orbit needs more than 80 percent of the bank limit");
+        }
+        if (omega * outer > s.vehicle.fixed_wing.max_speed - o.speed_margin) {
+          throw std::invalid_argument("the outer orbit needs more than the maximum speed");
+        }
+      });
+    }
   }
   validate_with(ctx, "mission", 0, [&] { MissionPath path(s.mission); });
   validate_with(ctx, "comms", 0, [&] {

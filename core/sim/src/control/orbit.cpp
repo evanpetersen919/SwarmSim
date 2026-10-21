@@ -10,7 +10,9 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-bool finite(const Vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
+bool finite(const Vec3& v) {
+  return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
 
 double wrap(double angle) {
   double wrapped = std::fmod(angle + kPi, 2.0 * kPi);
@@ -30,15 +32,17 @@ void validate(const OrbitParams& p) {
   }
   if (!positive(p.radius) || !positive(p.speed) || !positive(p.min_speed) ||
       !positive(p.max_speed) || !positive(p.max_accel) || !positive(p.lookahead_s)) {
-    throw std::invalid_argument("OrbitParams: radius, speeds, max_accel, and lookahead must be "
-                                "finite and positive");
+    throw std::invalid_argument(
+        "OrbitParams: radius, speeds, max_accel, and lookahead must be "
+        "finite and positive");
   }
   if (!non_negative(p.radius_step) || !non_negative(p.altitude_step) ||
       !non_negative(p.speed_margin) || !non_negative(p.radial_gain) ||
       !non_negative(p.phase_gain) || !non_negative(p.velocity_gain) ||
       !non_negative(p.altitude_gain) || !non_negative(p.altitude_damping)) {
-    throw std::invalid_argument("OrbitParams: steps, margin, and gains must be finite and "
-                                "not negative");
+    throw std::invalid_argument(
+        "OrbitParams: steps, margin, and gains must be finite and "
+        "not negative");
   }
   if (!(p.min_speed + p.speed_margin < p.speed && p.speed < p.max_speed - p.speed_margin)) {
     throw std::invalid_argument(
@@ -87,8 +91,9 @@ Vec3 orbit_guidance(const Vec3& position, const Vec3& velocity, const Vec3& cent
                     double gain_scale) {
   if (!finite(position) || !finite(velocity) || !finite(center) || !std::isfinite(z_ref) ||
       !std::isfinite(phase_error) || !std::isfinite(gain_scale) || gain_scale < 0.0) {
-    throw std::invalid_argument("orbit_guidance: inputs must be finite and the gain scale not "
-                                "negative");
+    throw std::invalid_argument(
+        "orbit_guidance: inputs must be finite and the gain scale not "
+        "negative");
   }
   if (!(std::isfinite(radius) && radius > 0.0) || !(std::isfinite(speed) && speed > 0.0)) {
     throw std::invalid_argument("orbit_guidance: radius and speed must be positive");
@@ -124,17 +129,19 @@ Vec3 orbit_guidance(const Vec3& position, const Vec3& velocity, const Vec3& cent
   Vec3 a;
   a.x = -centripetal * erx + kv * (desired * dx - velocity.x);
   a.y = -centripetal * ery + kv * (desired * dy - velocity.y);
-  a.z = gain_scale * (params.altitude_gain * (z_ref - position.z) -
-                      params.altitude_damping * velocity.z);
+  a.z = gain_scale *
+        (params.altitude_gain * (z_ref - position.z) - params.altitude_damping * velocity.z);
   return a;
 }
 
 Vec3 orbit_separation_accel(std::uint32_t self, const Vec3& position, const Vec3& velocity,
-                            const std::vector<OrbitNeighbor>& neighbors,
-                            const OrbitParams& params, double margin_scale) {
-  if (!finite(position) || !finite(velocity) || !(std::isfinite(margin_scale) && margin_scale > 0.0)) {
-    throw std::invalid_argument("orbit_separation_accel: own state must be finite and the margin "
-                                "scale positive");
+                            const std::vector<OrbitNeighbor>& neighbors, const OrbitParams& params,
+                            double margin_scale) {
+  if (!finite(position) || !finite(velocity) ||
+      !(std::isfinite(margin_scale) && margin_scale > 0.0)) {
+    throw std::invalid_argument(
+        "orbit_separation_accel: own state must be finite and the margin "
+        "scale positive");
   }
   validate(params);
   const SeparationParams& sep = params.separation;

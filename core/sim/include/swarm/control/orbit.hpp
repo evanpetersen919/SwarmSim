@@ -27,21 +27,21 @@ namespace swarm {
 // All values here are assumptions (docs/MODELS.md). The limits are copied from the vehicle by the
 // scenario builder, because controllers do not see the vehicle.
 struct OrbitParams {
-  Vec3 center;                 // horizontal center; z is the altitude of slot 0
-  double radius = 150.0;       // m, base radius
-  double radius_step = 12.0;   // m, added to odd slots
-  double altitude_step = 10.0; // m, added per slot
-  double speed = 17.0;         // m/s on the base radius
-  double min_speed = 12.0;     // m/s, the vehicle's limits
+  Vec3 center;                  // horizontal center; z is the altitude of slot 0
+  double radius = 150.0;        // m, base radius
+  double radius_step = 12.0;    // m, added to odd slots
+  double altitude_step = 10.0;  // m, added per slot
+  double speed = 17.0;          // m/s on the base radius
+  double min_speed = 12.0;      // m/s, the vehicle's limits
   double max_speed = 25.0;
-  double speed_margin = 1.0;   // m/s kept clear of both limits when asking for a speed
+  double speed_margin = 1.0;  // m/s kept clear of both limits when asking for a speed
 
-  double radial_gain = 1.0;    // cut toward the circle per unit of relative radial error
-  double phase_gain = 0.05;    // 1/s: m/s of speed per meter of arc error
-  double velocity_gain = 1.0;  // 1/s: acceleration per m/s of velocity error
-  double altitude_gain = 0.5;  // 1/s^2
+  double radial_gain = 1.0;       // cut toward the circle per unit of relative radial error
+  double phase_gain = 0.05;       // 1/s: m/s of speed per meter of arc error
+  double velocity_gain = 1.0;     // 1/s: acceleration per m/s of velocity error
+  double altitude_gain = 0.5;     // 1/s^2
   double altitude_damping = 1.5;  // 1/s
-  double max_accel = 10.0;     // m/s^2, limit of the combined command
+  double max_accel = 10.0;        // m/s^2, limit of the combined command
 
   // Closest-approach separation. The margin of a neighbor is min(d_safe + kappa * sigma,
   // max_margin); `lookahead_s` is how far ahead the closest approach is looked for.
@@ -104,13 +104,14 @@ struct OrbitNeighbor {
 // approach, vertical included) with magnitude gain * (margin - |m|), capped at max_accel. When the
 // closest approach is exactly zero there is no side to dodge to, and the push is to the right of
 // the drone's own heading (along +x for the higher slot and -x for the lower when it has no
-// heading), so two aircraft head-on pass on their right. The higher slot applies the whole push and the lower slot half of it, so a pair does not both
-// dodge the same way and cancel. Neighbors that are not finite, have a negative sigma, or share
-// this drone's slot are ignored. The sum is capped at max_accel.
+// heading), so two aircraft head-on pass on their right. The higher slot applies the whole push and
+// the lower slot half of it, so a pair does not both dodge the same way and cancel. Neighbors that
+// are not finite, have a negative sigma, or share this drone's slot are ignored. The sum is capped
+// at max_accel.
 //
 // Throws std::invalid_argument for a non-finite own position or velocity, or invalid parameters.
 Vec3 orbit_separation_accel(std::uint32_t self, const Vec3& position, const Vec3& velocity,
-                            const std::vector<OrbitNeighbor>& neighbors,
-                            const OrbitParams& params, double margin_scale);
+                            const std::vector<OrbitNeighbor>& neighbors, const OrbitParams& params,
+                            double margin_scale);
 
 }  // namespace swarm

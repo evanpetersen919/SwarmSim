@@ -29,6 +29,15 @@ std::vector<Vec3> start_positions(const Scenario& s) {
     const double jx = rng.uniform(-1.0, 1.0);
     const double jy = rng.uniform(-1.0, 1.0);
     const double jz = rng.uniform(-1.0, 1.0);
+    if (s.vehicle.kind == VehicleKind::kFixedWing) {
+      // An aircraft starts on station: on its slot of the orbit, with the jitter added. Launching
+      // and joining the orbit are not part of what is studied, and a swarm launched in a grid at
+      // one altitude has to cross itself to spread onto its circles. The grid keys do not apply.
+      const Vec3 slot = orbit_reference(i, s.drones, 0.0, orbit_params(s)).position;
+      starts.push_back({slot.x + jx * layout.jitter_m, slot.y + jy * layout.jitter_m,
+                        slot.z + jz * layout.altitude_jitter_m});
+      continue;
+    }
     starts.push_back({center.x + col * layout.spacing_m + jx * layout.jitter_m,
                       center.y + row * layout.spacing_m + jy * layout.jitter_m,
                       layout.altitude_m + jz * layout.altitude_jitter_m});
@@ -45,6 +54,17 @@ std::string hash_text(std::uint64_t v) {
 }
 
 }  // namespace
+
+OrbitParams orbit_params(const Scenario& s) {
+  OrbitParams p = s.orbit;
+  if (!s.mission.waypoints.empty()) {
+    p.center = s.mission.waypoints.front();
+  }
+  p.speed = s.mission.speed;
+  p.min_speed = s.vehicle.fixed_wing.min_speed;
+  p.max_speed = s.vehicle.fixed_wing.max_speed;
+  return p;
+}
 
 ScenarioWorld build_world(const Scenario& s) {
   ScenarioWorld world;
@@ -108,20 +128,17 @@ ScenarioWorld build_world(const Scenario& s) {
     c.start = starts[i];
     c.vehicle.max_accel = c.brain.separation.max_accel;
     c.vehicle_kind = s.vehicle.kind;
+    if (s.vehicle.kind == VehicleKind::kFixedWing) {
+      c.brain.guidance = Guidance::kOrbit;
+      c.brain.orbit = orbit_params(s);
+    }
     c.camera = s.camera;
     c.fixed_wing = s.vehicle.fixed_wing;
     if (s.vehicle.kind == VehicleKind::kFixedWing) {
-      // An aircraft starts flying: toward the first waypoint, at the mission speed within its
-      // limits. At rest it would be at minimum speed along its heading after one step, and the
-      // pose estimator would start with the wrong velocity.
-      const Vec3 toward = s.mission.waypoints.front() - starts[i];
-      const double horizontal = std::hypot(toward.x, toward.y);
-      const FixedWingParams& wing = s.vehicle.fixed_wing;
-      const double speed = std::clamp(s.mission.speed, wing.min_speed, wing.max_speed);
-      c.start_velocity = Vec3{speed, 0.0, 0.0};
-      if (horizontal > 1e-9) {
-        c.start_velocity = Vec3{speed * toward.x / horizontal, speed * toward.y / horizontal, 0.0};
-      }
+      // An aircraft starts flying along its orbit, at the speed of its slot. At rest it would be at
+      // minimum speed along its heading after one step, and the pose estimator would start with the
+      // wrong velocity.
+      c.start_velocity = orbit_reference(i, s.drones, 0.0, c.brain.orbit).velocity;
     }
     c.lidar.beams = s.lidar_beams;
     c.lidar.azimuth_samples = s.lidar_azimuth_samples;

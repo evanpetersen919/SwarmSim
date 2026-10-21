@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace swarm {
 
@@ -40,6 +42,9 @@ void validate(const BrainConfig& c) {
   }
   if (c.report_period_ticks == 0 || c.staleness_ticks == 0) {
     throw std::invalid_argument("BrainConfig: report period and staleness must be positive");
+  }
+  if (c.guidance == Guidance::kOrbit) {
+    swarm::validate(c.orbit);
   }
 }
 
@@ -135,6 +140,13 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     has_hold_ = true;
   }
 
+  BrainOutput out;
+  if (config_.guidance == Guidance::kOrbit) {
+    out.command.accel = orbit_command(pose, own_sigma, behavior, tick);
+    last_command_ = out.command;
+    return finish_step(std::move(out), pose, own_sigma, tick);
+  }
+
   // Control.
   FormationParams formation = config_.formation;
   Vec3 pull;
@@ -207,10 +219,13 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
                         ? separation_accel(config_.id, pose.position, others, separation)
                         : Vec3{};
 
-  BrainOutput out;
   out.command.accel = combine_accel(pull, push, separation.max_accel);
   last_command_ = out.command;
+  return finish_step(std::move(out), pose, own_sigma, tick);
+}
 
+BrainOutput DroneBrain::finish_step(BrainOutput out, const PoseEstimate& pose, double own_sigma,
+                                    std::uint64_t tick) const {
   // Broadcast the drone's own estimate, never truth.
   if (tick % config_.report_period_ticks == 0) {
     NeighborReport report;
@@ -222,6 +237,54 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     out.has_report = true;
   }
   return out;
+}
+
+Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
+                               const FallbackBehavior& behavior, std::uint64_t tick) {
+  const OrbitParams& orbit = config_.orbit;
+  Vec3 track;
+  if (behavior.hold) {
+    if (!hold_orbit_valid_) {
+      // Fly a circle through where the aircraft is now: the center is one radius to its left.
+      const double speed_h = std::hypot(pose.velocity.x, pose.velocity.y);
+      const Vec3 left = speed_h > 1e-9
+                            ? Vec3{-pose.velocity.y / speed_h, pose.velocity.x / speed_h, 0.0}
+                            : Vec3{0.0, 1.0, 0.0};
+      hold_center_ = pose.position + left * orbit.radius;
+      hold_z_ = pose.position.z;
+      hold_orbit_valid_ = true;
+    }
+    track = orbit_guidance(pose.position, pose.velocity, hold_center_, orbit.radius, orbit.speed,
+                           hold_z_, 0.0, orbit, 1.0);
+    target_ = FormationTarget{};
+    target_.position = pose.position;
+  } else {
+    hold_orbit_valid_ = false;
+    const OrbitReference ref = orbit_reference(config_.id, config_.num_drones,
+                                               static_cast<double>(tick) * config_.dt, orbit);
+    const double phase_error = orbit_phase_error(pose.position, orbit.center, ref.angle);
+    track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed,
+                           ref.position.z, phase_error, orbit, behavior.gain_scale);
+    target_ = FormationTarget{};
+    target_.position = ref.position;
+    target_.velocity = ref.velocity;
+  }
+
+  // Every neighbor with an estimate counts, silent or not: an aircraft keeps moving, so a
+  // prediction that cannot be checked is still the best account of where it is.
+  Vec3 push;
+  if (config_.separation_enabled) {
+    std::vector<OrbitNeighbor> others;
+    for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
+      if (j != config_.id && estimates_[j].valid) {
+        others.push_back({j, estimates_[j].position, estimates_[j].velocity,
+                          estimates_[j].position_sigma + own_sigma});
+      }
+    }
+    push = orbit_separation_accel(config_.id, pose.position, pose.velocity, others, orbit,
+                                  behavior.margin_scale);
+  }
+  return combine_accel(track, push, orbit.max_accel);
 }
 
 void DroneBrain::apply_command(const InboundReport& in, const Vec3& position) {
@@ -260,6 +323,11 @@ void DroneBrain::hash_state(Fnv1a64& hash) const {
   hash.update_u64(has_hold_ ? 1 : 0);
   hash_vec(hash, hold_position_);
   hash.update_u64(commanded_hold_ ? 1 : 0);
+  if (config_.guidance == Guidance::kOrbit) {
+    hash.update_u64(hold_orbit_valid_ ? 1 : 0);
+    hash_vec(hash, hold_center_);
+    hash.update_f64(hold_z_);
+  }
   hash.update_u64(has_command_ ? 1 : 0);
   hash.update_u64(last_command_tick_);
   hash.update_u64(command_counters_.applied);

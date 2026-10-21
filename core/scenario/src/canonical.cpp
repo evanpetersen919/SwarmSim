@@ -214,6 +214,17 @@ std::string canonical_text(const Scenario& s) {
   if (!s.separation_enabled) {
     line("  separation: false");
   }
+  if (s.vehicle.kind == VehicleKind::kFixedWing) {
+    const OrbitParams& orbit = s.orbit;
+    line("  orbit:");
+    line("    radius_m: " + num(orbit.radius));
+    line("    radius_step_m: " + num(orbit.radius_step));
+    line("    altitude_step_m: " + num(orbit.altitude_step));
+    line("    phase_gain: " + num(orbit.phase_gain));
+    line("    radial_gain: " + num(orbit.radial_gain));
+    line("    lookahead_s: " + num(orbit.lookahead_s));
+    line("    safe_distance_m: " + num(orbit.separation.d_safe));
+  }
   line("  report_period_ticks: " + uint(s.report_period_ticks));
   line("  staleness_ticks: " + uint(s.staleness_ticks));
 

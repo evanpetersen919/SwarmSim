@@ -9,6 +9,7 @@
 #include "swarm/control/command.hpp"
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
+#include "swarm/control/orbit.hpp"
 #include "swarm/deterministic_channel.hpp"
 #include "swarm/fixed_wing.hpp"
 #include "swarm/obstacles.hpp"
@@ -105,6 +106,11 @@ struct Scenario {
   // The camera fix of a fixed-wing vehicle, which has no LiDAR. Written to the canonical text
   // only for a fixed-wing vehicle.
   CameraFixConfig camera;
+  // Orbit guidance of a fixed-wing vehicle. Only the shape is set here (radius, steps, gains,
+  // separation distance); the center, altitude, speed, and speed limits come from the mission
+  // and the vehicle through orbit_params(). Written to the canonical text only for a
+  // fixed-wing vehicle.
+  OrbitParams orbit;
 
   // `channel.seed` is not part of a scenario: the simulation seeds the channel from `seed`.
   ChannelConfig channel;
@@ -145,6 +151,10 @@ struct LoadResult {
 // version 1, so logs written before version 2 existed still verify.
 inline constexpr std::uint64_t kScenarioVersion = 2;
 inline constexpr std::uint64_t kScenarioVehicleVersion = 2;
+
+// The full orbit parameters of a fixed-wing scenario: `scenario.orbit` with the center and
+// altitude of the mission's first waypoint, the mission speed, and the vehicle's speed limits.
+OrbitParams orbit_params(const Scenario& scenario);
 
 // Parses and validates scenario text. Never throws: every problem, including malformed YAML, comes
 // back as an entry in `errors`, in file order where there is one. Unknown keys are errors.

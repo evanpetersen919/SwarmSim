@@ -32,8 +32,7 @@ class QuadVehicle final : public IVehicle {
  public:
   explicit QuadVehicle(const DroneParams& params) : params_(params) {}
 
-  DroneState step(const DroneState& state, const DroneCommand& command,
-                  double dt) const override {
+  DroneState step(const DroneState& state, const DroneCommand& command, double dt) const override {
     return swarm::step(state, command, params_, dt);
   }
 

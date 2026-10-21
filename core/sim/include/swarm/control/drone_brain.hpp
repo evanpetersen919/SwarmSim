@@ -14,6 +14,7 @@
 #include "swarm/control/fallback.hpp"
 #include "swarm/control/formation_control.hpp"
 #include "swarm/control/mission.hpp"
+#include "swarm/control/orbit.hpp"
 #include "swarm/control/separation.hpp"
 #include "swarm/drone_command.hpp"
 #include "swarm/estimation/neighbor_message.hpp"
@@ -26,6 +27,13 @@
 #include "swarm/vec3.hpp"
 
 namespace swarm {
+
+// How a drone is guided. `kFormation` flies to a slot of a formation that moves along the mission
+// path and can stop; `kOrbit` is for a vehicle that cannot stop and flies a circle (orbit.hpp).
+enum class Guidance : std::uint8_t {
+  kFormation = 0,
+  kOrbit = 1,
+};
 
 struct BrainConfig {
   std::uint32_t id = 0;          // this drone, which is also its formation slot
@@ -62,6 +70,16 @@ struct BrainConfig {
   bool fallback_enabled = true;
   bool separation_enabled = true;
 
+  // With `kOrbit` the formation, mission-path, and last-known-position rules are not used. The
+  // mission's first waypoint is not read either: the orbit's center and altitude come from `orbit`.
+  // The fallback state still scales the tracking gains (gain_scale) and the separation margin
+  // (margin_scale). Its speed scale and reference boost have no meaning for an aircraft and are
+  // ignored. Safe hold, and a commanded hold, fly a circle of radius `orbit.radius` through the
+  // aircraft's position at the moment the hold starts, with the center to the left of its heading
+  // and the altitude held. A holding aircraft keeps moving, so its separation still counts every
+  // neighbor, silent or not.
+  Guidance guidance = Guidance::kFormation;
+  OrbitParams orbit;
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.
@@ -147,6 +165,11 @@ class DroneBrain {
 
  private:
   void apply_command(const InboundReport& in, const Vec3& position);
+  // Adds the broadcast of the drone's own estimate to the output.
+  BrainOutput finish_step(BrainOutput out, const PoseEstimate& pose, double own_sigma,
+                          std::uint64_t tick) const;
+  Vec3 orbit_command(const PoseEstimate& pose, double own_sigma, const FallbackBehavior& behavior,
+                     std::uint64_t tick);
 
   BrainConfig config_;
   MissionPath path_;
@@ -166,6 +189,9 @@ class DroneBrain {
   std::uint64_t last_command_tick_ = 0;
   CommandCounters command_counters_;
   Vec3 hold_position_;
+  bool hold_orbit_valid_ = false;  // orbit guidance: the hold circle has been set
+  Vec3 hold_center_;
+  double hold_z_ = 0.0;
   FormationTarget target_;
   DroneCommand last_command_;
 };
