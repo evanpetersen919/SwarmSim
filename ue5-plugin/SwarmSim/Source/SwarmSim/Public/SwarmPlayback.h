@@ -155,6 +155,8 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   struct FDrone {
     TObjectPtr<USceneComponent> Root;
     TArray<TObjectPtr<UStaticMeshComponent>> Rotors;
+    // The propeller of a folder model, turned about the fuselage axis; null for the stand-in.
+    TObjectPtr<USceneComponent> Propeller;
     TObjectPtr<UMaterialInstanceDynamic> Paint;
     FLinearColor Color = FLinearColor::Black;
     double YawDeg = 0.0;

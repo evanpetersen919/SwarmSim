@@ -28,10 +28,29 @@ namespace {
 const FName kColorParameter(TEXT("Color"));
 // Wingspan of the drone model in centimeters: 12 ft, the figure press reports for the ALTIUS-700.
 constexpr double kModelSpanCm = 366.0;
+// The turn that points the model's nose (+Y in the file) along +X.
+FRotator kModelTurn() { return FRotator(0.0, -90.0, 0.0); }
 // How many ticks back the acceleration is taken over: 5 ticks is 0.1 s at the usual 0.02 s.
 constexpr double kAccelerationWindowTicks = 5.0;
 // Time constant of the display attitude's smoothing, in seconds.
 constexpr double kAttitudeSmoothing = 0.2;
+// The propeller of a folder model turns this many degrees per meter per second of airspeed.
+constexpr double kPropellerDegPerMps = 60.0;
+// Mesh-name prefixes of the ALTIUS model's propeller: two blades and their two hubs. The glTF
+// gives its nodes generic names; these were found from the world-space bounds of each mesh.
+const TCHAR* const kPropellerParts[] = {TEXT("C-Ext001"), TEXT("C-Ext002"), TEXT("Cylinder015"),
+                                        TEXT("Cylinder016")};
+const TCHAR* const kPropellerHubs[] = {TEXT("Cylinder015"), TEXT("Cylinder016")};
+
+bool NameStartsWithAny(const UStaticMesh* Mesh, const TCHAR* const* Prefixes, int32 Count) {
+  const FString Name = Mesh->GetName();
+  for (int32 I = 0; I < Count; ++I) {
+    if (Name.StartsWith(Prefixes[I])) {
+      return true;
+    }
+  }
+  return false;
+}
 constexpr uint64 kHudKeyBase = 7100;
 }  // namespace
 
@@ -120,6 +139,7 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
   UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
   UStaticMesh* Cylinder =
       LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+  UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
   UMaterialInterface* Basic = LoadObject<UMaterialInterface>(
       nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
   if (Basic != nullptr) {
@@ -181,8 +201,16 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
       ModelMeshes.Reset();
     }
   }
+  // The propeller's hub, in the model's own space: the center of its two hub meshes.
+  FBox HubBox(ForceInit);
+  for (const UStaticMesh* Mesh : ModelMeshes) {
+    if (NameStartsWithAny(Mesh, kPropellerHubs, UE_ARRAY_COUNT(kPropellerHubs))) {
+      HubBox += Mesh->GetBounds().GetBox();
+    }
+  }
+  const FVector PropellerHub = HubBox.IsValid ? HubBox.GetCenter() : ModelBox.GetCenter();
   const double ModelScale = ModelMeshes.IsEmpty() ? 1.0 : kModelSpanCm / ModelBox.GetSize().X;
-  const FRotator ModelTurn(0.0, -90.0, 0.0);
+  const FRotator ModelTurn = kModelTurn();
   const FVector ModelOffset = ModelTurn.RotateVector(-ModelBox.GetCenter() * ModelScale);
 
   Drones.SetNum(Count);
@@ -195,10 +223,31 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
     Drone.Root->SetWorldScale3D(FVector(DroneScale));
 
     if (!ModelMeshes.IsEmpty()) {
-      // No Paint here: FDrone is not a UPROPERTY, so a material that no component holds is
-      // collected, and the first state change would write through the freed object.
+      // The propeller hangs from a pivot at its hub, which is turned about the model's Y axis.
+      // The pivot carries the model's own transform, and its parts sit at minus the hub so that
+      // each lands where the other parts do.
+      Drone.Propeller = NewObject<USceneComponent>(this);
+      Drone.Propeller->SetupAttachment(Drone.Root);
+      Drone.Propeller->RegisterComponent();
+      AddInstanceComponent(Drone.Propeller);
+      Drone.Propeller->SetRelativeLocationAndRotation(
+          ModelOffset + ModelTurn.RotateVector(PropellerHub * ModelScale), ModelTurn);
+      Drone.Propeller->SetRelativeScale3D(FVector(ModelScale));
       for (UStaticMesh* Mesh : ModelMeshes) {
-        AddPart(Drone.Root, Mesh, ModelOffset, ModelTurn, FVector(ModelScale), nullptr);
+        if (NameStartsWithAny(Mesh, kPropellerParts, UE_ARRAY_COUNT(kPropellerParts))) {
+          AddPart(Drone.Propeller, Mesh, -PropellerHub, FRotator::ZeroRotator, FVector::OneVector,
+                  nullptr);
+        } else {
+          AddPart(Drone.Root, Mesh, ModelOffset, ModelTurn, FVector(ModelScale), nullptr);
+        }
+      }
+      // The model's materials have no color parameter, so a lamp on top of the fuselage carries
+      // the state color. The lamp's component holds its material, which keeps it from being
+      // collected (FDrone is not a UPROPERTY).
+      if (Basic != nullptr && Sphere != nullptr) {
+        Drone.Paint = UMaterialInstanceDynamic::Create(Basic, this);
+        AddPart(Drone.Root, Sphere, FVector(0.0, 0.0, 0.5 * kModelSpanCm * 0.18),
+                FRotator::ZeroRotator, FVector(0.45), Drone.Paint);
       }
       Drone.Color = FLinearColor::Black;
       continue;
@@ -424,7 +473,16 @@ void ASwarmPlayback::ApplyFrame(double DeltaSeconds, bool bFirst) {
 
     // Rotors spin while the drone is alive.
     if (A.alive && !bFirst) {
-      Drone.SpinDeg = FMath::Fmod(Drone.SpinDeg + RotorSpinDegPerSecond * DeltaSeconds, 360.0);
+      const double Rate =
+          Drone.Propeller != nullptr
+              ? kPropellerDegPerMps * FVector(A.velocity[0], A.velocity[1], A.velocity[2]).Size()
+              : RotorSpinDegPerSecond;
+      Drone.SpinDeg = FMath::Fmod(Drone.SpinDeg + Rate * DeltaSeconds, 360.0);
+    }
+    if (Drone.Propeller != nullptr) {
+      Drone.Propeller->SetRelativeRotation(
+          kModelTurn().Quaternion() *
+          FQuat(FVector::YAxisVector, FMath::DegreesToRadians(Drone.SpinDeg)));
     }
     for (int32 R = 0; R < Drone.Rotors.Num(); ++R) {
       if (Drone.Rotors[R] != nullptr) {
@@ -462,10 +520,11 @@ void ASwarmPlayback::UpdateCamera(double DeltaSeconds) {
   Centroid /= Used;
 
   // How far the drones spread from the centroid, so that a swarm on orbits several hundred meters
-  // across stays in frame; the fixed distances below suit a swarm of tens of meters.
+  // across stays in frame; the fixed distances below suit a swarm of tens of meters. Counted over
+  // the same drones as the centroid, so an aircraft that failed and flew on does not pull it out.
   double Extent = 0.0;
   for (const FDrone& Drone : Drones) {
-    if (Drone.Root != nullptr) {
+    if (Drone.Root != nullptr && (Drone.bAlive || AliveCount == 0)) {
       Extent = FMath::Max(Extent, FVector::Dist2D(Drone.Root->GetComponentLocation(), Centroid));
     }
   }
