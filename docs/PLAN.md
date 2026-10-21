@@ -1,6 +1,6 @@
 # SwarmSim: Project Plan
 
-Status: approved scope, timeline flexible. Last updated 2026-10-16.
+Status: approved scope, timeline flexible. Last updated 2026-10-20.
 
 This document is the log of what the project is, what is in scope, what is deliberately cut, and in what order work happens. Changes to scope go here first, with a dated entry in the change log at the bottom.
 
@@ -19,6 +19,8 @@ Under bursty packet loss and weather-degraded LiDAR, how much does neighbor pred
 ## Scope
 
 This is a simulation study. Comms and jamming models are parameterized, not measured against real radios. Results are claimed only for the simulator.
+
+Vehicles: a quadrotor and an ALTIUS-class fixed-wing aircraft, behind a vehicle interface (ADR 0010). The fixed-wing parameters come from public press figures and the literature, each marked published, literature, or assumed. The aircraft is not claimed to match any real model, and strike behavior is out of scope.
 
 ## Architecture
 
@@ -121,6 +123,8 @@ Later: multi-process drones with epoll, real-time tuning, ORCA/CBF, fault inject
 | 5 seeds is too few for tight intervals | Raise the seed count for the final run |
 | Models unvalidated | One sourced fog fit and the real-versus-simulated channel comparison; label the rest as assumptions |
 | No clear winner in the results | Still a valid result; report where each method breaks |
+| Fixed-wing control grows beyond its limit | v0.1 is loiter orbits, offset phases, speed matching, and one separation rule; nothing else |
+| Fixed-wing parameters and the camera-fix model are unvalidated | Parameter table with provenance; sensitivity runs on the assumed values; label them as assumptions |
 
 ## Honest limits
 
@@ -137,3 +141,4 @@ The project demonstrates multithreading, sockets and Linux tooling. It does not 
 - 2026-10-18: Phase 5 (scenarios, faults, metrics, baselines) complete: a strict YAML scenario loader, a scenario runner that records a verifiable log with per-tick snapshots and message events, drone failure, metrics computed from the log alone, CSV export, and an oracle baseline. Finding: in steady straight flight, packet loss up to 50 percent changes the settled formation error by under 0.05 m, and fog turns the position fix off abruptly between 200 m and 150 m visibility. A failed lead drone in single file is flown into unless silent neighbors keep their last known position as an obstacle. See docs/phases/phase-05-scenarios-and-metrics.md.
 - 2026-10-19: Phase 6 (network backend) complete: a versioned wire format, a channel model separated from the channel, reliable hold and resume commands from a ground station, UDP and TCP transports on loopback, a socket channel that delivers at a barrier, a `--transport sockets` option for `swarm_sim run`, and a `swarm_netcmp` comparison tool. Finding: a scenario run over sockets writes a log byte-identical to the simulated run, and a network that loses messages produces a log that fails verification. Scenario running takes a channel factory because `core/` cannot include `net/`. See docs/phases/phase-06-network-backend.md.
 - 2026-10-19: Phase 7 (batch runs and analysis) complete: experiment files that expand into cells (the planned matrix is 432), a parallel batch driver whose table does not depend on the job count, ablation switches for the fallback and the separation rule, a Python analysis package with Student t intervals and paired differences, figure scripts, and a fog check against one published relation. Findings: the position fix is lost at 45 m altitude, so experiments fly at 20 m; the default fog constant is 1.304 times the published one, a difference in visibility convention, and a setting exists to use the published value. See docs/phases/phase-07-batch-and-analysis.md.
+- 2026-10-20: Scope change: add an ALTIUS-class fixed-wing vehicle behind a vehicle interface, with a camera position-fix sensor, orbit-based control, and a turn-aware neighbor predictor, and keep the quadrotor as a second vehicle (ADR 0010). The benchmark matrix is recomputed for two vehicles and swarm sizes of 6, 10, and 16, with 28 as an extra case; the 432-cell figure above is for the quadrotor only. The local tag `quad-baseline` marks the code before this change. Work order: vehicle interface with no change to existing logs, fixed-wing model, camera fix, orbit control, predictor, metrics, benchmark, viewer.
