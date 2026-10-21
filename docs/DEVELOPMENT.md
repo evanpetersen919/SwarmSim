@@ -92,3 +92,11 @@ Figures from the same table:
 python -m swarmsim_analysis figures ../results/ablation.csv --out ../results/figures \
     --where faults=one
 ```
+
+To play a run in a level, the plugin is linked into the level's project and the game is started from the command line. In a Windows shell that does not rewrite paths (not Git Bash, which turns `/Game/...` into a file path):
+
+```
+UnrealEditor.exe PROJECT.uproject /Game/Levels/MAP -game -windowed -EnablePlugins=SwarmSim -SwarmLog=run.log -SwarmAnchor=X,Y -SwarmScale=6 -SwarmCamera=orbit
+```
+
+Add `-SwarmShotDir=DIR -SwarmShotDelay=30 -SwarmShotCount=2` to save renders of the game and quit. The options are listed in `docs/MODELS.md`, under the Unreal viewer: playback.

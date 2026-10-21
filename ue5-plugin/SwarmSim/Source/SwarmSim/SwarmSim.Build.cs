@@ -19,6 +19,7 @@ public class SwarmSim : ModuleRules
             "DeveloperSettings",
             "Landscape",
             "Foliage",  // LandscapeEdit.h includes the foliage actor header
+            "InputCore",  // the keys that control playback
         });
 
         // Building a Landscape from code (ALandscape::Import) exists only in the editor, and the
