@@ -461,13 +461,24 @@ void ASwarmPlayback::UpdateCamera(double DeltaSeconds) {
   }
   Centroid /= Used;
 
+  // How far the drones spread from the centroid, so that a swarm on orbits several hundred meters
+  // across stays in frame; the fixed distances below suit a swarm of tens of meters.
+  double Extent = 0.0;
+  for (const FDrone& Drone : Drones) {
+    if (Drone.Root != nullptr) {
+      Extent = FMath::Max(Extent, FVector::Dist2D(Drone.Root->GetComponentLocation(), Centroid));
+    }
+  }
+
   FVector Target = Centroid;
   FVector Wanted = CameraLocation;
   const double T = CameraClock;
   switch (CameraMode) {
     case ESwarmCameraMode::Orbit: {
       const double Angle = FMath::DegreesToRadians(6.0 * T);
-      Wanted = Centroid + FVector(FMath::Cos(Angle) * 8000.0, FMath::Sin(Angle) * 8000.0, 3500.0);
+      const double Radius = FMath::Max(8000.0, 1.5 * Extent);
+      Wanted =
+          Centroid + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.45 * Radius);
       break;
     }
     case ESwarmCameraMode::Follow: {
@@ -482,8 +493,9 @@ void ASwarmPlayback::UpdateCamera(double DeltaSeconds) {
     }
     case ESwarmCameraMode::Cinematic: {
       const double Angle = FMath::DegreesToRadians(3.0 * T);
-      const double Radius = (110.0 + 50.0 * FMath::Sin(0.05 * T)) * 100.0;
-      const double Height = (30.0 + 25.0 * FMath::Sin(0.031 * T + 1.0)) * 100.0;
+      const double Radius = FMath::Max((110.0 + 50.0 * FMath::Sin(0.05 * T)) * 100.0, 1.5 * Extent);
+      const double Height =
+          FMath::Max((30.0 + 25.0 * FMath::Sin(0.031 * T + 1.0)) * 100.0, 0.4 * Extent);
       Wanted = Centroid + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, Height);
       break;
     }
