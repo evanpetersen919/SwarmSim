@@ -179,3 +179,23 @@ TEST(ScenarioFlight, TheFlightScenarioFileFliesItsPatternAboveTheGround) {
   EXPECT_GT(*m.result.min_agl, 40.0);
   EXPECT_LT(*m.result.orbit_radial_rmse, 10.0);
 }
+
+TEST(ScenarioFlight, TheFormationScenarioFileHoldsItsFormationThroughTheSequence) {
+  std::ifstream in(std::string(SWARM_SCENARIO_DIR) + "/fixed_wing_formation.yaml",
+                   std::ios::binary);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const LoadResult r = swarm::load_scenario(text);
+  ASSERT_TRUE(r.ok()) << (r.errors.empty() ? "" : swarm::to_string(r.errors.front()));
+  EXPECT_EQ(r.scenario.drones, 4U);
+  EXPECT_EQ(r.scenario.duration_ticks, 3000U);  // 60 s
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(r.scenario, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome m = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(m.ok()) << m.message;
+  EXPECT_EQ(m.result.alive_at_end, 4U);
+  EXPECT_EQ(m.result.collision_episodes, 0U);
+  EXPECT_EQ(*m.result.ground_contacts, 0U);
+  EXPECT_GT(*m.result.min_separation, 15.0);
+  EXPECT_LT(*m.result.orbit_radial_rmse, 6.0);
+  EXPECT_LT(*m.result.orbit_phase_rmse, 8.0);
+}

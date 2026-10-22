@@ -216,10 +216,23 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
       if (pattern) {
         const PatternReference& ref = pattern_refs[i];
         const Vec3 p = to_vec(a.position);
-        const StadiumPath own = pattern_path(i, n, scenario.pattern, orbit);
-        const double cross = own.nearest(p.x, p.y).cross_track;
+        double cross = 0.0;
+        double phase = 0.0;
+        if (scenario.pattern.kind == PatternKind::kFormation) {
+          // Against the aircraft's own place in the formation: the error to its left (across) and
+          // behind (along) the direction the reference is flying.
+          const double tx = ref.velocity.x / ref.speed;
+          const double ty = ref.velocity.y / ref.speed;
+          const double ex = p.x - ref.position.x;
+          const double ey = p.y - ref.position.y;
+          cross = ex * -ty + ey * tx;
+          phase = -(ex * tx + ey * ty);
+        } else {
+          const StadiumPath own = pattern_path(i, n, scenario.pattern, orbit);
+          cross = own.nearest(p.x, p.y).cross_track;
+          phase = path_phase_error(own, p, ref.s);
+        }
         const double altitude = p.z - ref.position.z;
-        const double phase = path_phase_error(own, p, ref.s);
         sum_radial += cross * cross;
         sum_altitude += altitude * altitude;
         sum_phase += phase * phase;

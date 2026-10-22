@@ -21,10 +21,48 @@ namespace swarm {
 //               the center, on concentric stadiums and spread along the loop
 //   kLanes      each aircraft flies its own stadium, side by side across the area, with adjacent
 //               lanes flown in opposite directions
+//   kFormation  slot 0 flies a lead track (straights and turns of a stadium path) and the others
+//               hold scheduled offsets from it: in trail, in echelon right or left, or in a vee.
+//               This follows the one sequence that is documented for the ALTIUS-600: launches
+//               10 to 15 s apart, then an echelon, a left echelon, and a vee (Inside Unmanned
+//               Systems, "ALEs: Multiplatform Force Multipliers").
 enum class PatternKind : std::uint8_t {
   kOrbit = 0,
   kRacetrack = 1,
   kLanes = 2,
+  kFormation = 3,
+};
+
+// The shape of a formation: where slot i holds relative to the lead, in meters back along the
+// lead's heading and to its left.
+//   kTrail          i * (stagger_s * speed) back, no offset to the side
+//   kEchelonRight   i * along back, i * across to the right
+//   kEchelonLeft    i * along back, i * across to the left
+//   kVee            k * along back and k * across to the side, with k = ceil(i / 2), odd slots on
+//                   the left and even slots on the right
+enum class FormationStyle : std::uint8_t {
+  kTrail = 0,
+  kEchelonRight = 1,
+  kEchelonLeft = 2,
+  kVee = 3,
+};
+
+// From `at_s` seconds on, the formation takes `shape`, moving into it over `transition_s`.
+struct FormationPhase {
+  double at_s = 0.0;
+  FormationStyle shape = FormationStyle::kTrail;
+};
+
+struct FormationPlan {
+  std::vector<FormationPhase> phases;  // sorted by at_s; empty means trail throughout
+  double along = 50.0;                 // m back per rank
+  double across = 30.0;                // m to the side per rank
+  // Time to move from one shape to the next. A fixed-wing aircraft closes or opens a gap at a few
+  // meters per second at most (the speed margin of its limits), so changing sides takes tens of
+  // seconds and closing a trail of several launch intervals takes over a minute.
+  double transition_s = 25.0;
+  double position_gain = 0.15;  // 1/s^2: acceleration per meter of position error
+  double velocity_gain = 0.8;   // 1/s: acceleration per m/s of velocity error
 };
 
 struct PatternParams {
@@ -39,6 +77,7 @@ struct PatternParams {
   // An aircraft farther than this fraction of the turn radius from its path is joining it: it
   // flies at the nominal speed toward the path and does not try to hold its phase.
   double join_fraction = 0.5;
+  FormationPlan formation;  // used by kFormation
 };
 
 // Throws std::invalid_argument unless every value is finite, the leg length is not negative, the
@@ -105,6 +144,7 @@ StadiumPath pattern_path(std::uint32_t slot, std::uint32_t n, const PatternParam
 struct PatternReference {
   Vec3 position;
   Vec3 velocity;
+  Vec3 acceleration;   // of the reference; zero except for a formation
   double s = 0.0;      // distance along the slot's own path
   double speed = 0.0;  // m/s along the path
 };
@@ -126,6 +166,25 @@ PatternReference pattern_reference(std::uint32_t slot, std::uint32_t n, double t
 Vec3 path_guidance(const Vec3& position, const Vec3& velocity, const StadiumPath& path,
                    double speed, double z_ref, double phase_error, const PatternParams& params,
                    const OrbitParams& orbit, double gain_scale);
+
+// The lead track of a formation: the stadium path of `params`, translated so that the lead is at
+// the center of `orbit` at time 0, flying along `params.heading`. The lead flies it at
+// `orbit.speed`, so it is at distance `orbit.speed * t` along it at time t.
+StadiumPath formation_lead(const PatternParams& params, const OrbitParams& orbit);
+
+// Acceleration that holds a formation slot: the reference's acceleration plus gains on its
+// position and velocity errors, the horizontal part limited to `orbit.max_accel`, and the
+// vertical part the orbit's altitude law toward `z_ref`.
+Vec3 formation_guidance(const Vec3& position, const Vec3& velocity, const PatternReference& ref,
+                        double z_ref, const PatternParams& params, const OrbitParams& orbit,
+                        double gain_scale);
+
+// The samples of the track ahead of slot `slot` at time `time_s`, shifted by the slot's offset,
+// for terrain guidance: `params.lookahead` meters of the lead track from where the lead is, at
+// `params.sample_spacing`.
+std::vector<PathSample> formation_samples(std::uint32_t slot, double time_s,
+                                          const PatternParams& params, const OrbitParams& orbit,
+                                          const TerrainGuidanceParams& terrain);
 
 // The signed distance in meters along the path from the aircraft's nearest point to the reference
 // distance `s_ref`, wrapped into (-length / 2, length / 2]; positive when the reference is ahead.

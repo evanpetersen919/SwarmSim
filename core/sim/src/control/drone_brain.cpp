@@ -304,6 +304,26 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                            z_hold, 0.0, orbit, 1.0);
     target_ = FormationTarget{};
     target_.position = pose.position;
+  } else if (config_.pattern.kind == PatternKind::kFormation) {
+    hold_orbit_valid_ = false;
+    const double time = static_cast<double>(tick) * config_.dt;
+    const PatternReference ref =
+        pattern_reference(config_.id, config_.num_drones, time, config_.pattern, orbit);
+    const double slot_offset = ref.position.z - orbit.center.z;
+    double floor = -std::numeric_limits<double>::infinity();
+    if (config_.terrain_guidance.enabled && config_.terrain != nullptr) {
+      floor = terrain_floor_over(pose,
+                                 formation_samples(config_.id, time, config_.pattern, orbit,
+                                                   config_.terrain_guidance),
+                                 0.0, 1.0) +
+              slot_offset;
+    }
+    const double z_ref = std::max(ref.position.z, floor);
+    track = formation_guidance(pose.position, pose.velocity, ref, z_ref, config_.pattern, orbit,
+                               behavior.gain_scale);
+    target_ = FormationTarget{};
+    target_.position = ref.position;
+    target_.velocity = ref.velocity;
   } else if (config_.pattern.kind != PatternKind::kOrbit) {
     hold_orbit_valid_ = false;
     const double time = static_cast<double>(tick) * config_.dt;

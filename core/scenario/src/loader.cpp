@@ -858,6 +858,49 @@ void read_orbit(Section& control, Scenario& s) {
   o.finish();
 }
 
+// `control.pattern.formation`: the shapes of a formation pattern and when it takes them.
+void read_formation_plan(Section& pattern, PatternParams& q) {
+  const YAML::Node node = pattern.find("formation");
+  if (!node.IsDefined()) {
+    return;
+  }
+  Section f(pattern.ctx(), node, "control.pattern.formation");
+  if (!f.valid()) {
+    return;
+  }
+  FormationPlan& plan = q.formation;
+  read_double(f, "along_m", plan.along, at_least(0.0));
+  read_double(f, "across_m", plan.across, at_least(0.0));
+  read_double(f, "transition_s", plan.transition_s, greater_than(0.0));
+  read_double(f, "position_gain", plan.position_gain, at_least(0.0));
+  read_double(f, "velocity_gain", plan.velocity_gain, at_least(0.0));
+  const YAML::Node phases = f.find("phases");
+  if (phases.IsDefined()) {
+    if (!phases.IsSequence()) {
+      pattern.ctx().add("control.pattern.formation.phases", line_of(phases), "must be a list");
+    } else {
+      plan.phases.clear();
+      for (std::size_t i = 0; i < phases.size(); ++i) {
+        Section ph(pattern.ctx(), phases[i],
+                   "control.pattern.formation.phases[" + std::to_string(i) + "]");
+        if (!ph.valid()) {
+          continue;
+        }
+        FormationPhase phase;
+        read_double(ph, "at_s", phase.at_s, at_least(0.0), true);
+        read_choice<FormationStyle>(ph, "shape", phase.shape,
+                                    {{"trail", FormationStyle::kTrail},
+                                     {"echelon_right", FormationStyle::kEchelonRight},
+                                     {"echelon_left", FormationStyle::kEchelonLeft},
+                                     {"vee", FormationStyle::kVee}});
+        ph.finish();
+        plan.phases.push_back(phase);
+      }
+    }
+  }
+  f.finish();
+}
+
 // `control.pattern` (version 3): the pattern a fixed-wing vehicle flies. The orbit section still
 // gives the center, the layers, the speed, the gains, and the separation.
 void read_pattern(Section& control, Scenario& s, std::uint64_t version) {
@@ -882,7 +925,8 @@ void read_pattern(Section& control, Scenario& s, std::uint64_t version) {
   read_choice<PatternKind>(p, "type", q.kind,
                            {{"orbit", PatternKind::kOrbit},
                             {"racetrack", PatternKind::kRacetrack},
-                            {"lanes", PatternKind::kLanes}});
+                            {"lanes", PatternKind::kLanes},
+                            {"formation", PatternKind::kFormation}});
   double heading_deg = q.heading * 180.0 / kPi;
   if (read_double(p, "heading_deg", heading_deg, Bounds{-360.0, 360.0, false, false})) {
     q.heading = heading_deg * kPi / 180.0;
@@ -892,6 +936,7 @@ void read_pattern(Section& control, Scenario& s, std::uint64_t version) {
   read_double(p, "lane_spacing_m", q.lane_spacing, greater_than(0.0));
   read_double(p, "stagger_s", q.stagger_s, at_least(0.0));
   read_double(p, "join_fraction", q.join_fraction, greater_than(0.0));
+  read_formation_plan(p, q);
   p.finish();
 }
 
@@ -1089,7 +1134,46 @@ void cross_validate(Context& ctx, const Scenario& s) {
       ctx.add("mission.waypoints", 0,
               "a fixed-wing vehicle orbits the first waypoint, so there must be exactly one");
     } else {
-      if (s.pattern.kind != PatternKind::kOrbit) {
+      if (s.pattern.kind == PatternKind::kFormation) {
+        validate_with(ctx, "control.pattern", 0, [&] {
+          const OrbitParams o = orbit_params(s);
+          validate(o);
+          validate(s.pattern);
+          const FixedWingParams& wing = s.vehicle.fixed_wing;
+          // The widest the formation gets, to the side of the lead, bounds the speeds of the
+          // wingmen when the lead turns: the inside ones slow down and the outside ones speed up.
+          const FormationPlan& plan = s.pattern.formation;
+          const double widest = static_cast<double>(s.drones - 1U) * plan.across;
+          const double radius = s.pattern.turn_radius;
+          const double inner = o.speed * (radius - widest) / radius;
+          const double outer = o.speed * (radius + widest) / radius;
+          if (!(radius > widest) || inner < wing.min_speed + o.speed_margin ||
+              outer > wing.max_speed - o.speed_margin) {
+            throw std::invalid_argument(
+                "the lead's turn radius is too small for the width of the formation: a wingman "
+                "on the inside would fly under the minimum speed or one on the outside over the "
+                "maximum");
+          }
+          if (o.speed * o.speed / radius > 0.8 * wing.max_lateral_accel()) {
+            throw std::invalid_argument(
+                "the lead's turn needs more than 80 percent of the bank limit");
+          }
+          // Neighbors must hold outside the separation margin.
+          const double margin = o.separation.max_margin;
+          bool trail = plan.phases.empty();
+          for (const FormationPhase& phase : plan.phases) {
+            trail = trail || phase.shape == FormationStyle::kTrail;
+          }
+          if (s.drones > 1 && (std::hypot(plan.along, plan.across) <= margin ||
+                               (s.drones > 2 && 2.0 * plan.across <= margin) ||
+                               (trail && s.pattern.stagger_s * o.speed <= margin))) {
+            throw std::invalid_argument(
+                "formation spacing (along, across, or stagger_s times the speed) must exceed the "
+                "separation margin of " +
+                std::to_string(margin) + " m");
+          }
+        });
+      } else if (s.pattern.kind != PatternKind::kOrbit) {
         validate_with(ctx, "control.pattern", 0, [&] {
           const OrbitParams o = orbit_params(s);
           validate(o);

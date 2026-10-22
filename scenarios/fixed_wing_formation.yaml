@@ -1,0 +1,71 @@
+# Four fixed-wing aircraft of the ALTIUS class flying the formation sequence that Anduril's test
+# pilot described for four ALTIUS-600 at the 2022 Army EDGE exercise: an echelon, shifted to a left
+# echelon, then a vee (Inside Unmanned Systems, "ALEs: Multiplatform Force Multipliers"). Scenario
+# version 3. A 60 second demonstration.
+#
+# What is published: the sequence, the 60 km/h cruise speed (16.7 m/s), and that launches were
+# spaced 10 to 15 s apart. What is assumed, because no source gives it: the altitude (150 m, in the
+# 30 to 198 m AGL range that the datasheets of the similar Raven and Switchblade 600 give), the
+# spacing of the formation, the times of the changes, and every flight parameter of the model.
+# Launch is not flown: the aircraft start already in the echelon. Closing a launch trail of
+# several 12 s intervals into an echelon takes over a minute at the speed margin of the aircraft.
+version: 3
+seed: 7
+dt: 0.02
+duration_s: 60
+
+scene:
+  type: hills
+  size_m: [4000, 4000]
+  cell_m: 10
+  amplitude_m: 30
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 4
+
+mission:
+  waypoints:
+    - [0, 0, 150]
+  speed_mps: 16.7
+
+vehicle:
+  type: fixed_wing
+  dynamics: energy
+
+environment:
+  wind: {mean_mps: [2, -1], gust_mps: 0.8, gust_scale_m: 150}
+  ground_contact_crashes: true
+
+weather: {visibility_m: 20000}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.05
+
+metrics:
+  settle_s: 15
+
+control:
+  predictor: kalman
+  orbit:
+    radius_step_m: 0
+    altitude_step_m: 0
+    safe_distance_m: 25
+  pattern:
+    type: formation
+    heading_deg: 0
+    leg_length_m: 3000
+    turn_radius_m: 2000
+    formation:
+      along_m: 50
+      across_m: 30
+      transition_s: 25
+      phases:
+        - {at_s: 0, shape: echelon_right}
+        - {at_s: 5, shape: echelon_left}
+        - {at_s: 33, shape: vee}
+  terrain:
+    clearance_m: 60

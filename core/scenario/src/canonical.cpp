@@ -282,13 +282,35 @@ std::string canonical_text(const Scenario& s) {
     if (s.pattern.kind != PatternKind::kOrbit) {
       const PatternParams& q = s.pattern;
       line("  pattern:");
-      line(std::string("    type: ") + (q.kind == PatternKind::kRacetrack ? "racetrack" : "lanes"));
+      line(std::string("    type: ") + (q.kind == PatternKind::kRacetrack ? "racetrack"
+                                        : q.kind == PatternKind::kLanes   ? "lanes"
+                                                                          : "formation"));
       line("    heading_deg: " + num(q.heading * 180.0 / kPi));
       line("    leg_length_m: " + num(q.leg_length));
       line("    turn_radius_m: " + num(q.turn_radius));
       line("    lane_spacing_m: " + num(q.lane_spacing));
       line("    stagger_s: " + num(q.stagger_s));
       line("    join_fraction: " + num(q.join_fraction));
+      if (q.kind == PatternKind::kFormation) {
+        const FormationPlan& f = q.formation;
+        line("    formation:");
+        line("      along_m: " + num(f.along));
+        line("      across_m: " + num(f.across));
+        line("      transition_s: " + num(f.transition_s));
+        line("      position_gain: " + num(f.position_gain));
+        line("      velocity_gain: " + num(f.velocity_gain));
+        if (!f.phases.empty()) {
+          line("      phases:");
+          for (const FormationPhase& phase : f.phases) {
+            line("        - at_s: " + num(phase.at_s));
+            line(std::string("          shape: ") +
+                 (phase.shape == FormationStyle::kTrail          ? "trail"
+                  : phase.shape == FormationStyle::kEchelonRight ? "echelon_right"
+                  : phase.shape == FormationStyle::kEchelonLeft  ? "echelon_left"
+                                                                 : "vee"));
+          }
+        }
+      }
     }
     if (s.terrain_guidance.enabled) {
       const TerrainGuidanceParams& t = s.terrain_guidance;
