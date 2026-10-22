@@ -90,6 +90,36 @@ bool build_scene_data(const Scenario& s, SceneData& data, std::string& error) {
   return true;
 }
 
+TerrainMap make_terrain_map(const SceneData& scene) {
+  const Heightfield& field = scene.terrain;
+  std::vector<double> heights = field.heights;
+  const std::size_t stride = field.samples_x();
+  for (const Obstacle& o : scene.obstacles) {
+    const double top = o.base_z + o.height;
+    const double hx = o.half_x;
+    const double hy = o.kind == ObstacleKind::kCylinder ? o.half_x : o.half_y;
+    // The samples whose cells the footprint's bounding box touches.
+    const auto first = [&](double v, double origin) {
+      return std::max(0.0, std::floor((v - origin) / field.cell_size));
+    };
+    const auto last = [&](double v, double origin, std::size_t samples) {
+      return std::min(static_cast<double>(samples - 1), std::ceil((v - origin) / field.cell_size));
+    };
+    const double i0 = first(o.cx - hx, field.origin_x);
+    const double i1 = last(o.cx + hx, field.origin_x, field.samples_x());
+    const double j0 = first(o.cy - hy, field.origin_y);
+    const double j1 = last(o.cy + hy, field.origin_y, field.samples_y());
+    for (double j = j0; j <= j1; j += 1.0) {
+      for (double i = i0; i <= i1; i += 1.0) {
+        double& h = heights[static_cast<std::size_t>(j) * stride + static_cast<std::size_t>(i)];
+        h = std::max(h, top);
+      }
+    }
+  }
+  return TerrainMap(field.cells_x, field.cells_y, field.origin_x, field.origin_y, field.cell_size,
+                    std::move(heights));
+}
+
 ScenarioWorld build_world(const Scenario& s) {
   ScenarioWorld world;
   world.scenario = s;
@@ -106,10 +136,7 @@ ScenarioWorld build_world(const Scenario& s) {
   world.scene = std::make_unique<Scene>(std::move(data));
   std::shared_ptr<const TerrainMap> terrain_map;
   if (s.terrain_guidance.enabled) {
-    const Heightfield& field = world.scene->data().terrain;
-    terrain_map =
-        std::make_shared<const TerrainMap>(field.cells_x, field.cells_y, field.origin_x,
-                                           field.origin_y, field.cell_size, field.heights);
+    terrain_map = std::make_shared<const TerrainMap>(make_terrain_map(world.scene->data()));
   }
 
   world.sim.dt = s.dt;

@@ -10,6 +10,7 @@
 
 #include "swarm/control/terrain_map.hpp"
 #include "swarm/drone_agent.hpp"
+#include "swarm/format/scene.hpp"
 #include "swarm/scenario/scenario.hpp"
 #include "swarm/scenario/world.hpp"
 #include "swarm/simulation.hpp"
@@ -232,4 +233,39 @@ TEST(TerrainGuidanceFlight, ScenarioKeysNeedTheirVersionAndAnAircraft) {
   EXPECT_EQ(swarm::canonical_text(again.scenario), text);
   EXPECT_TRUE(again.scenario.terrain_guidance.enabled);
   EXPECT_TRUE(again.scenario.ground_contact_crashes);
+}
+
+TEST(TerrainGuidance, ObstacleTopsAreRaisedIntoTheMap) {
+  swarm::SceneData scene;
+  scene.terrain.cells_x = 10;
+  scene.terrain.cells_y = 10;
+  scene.terrain.origin_x = -50.0;
+  scene.terrain.origin_y = -50.0;
+  scene.terrain.cell_size = 10.0;
+  scene.terrain.heights.assign(11 * 11, 5.0);
+  swarm::Obstacle tower;
+  tower.kind = swarm::ObstacleKind::kCylinder;
+  tower.cx = 20.0;
+  tower.cy = 0.0;
+  tower.base_z = 5.0;
+  tower.height = 95.0;
+  tower.half_x = 4.0;
+  scene.obstacles.push_back(tower);
+  const TerrainMap map = swarm::make_terrain_map(scene);
+  EXPECT_EQ(map.max_height_near(20.0, 0.0, 1.0), 100.0);
+  // Away from the tower the ground is as it was.
+  EXPECT_EQ(map.max_height_near(-40.0, 40.0, 1.0), 5.0);
+  // A box counts by its bounding rectangle.
+  swarm::Obstacle slab;
+  slab.kind = swarm::ObstacleKind::kBox;
+  slab.cx = -20.0;
+  slab.cy = -20.0;
+  slab.base_z = 5.0;
+  slab.height = 45.0;
+  slab.half_x = 12.0;
+  slab.half_y = 3.0;
+  scene.obstacles.push_back(slab);
+  const TerrainMap with_slab = swarm::make_terrain_map(scene);
+  EXPECT_EQ(with_slab.max_height_near(-20.0, -20.0, 1.0), 50.0);
+  EXPECT_EQ(with_slab.max_height_near(-32.0, -20.0, 1.0), 50.0);
 }

@@ -8,6 +8,7 @@
 
 #include "swarm/channel.hpp"
 #include "swarm/channel_model.hpp"
+#include "swarm/control/terrain_map.hpp"
 #include "swarm/drone_agent.hpp"
 #include "swarm/ground_station.hpp"
 #include "swarm/scenario/scenario.hpp"
@@ -28,6 +29,12 @@ using ChannelFactory =
 // from the one the scenario expects. This is what build_world uses, and what metrics use to find
 // the ground under an aircraft.
 bool build_scene_data(const Scenario& scenario, SceneData& out, std::string& error);
+
+// The elevation map an aircraft carries for a scene: the heightfield, with each obstacle's top
+// raised into every sample under the bounding box of its footprint, so trees, rocks, and buildings
+// count as terrain. Conservative: a sample is raised if any part of its cell could be under the
+// obstacle.
+TerrainMap make_terrain_map(const SceneData& scene);
 
 // A scenario turned into things that can run: the generated scene, the simulation configuration,
 // and one agent configuration per drone. The world owns the scene, and every simulation made from
