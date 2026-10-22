@@ -874,6 +874,17 @@ void read_formation_plan(Section& pattern, PatternParams& q) {
   read_double(f, "transition_s", plan.transition_s, greater_than(0.0));
   read_double(f, "position_gain", plan.position_gain, at_least(0.0));
   read_double(f, "velocity_gain", plan.velocity_gain, at_least(0.0));
+  read_double(f, "altitude_stagger_m", plan.altitude_stagger, at_least(0.0));
+  const YAML::Node rake = f.find("rake");
+  if (rake.IsDefined()) {
+    Section r(pattern.ctx(), rake, "control.pattern.formation.rake");
+    if (r.valid()) {
+      read_double(r, "agl_m", plan.rake_agl, greater_than(0.0));
+      read_double(r, "hfov_deg", plan.rake_hfov_deg, Bounds{0.0, 180.0, true, true});
+      read_double(r, "overlap", plan.rake_overlap, Bounds{0.0, 1.0, false, true});
+      r.finish();
+    }
+  }
   const YAML::Node phases = f.find("phases");
   if (phases.IsDefined()) {
     if (!phases.IsSequence()) {
@@ -892,7 +903,8 @@ void read_formation_plan(Section& pattern, PatternParams& q) {
                                     {{"trail", FormationStyle::kTrail},
                                      {"echelon_right", FormationStyle::kEchelonRight},
                                      {"echelon_left", FormationStyle::kEchelonLeft},
-                                     {"vee", FormationStyle::kVee}});
+                                     {"vee", FormationStyle::kVee},
+                                     {"rake", FormationStyle::kRake}});
         ph.finish();
         plan.phases.push_back(phase);
       }
@@ -1143,7 +1155,12 @@ void cross_validate(Context& ctx, const Scenario& s) {
           // The widest the formation gets, to the side of the lead, bounds the speeds of the
           // wingmen when the lead turns: the inside ones slow down and the outside ones speed up.
           const FormationPlan& plan = s.pattern.formation;
-          const double widest = static_cast<double>(s.drones - 1U) * plan.across;
+          bool rake = false;
+          for (const FormationPhase& phase : plan.phases) {
+            rake = rake || phase.shape == FormationStyle::kRake;
+          }
+          const double side = rake ? std::max(plan.across, rake_spacing(plan)) : plan.across;
+          const double widest = static_cast<double>(s.drones - 1U) * side;
           const double radius = s.pattern.turn_radius;
           const double inner = o.speed * (radius - widest) / radius;
           const double outer = o.speed * (radius + widest) / radius;
@@ -1163,6 +1180,10 @@ void cross_validate(Context& ctx, const Scenario& s) {
           bool trail = plan.phases.empty();
           for (const FormationPhase& phase : plan.phases) {
             trail = trail || phase.shape == FormationStyle::kTrail;
+          }
+          if (s.drones > 1 && rake && rake_spacing(plan) <= margin) {
+            throw std::invalid_argument("the rake spacing must exceed the separation margin of " +
+                                        std::to_string(margin) + " m");
           }
           if (s.drones > 1 && (std::hypot(plan.along, plan.across) <= margin ||
                                (s.drones > 2 && 2.0 * plan.across <= margin) ||

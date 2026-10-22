@@ -31,6 +31,10 @@ class IScene {
 
   // Terrain height at (x, y), clamped to the terrain boundary outside it.
   virtual double ground_height(double x, double y) const = 0;
+
+  // The highest solid surface at (x, y): the terrain, or the top of an obstacle whose footprint
+  // contains the point. Defaults to the terrain for scenes without obstacles.
+  virtual double surface_height(double x, double y) const { return ground_height(x, y); }
 };
 
 // Terrain and obstacles from a SceneData, with a spatial index for ray casting.
@@ -51,6 +55,7 @@ class Scene : public IScene {
   bool raycast(const Vec3& origin, const Vec3& direction, double max_range,
                RayHit& hit) const override;
   double ground_height(double x, double y) const override;
+  double surface_height(double x, double y) const override;
 
  private:
   SceneData data_;

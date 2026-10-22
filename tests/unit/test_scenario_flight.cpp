@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "swarm/control/path.hpp"
 #include "swarm/format/log.hpp"
 #include "swarm/scenario/metrics.hpp"
 #include "swarm/scenario/run.hpp"
@@ -198,4 +199,29 @@ TEST(ScenarioFlight, TheFormationScenarioFileHoldsItsFormationThroughTheSequence
   EXPECT_GT(*m.result.min_separation, 15.0);
   EXPECT_LT(*m.result.orbit_radial_rmse, 6.0);
   EXPECT_LT(*m.result.orbit_phase_rmse, 8.0);
+}
+
+TEST(ScenarioFlight, TheRakeScenarioFileSweepsAWideStripWithoutCollision) {
+  std::ifstream in(std::string(SWARM_SCENARIO_DIR) + "/fixed_wing_rake.yaml", std::ios::binary);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const LoadResult r = swarm::load_scenario(text);
+  ASSERT_TRUE(r.ok()) << (r.errors.empty() ? "" : swarm::to_string(r.errors.front()));
+  EXPECT_EQ(r.scenario.drones, 15U);
+  EXPECT_NEAR(swarm::rake_spacing(r.scenario.pattern.formation), 739.0, 1.0);
+  const std::string canonical = swarm::canonical_text(r.scenario);
+  EXPECT_NE(canonical.find("shape: rake"), std::string::npos);
+  const LoadResult again = swarm::load_scenario(canonical);
+  ASSERT_TRUE(again.ok()) << (again.errors.empty() ? "" : swarm::to_string(again.errors.front()));
+  EXPECT_EQ(swarm::canonical_text(again.scenario), canonical);
+
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(r.scenario, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome m = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(m.ok()) << m.message;
+  EXPECT_EQ(m.result.alive_at_end, 15U);
+  EXPECT_EQ(m.result.collision_episodes, 0U);
+  EXPECT_EQ(*m.result.ground_contacts, 0U);
+  // Neighbors are a swath apart; the closest pair cannot be nearer than the 20 m of altitude.
+  EXPECT_GT(*m.result.min_separation, 20.0);
+  EXPECT_LT(*m.result.orbit_radial_rmse, 10.0);
 }

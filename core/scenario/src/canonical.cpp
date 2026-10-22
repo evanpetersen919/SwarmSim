@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -299,6 +300,18 @@ std::string canonical_text(const Scenario& s) {
         line("      transition_s: " + num(f.transition_s));
         line("      position_gain: " + num(f.position_gain));
         line("      velocity_gain: " + num(f.velocity_gain));
+        // Keys added after the formation pattern are written only when they are used, so the text
+        // of earlier scenarios does not change.
+        if (f.altitude_stagger != 0.0) {
+          line("      altitude_stagger_m: " + num(f.altitude_stagger));
+        }
+        if (std::any_of(f.phases.begin(), f.phases.end(),
+                        [](const FormationPhase& p) { return p.shape == FormationStyle::kRake; })) {
+          line("      rake:");
+          line("        agl_m: " + num(f.rake_agl));
+          line("        hfov_deg: " + num(f.rake_hfov_deg));
+          line("        overlap: " + num(f.rake_overlap));
+        }
         if (!f.phases.empty()) {
           line("      phases:");
           for (const FormationPhase& phase : f.phases) {
@@ -307,6 +320,7 @@ std::string canonical_text(const Scenario& s) {
                  (phase.shape == FormationStyle::kTrail          ? "trail"
                   : phase.shape == FormationStyle::kEchelonRight ? "echelon_right"
                   : phase.shape == FormationStyle::kEchelonLeft  ? "echelon_left"
+                  : phase.shape == FormationStyle::kRake         ? "rake"
                                                                  : "vee"));
           }
         }

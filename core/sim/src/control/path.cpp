@@ -26,6 +26,11 @@ double wrap_length(double s, double length) {
 
 }  // namespace
 
+double rake_spacing(const FormationPlan& plan) {
+  return 2.0 * plan.rake_agl * std::tan(0.5 * plan.rake_hfov_deg * kPi / 180.0) *
+         (1.0 - plan.rake_overlap);
+}
+
 // Meters back and to the left of the lead.
 struct Offset {
   double back = 0.0;
@@ -46,6 +51,8 @@ Offset shape_offset(FormationStyle shape, std::uint32_t slot, const FormationPla
       const double k = static_cast<double>((slot + 1U) / 2U);
       return {k * plan.along, slot % 2U == 1U ? k * plan.across : -k * plan.across};
     }
+    case FormationStyle::kRake:
+      return {0.0, -i * rake_spacing(plan)};
   }
   return {};
 }
@@ -91,9 +98,10 @@ Vec3 formation_position(std::uint32_t slot, double time_s, const PatternParams& 
                         const OrbitParams& orbit, const StadiumPath& lead) {
   const StadiumPath::Point p = lead_point(lead, orbit.speed * time_s);
   const Offset off = formation_offset(slot, time_s, params, params.stagger_s * orbit.speed);
+  const double stagger = slot % 2U == 1U ? params.formation.altitude_stagger : 0.0;
   return {p.x - off.back * p.tangent_x - off.left * p.tangent_y,
           p.y - off.back * p.tangent_y + off.left * p.tangent_x,
-          orbit.center.z + static_cast<double>(slot) * orbit.altitude_step};
+          orbit.center.z + static_cast<double>(slot) * orbit.altitude_step + stagger};
 }
 
 void validate(const PatternParams& p) {
@@ -116,6 +124,14 @@ void validate(const PatternParams& p) {
     throw std::invalid_argument(
         "FormationPlan: along, across, and the gains must be finite and not negative, and "
         "transition_s positive");
+  }
+  if (!finite_value(f.rake_agl) || !finite_value(f.rake_hfov_deg) ||
+      !finite_value(f.rake_overlap) || !finite_value(f.altitude_stagger) || !(f.rake_agl > 0.0) ||
+      !(f.rake_hfov_deg > 0.0 && f.rake_hfov_deg < 180.0) ||
+      !(f.rake_overlap >= 0.0 && f.rake_overlap < 1.0) || f.altitude_stagger < 0.0) {
+    throw std::invalid_argument(
+        "FormationPlan: rake_agl must be positive, rake_hfov_deg in (0, 180), rake_overlap in "
+        "[0, 1), and altitude_stagger not negative");
   }
   for (std::size_t i = 0; i < f.phases.size(); ++i) {
     if (!std::isfinite(f.phases[i].at_s) || f.phases[i].at_s < 0.0 ||

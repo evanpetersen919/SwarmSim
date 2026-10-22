@@ -40,11 +40,15 @@ enum class PatternKind : std::uint8_t {
 //   kEchelonLeft    i * along back, i * across to the left
 //   kVee            k * along back and k * across to the side, with k = ceil(i / 2), odd slots on
 //                   the left and even slots on the right
+//   kRake           a broadside rake, the line-abreast array of a wide-area search: no offset
+//                   back, and i * W to the right, where W is the sensor swath spacing of
+//                   rake_spacing(). Slot 0, the lead, is at the left end of the line.
 enum class FormationStyle : std::uint8_t {
   kTrail = 0,
   kEchelonRight = 1,
   kEchelonLeft = 2,
   kVee = 3,
+  kRake = 4,
 };
 
 // From `at_s` seconds on, the formation takes `shape`, moving into it over `transition_s`.
@@ -63,7 +67,20 @@ struct FormationPlan {
   double transition_s = 25.0;
   double position_gain = 0.15;  // 1/s^2: acceleration per meter of position error
   double velocity_gain = 0.8;   // 1/s: acceleration per m/s of velocity error
+  // The sensor footprint that sets the spacing of kRake: the height above ground, the horizontal
+  // field of view of the down-looking camera, and the overlap between adjacent swaths.
+  double rake_agl = 800.0;      // m
+  double rake_hfov_deg = 60.0;  // degrees, in (0, 180)
+  double rake_overlap = 0.2;    // fraction of a swath, in [0, 1)
+  // Adjacent slots differ in altitude by this much: odd slots fly it above the even ones. It
+  // applies to every shape and is zero by default. A rake uses it to keep the swaths overlapping
+  // without putting neighbors at the same height.
+  double altitude_stagger = 0.0;  // m
 };
+
+// The lateral spacing of a rake: W = 2 * h * tan(hfov / 2) * (1 - overlap), the width of one swath
+// less the overlap. With h = 800 m, a 60 degree field of view, and 20 percent overlap it is 739 m.
+double rake_spacing(const FormationPlan& plan);
 
 struct PatternParams {
   PatternKind kind = PatternKind::kOrbit;

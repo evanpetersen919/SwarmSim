@@ -117,7 +117,7 @@ void DroneAgent::step(AgentContext& ctx) {
   const BrainOutput out = brain_.step(in, ctx.tick);
   truth_ = advance(out.command, ctx.tick);
   if (config_.crash_on_ground) {
-    const double ground = scene_.ground_height(truth_.pos.x, truth_.pos.y);
+    const double ground = scene_.surface_height(truth_.pos.x, truth_.pos.y);
     if (truth_.pos.z <= ground) {
       // Ground contact ends the flight: the aircraft stays where it hit, silent, from the next
       // tick on.

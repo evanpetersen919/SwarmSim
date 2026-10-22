@@ -274,3 +274,57 @@ TEST(FormationScenario, ItRoundTripsAndRefusesAnImpossibleFormation) {
   order.replace(order.find(a), a.size(), "{at_s: 50, shape: echelon_left}");
   EXPECT_FALSE(swarm::load_scenario(order).ok());
 }
+
+TEST(Rake, TheSpacingIsTheSwathLessTheOverlap) {
+  swarm::FormationPlan plan;
+  plan.rake_agl = 800.0;
+  plan.rake_hfov_deg = 60.0;
+  plan.rake_overlap = 0.2;
+  // 2 * 800 * tan(30 deg) * 0.8
+  EXPECT_NEAR(swarm::rake_spacing(plan), 739.0083, 1e-3);
+  plan.rake_overlap = 0.0;
+  EXPECT_NEAR(swarm::rake_spacing(plan), 923.7604, 1e-3);
+  plan.rake_hfov_deg = 90.0;
+  EXPECT_NEAR(swarm::rake_spacing(plan), 1600.0, 1e-9);
+}
+
+TEST(Rake, TheAircraftFlyAbreastWithAlternatingAltitude) {
+  PatternParams p = formation();
+  p.heading = 0.5;
+  p.formation.phases = {{0.0, FormationStyle::kRake}};
+  p.formation.altitude_stagger = 20.0;
+  const double w = swarm::rake_spacing(p.formation);
+  const OrbitParams o = orbit();
+  const std::uint32_t n = 15;
+  for (const double t : {0.0, 20.0, 60.0}) {
+    for (std::uint32_t slot = 1; slot < n; ++slot) {
+      const Rel r = relative(slot, t, p, o, n);
+      EXPECT_NEAR(r.back, 0.0, 1e-6) << "slot " << slot << " t " << t;
+      EXPECT_NEAR(r.left, -static_cast<double>(slot) * w, 1e-6) << "slot " << slot << " t " << t;
+      const PatternReference me = swarm::pattern_reference(slot, n, t, p, o);
+      EXPECT_DOUBLE_EQ(me.position.z, 150.0 + (slot % 2U == 1U ? 20.0 : 0.0));
+    }
+  }
+  // Adjacent aircraft differ in height by the stagger, and all fly the lead's heading and speed.
+  const PatternReference a = swarm::pattern_reference(3, n, 10.0, p, o);
+  const PatternReference b = swarm::pattern_reference(4, n, 10.0, p, o);
+  EXPECT_DOUBLE_EQ(std::abs(a.position.z - b.position.z), 20.0);
+  EXPECT_NEAR(a.velocity.x, b.velocity.x, 1e-6);
+  EXPECT_NEAR(a.velocity.y, b.velocity.y, 1e-6);
+  EXPECT_NEAR(a.speed, 16.7, 1e-6);
+}
+
+TEST(Rake, TheRakeParametersAreChecked) {
+  PatternParams p = formation();
+  p.formation.rake_hfov_deg = 180.0;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+  p = formation();
+  p.formation.rake_overlap = 1.0;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+  p = formation();
+  p.formation.rake_agl = 0.0;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+  p = formation();
+  p.formation.altitude_stagger = -1.0;
+  EXPECT_THROW(swarm::validate(p), std::invalid_argument);
+}

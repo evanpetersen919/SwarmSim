@@ -1,0 +1,81 @@
+# Fifteen fixed-wing aircraft flying a broadside rake (a line-abreast lawnmower array): the
+# formation of a wide-area search, where each aircraft covers one swath and the swarm sweeps a wide
+# strip in one pass. Scenario version 3. A 90 second run of one pass.
+#
+# The spacing is the width of one down-looking swath less the overlap:
+#   W = 2 * h * tan(hfov / 2) * (1 - overlap) = 2 * 800 * tan(30 deg) * 0.8 = 739 m
+# so 15 aircraft sweep about 10.3 km between the first and last, and about 11 km with the swath of
+# the last. Adjacent aircraft differ in altitude by 20 m (odd slots fly above the even ones).
+#
+# Aircraft: ALTIUS-700 class, from figures the user supplied in a spec note that cites no source
+# (cruise 110 to 130 km/h, maximum 185 km/h, gross weight 27 to 30 kg). They are not verified
+# against Anduril's datasheet. Used: cruise 33 m/s (119 km/h), maximum 51 m/s (185 km/h), mass
+# 28.5 kg. Assumed, because the note does not give them: the wing area (1.0 m^2, chosen so the
+# stall speed is about 18 m/s), the wingspan (3.0 m), the drag polar, thrust (90 N) and power
+# (3500 W, enough for the 185 km/h maximum and a margin to climb), and every other flight
+# parameter of the model. The geometry comes from a pattern description of non-kinetic swarm
+# formations that cites no source, and the camera field of view, the overlap, and the altitude are
+# chosen values. The aircraft starts already in line; the lead (slot 0) is the left end of the
+# line, which extends to its right.
+#
+# The lead flies a straight leg and the turn radius (40 km) is large, because the formation is
+# wide: in a tight turn the aircraft at the end of the line would fly faster or slower than the
+# speed limits, and the loader refuses a turn that needs it. A sweep of several passes is not
+# modeled.
+version: 3
+seed: 11
+dt: 0.02
+duration_s: 90
+
+scene:
+  type: hills
+  size_m: [14000, 14000]
+  cell_m: 20
+  amplitude_m: 20
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 15
+
+mission:
+  waypoints:
+    - [-5000, -3000, 800]
+  speed_mps: 33
+
+vehicle:
+  type: fixed_wing
+  max_speed_mps: 51
+  dynamics: energy
+  energy: {mass_kg: 28.5, wing_area_m2: 1.0, wingspan_m: 3.0, max_thrust_n: 90, max_power_w: 3500}
+
+environment:
+  wind: {mean_mps: [2, -1], gust_mps: 0.8, gust_scale_m: 150}
+  ground_contact_crashes: true
+
+weather: {visibility_m: 20000}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.05
+
+metrics:
+  settle_s: 15
+
+control:
+  predictor: kalman
+  orbit:
+    radius_step_m: 0
+    altitude_step_m: 0
+    safe_distance_m: 25
+  pattern:
+    type: formation
+    heading_deg: 90
+    leg_length_m: 6000
+    turn_radius_m: 40000
+    formation:
+      altitude_stagger_m: 20
+      rake: {agl_m: 800, hfov_deg: 60, overlap: 0.2}
+      phases:
+        - {at_s: 0, shape: rake}

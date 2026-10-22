@@ -202,7 +202,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     for (std::uint32_t i = 0; i < n; ++i) {
       const AgentSnapshot& a = snapshot.agents[i];
       if (scene) {
-        const double agl = a.position[2] - scene->ground_height(a.position[0], a.position[1]);
+        const double agl = a.position[2] - scene->surface_height(a.position[0], a.position[1]);
         lowest_agl = std::min(lowest_agl, agl);
         if (agl <= 0.0) {
           touched[i] = 1;

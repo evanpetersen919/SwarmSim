@@ -78,6 +78,30 @@ Scene::Scene(SceneData data) : data_(std::move(data)) {
 
 double Scene::ground_height(double x, double y) const { return height_at(data_.terrain, x, y); }
 
+double Scene::surface_height(double x, double y) const {
+  double h = ground_height(x, y);
+  const Heightfield& t = data_.terrain;
+  const double fi = std::floor((x - t.origin_x) / t.cell_size);
+  const double fj = std::floor((y - t.origin_y) / t.cell_size);
+  if (!(fi >= 0.0 && fj >= 0.0 && fi < static_cast<double>(t.cells_x) &&
+        fj < static_cast<double>(t.cells_y))) {
+    return h;  // outside the terrain's extent no obstacle exists
+  }
+  const auto cell = static_cast<std::size_t>(fj) * t.cells_x + static_cast<std::size_t>(fi);
+  for (const std::uint32_t n : cell_obstacles_[cell]) {
+    const Obstacle& o = data_.obstacles[n];
+    const double dx = x - o.cx;
+    const double dy = y - o.cy;
+    const bool inside = o.kind == ObstacleKind::kCylinder
+                            ? dx * dx + dy * dy <= o.half_x * o.half_x
+                            : std::abs(dx) <= o.half_x && std::abs(dy) <= o.half_y;
+    if (inside) {
+      h = std::max(h, o.base_z + o.height);
+    }
+  }
+  return h;
+}
+
 bool Scene::raycast(const Vec3& origin, const Vec3& direction, double max_range,
                     RayHit& hit) const {
   if (!(max_range > 0.0) || !std::isfinite(max_range) || !std::isfinite(origin.x) ||
