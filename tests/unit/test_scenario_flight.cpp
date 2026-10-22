@@ -1,0 +1,161 @@
+#include <gtest/gtest.h>
+
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "swarm/format/log.hpp"
+#include "swarm/scenario/run.hpp"
+#include "swarm/scenario/scenario.hpp"
+#include "swarm/scenario/world.hpp"
+
+using swarm::FixedWingDynamics;
+using swarm::LoadResult;
+
+namespace {
+
+const char* kBody =
+    "seed: 1\n"
+    "duration_s: 10\n"
+    "swarm: {drones: 3}\n"
+    "mission:\n"
+    "  waypoints:\n"
+    "    - [0, 0, 100]\n"
+    "  speed_mps: 17\n";
+
+std::string file(int version, const std::string& rest = "") {
+  return "version: " + std::to_string(version) + "\n" + kBody + rest;
+}
+
+const char* kEnergy = "vehicle: {type: fixed_wing, dynamics: energy}\n";
+const char* kWind = "environment:\n  wind: {mean_mps: [4, -2], gust_mps: 1.5, gust_scale_m: 120}\n";
+
+bool has_error(const LoadResult& r, const std::string& path, const std::string& text) {
+  for (const swarm::ScenarioError& e : r.errors) {
+    if (e.path == path && e.message.find(text) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::uint64_t hash_of(const std::string& text, std::size_t threads) {
+  const LoadResult r = swarm::load_scenario(text);
+  EXPECT_TRUE(r.ok());
+  std::vector<std::uint8_t> bytes;
+  std::uint64_t hash = 0;
+  EXPECT_EQ(swarm::run_scenario(r.scenario, threads, bytes, &hash), swarm::LogStatus::kOk);
+  return hash;
+}
+
+}  // namespace
+
+TEST(ScenarioFlight, TheEnergyModelAndTheWindNeedVersionThree) {
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(2, kEnergy)), "vehicle.dynamics", "needs version 3"));
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(2, std::string("vehicle: {type: fixed_wing}\n") + kWind)),
+                "environment", "needs version 3"));
+  EXPECT_TRUE(swarm::load_scenario(file(3, kEnergy)).ok());
+}
+
+TEST(ScenarioFlight, TheEnergyModelDerivesTheMinimumSpeedFromTheWing) {
+  const LoadResult r = swarm::load_scenario(file(3, kEnergy));
+  ASSERT_TRUE(r.ok());
+  const swarm::VehicleSettings& v = r.scenario.vehicle;
+  EXPECT_EQ(v.dynamics, FixedWingDynamics::kEnergy);
+  EXPECT_NEAR(v.fixed_wing.min_speed, v.energy.hold_speed(v.fixed_wing.gravity), 1e-12);
+  EXPECT_TRUE(has_error(swarm::load_scenario(file(3,
+                                                  "vehicle: {type: fixed_wing, dynamics: "
+                                                  "energy, min_speed_mps: 13}\n")),
+                        "vehicle.min_speed_mps", "follows from the wing"));
+}
+
+TEST(ScenarioFlight, EnergyParametersAreOverriddenInTheirUnitsAndNeedTheEnergyModel) {
+  const LoadResult r = swarm::load_scenario(
+      file(3,
+           "vehicle:\n  type: fixed_wing\n  dynamics: energy\n  energy: {mass_kg: 10, "
+           "wing_area_m2: 0.8, max_power_w: 500}\n"));
+  ASSERT_TRUE(r.ok());
+  EXPECT_EQ(r.scenario.vehicle.energy.mass, 10.0);
+  EXPECT_EQ(r.scenario.vehicle.energy.wing_area, 0.8);
+  EXPECT_EQ(r.scenario.vehicle.energy.max_power, 500.0);
+  EXPECT_TRUE(has_error(swarm::load_scenario(file(3,
+                                                  "vehicle: {type: fixed_wing, energy: "
+                                                  "{mass_kg: 10}}\n")),
+                        "vehicle.energy", "needs dynamics: energy"));
+  EXPECT_TRUE(has_error(swarm::load_scenario(file(3,
+                                                  "vehicle: {type: fixed_wing, dynamics: "
+                                                  "energy, energy: {stall_margin: 0.5}}\n")),
+                        "vehicle.energy.stall_margin", ""));
+}
+
+TEST(ScenarioFlight, TheWindIsReadAndBadValuesAreErrors) {
+  const LoadResult r = swarm::load_scenario(file(3, std::string(kEnergy) + kWind));
+  ASSERT_TRUE(r.ok());
+  EXPECT_EQ(r.scenario.wind.mean.x, 4.0);
+  EXPECT_EQ(r.scenario.wind.mean.y, -2.0);
+  EXPECT_EQ(r.scenario.wind.gust_sigma, 1.5);
+  EXPECT_EQ(r.scenario.wind.gust_scale, 120.0);
+  EXPECT_TRUE(has_error(swarm::load_scenario(file(3, "environment:\n  wind: {gust_mps: -1}\n")),
+                        "environment.wind.gust_mps", ""));
+  EXPECT_TRUE(
+      has_error(swarm::load_scenario(file(3, "environment:\n  wind: {mean_mps: [1, 2, 3]}\n")),
+                "environment.wind.mean_mps", "list of 2"));
+}
+
+TEST(ScenarioFlight, CanonicalTextNamesTheLowestVersionAndRoundTrips) {
+  // Nothing new: the text is as it was.
+  const std::string plain = swarm::canonical_text(
+      swarm::load_scenario(file(3, "vehicle: {type: fixed_wing}\n")).scenario);
+  EXPECT_EQ(plain.rfind("version: 2\n", 0), 0U);
+  EXPECT_EQ(plain.find("environment:"), std::string::npos);
+  EXPECT_EQ(plain.find("dynamics:"), std::string::npos);
+
+  const swarm::Scenario flight =
+      swarm::load_scenario(file(3, std::string(kEnergy) + kWind)).scenario;
+  const std::string text = swarm::canonical_text(flight);
+  EXPECT_EQ(text.rfind("version: 3\n", 0), 0U);
+  EXPECT_NE(text.find("dynamics: energy"), std::string::npos);
+  EXPECT_EQ(text.find("min_speed_mps"), std::string::npos);
+  const LoadResult again = swarm::load_scenario(text);
+  ASSERT_TRUE(again.ok());
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+  EXPECT_EQ(again.scenario.wind.gust_sigma, flight.wind.gust_sigma);
+  EXPECT_EQ(again.scenario.vehicle.energy.mass, flight.vehicle.energy.mass);
+
+  // Wind alone, on the simple model, is version 3 too.
+  const std::string windy = swarm::canonical_text(
+      swarm::load_scenario(file(3, std::string("vehicle: {type: fixed_wing}\n") + kWind)).scenario);
+  EXPECT_EQ(windy.rfind("version: 3\n", 0), 0U);
+}
+
+TEST(ScenarioFlight, TheWorldHandsTheWindAndTheEnergyModelToEveryDrone) {
+  const swarm::Scenario s = swarm::load_scenario(file(3, std::string(kEnergy) + kWind)).scenario;
+  const swarm::ScenarioWorld world = swarm::build_world(s);
+  ASSERT_EQ(world.agents.size(), 3U);
+  for (const swarm::DroneAgentConfig& a : world.agents) {
+    EXPECT_EQ(a.dynamics, FixedWingDynamics::kEnergy);
+    EXPECT_EQ(a.wind.mean.x, 4.0);
+    EXPECT_EQ(a.wind.gust_sigma, 1.5);
+  }
+}
+
+TEST(ScenarioFlight, AWindyEnergyRunIsRepeatableAndDiffersFromACalmOne) {
+  const std::string calm = file(3, kEnergy);
+  const std::string windy = file(3, std::string(kEnergy) + kWind);
+  EXPECT_EQ(hash_of(windy, 1), hash_of(windy, 1));
+  EXPECT_EQ(hash_of(windy, 1), hash_of(windy, 3));
+  EXPECT_NE(hash_of(windy, 1), hash_of(calm, 1));
+}
+
+TEST(ScenarioFlight, ASimpleFixedWingRunWithoutWindIsTheSameAsBefore) {
+  // The same run written as a version 2 file and as a version 3 file with no new keys has the same
+  // canonical text and so the same hash.
+  const std::string v2 = file(2, "vehicle: {type: fixed_wing}\n");
+  const std::string v3 = file(3, "vehicle: {type: fixed_wing}\n");
+  EXPECT_EQ(swarm::canonical_text(swarm::load_scenario(v2).scenario),
+            swarm::canonical_text(swarm::load_scenario(v3).scenario));
+  EXPECT_EQ(hash_of(v2, 1), hash_of(v3, 1));
+}

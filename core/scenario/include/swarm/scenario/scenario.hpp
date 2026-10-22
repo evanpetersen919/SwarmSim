@@ -10,12 +10,15 @@
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/control/orbit.hpp"
+#include "swarm/control/path.hpp"
 #include "swarm/deterministic_channel.hpp"
 #include "swarm/fixed_wing.hpp"
+#include "swarm/fixed_wing_energy.hpp"
 #include "swarm/obstacles.hpp"
 #include "swarm/terrain.hpp"
 #include "swarm/vehicle.hpp"
 #include "swarm/weather.hpp"
+#include "swarm/wind.hpp"
 
 namespace swarm {
 
@@ -74,9 +77,15 @@ struct MetricsSettings {
 
 // The vehicle every drone of the swarm flies. Written to the canonical text only when it is not a
 // quad, which needs scenario version 2.
+//
+// With `dynamics` set to kEnergy (version 3) the aircraft is flown by the energy model. Its
+// minimum speed is then not a free setting: it is the hold speed of the wing, derived from
+// `energy`, and the loader writes it into `fixed_wing.min_speed`.
 struct VehicleSettings {
   VehicleKind kind = VehicleKind::kQuad;
   FixedWingParams fixed_wing;  // used when `kind` is kFixedWing
+  FixedWingDynamics dynamics = FixedWingDynamics::kSimple;
+  EnergyParams energy;  // used when `dynamics` is kEnergy
 };
 
 // Everything that defines a run except the thread count, which must never matter. Times are in
@@ -100,6 +109,12 @@ struct Scenario {
   VehicleSettings vehicle;
 
   Weather weather;
+  // The air a fixed-wing aircraft flies in (version 3). Written to the canonical text only when
+  // it has a mean or gusts.
+  WindParams wind;
+  // Whether an aircraft that reaches the ground stops there for good (version 3). Written to the
+  // canonical text only when on.
+  bool ground_contact_crashes = false;
 
   std::uint32_t lidar_beams = 8;
   std::uint32_t lidar_azimuth_samples = 36;
@@ -112,6 +127,13 @@ struct Scenario {
   // and the vehicle through orbit_params(). Written to the canonical text only for a
   // fixed-wing vehicle.
   OrbitParams orbit;
+  // Terrain-aware altitude for orbit guidance (version 3). The aircraft carries the scene's
+  // heightfield as a map. `climb_rate` is set from the vehicle. Written to the canonical text only
+  // when enabled.
+  TerrainGuidanceParams terrain_guidance;
+  // The pattern a fixed-wing vehicle flies (version 3); the default is the orbit above. Written to
+  // the canonical text only when it is not the orbit.
+  PatternParams pattern;
 
   // `channel.seed` is not part of a scenario: the simulation seeds the channel from `seed`.
   ChannelConfig channel;
@@ -149,9 +171,18 @@ struct LoadResult {
 
 // Versions of the scenario file format this build reads. Version 2 adds the `vehicle` section; a
 // file that does not use it is the same in both, and the canonical text of such a scenario says
-// version 1, so logs written before version 2 existed still verify.
-inline constexpr std::uint64_t kScenarioVersion = 2;
+// version 1, so logs written before version 2 existed still verify. Version 3 adds the flight
+// realism of ADR 0011 (`vehicle.dynamics`, `vehicle.energy`, `environment`); a scenario that uses
+// none of it is written as version 2 or 1, as before.
+inline constexpr std::uint64_t kScenarioVersion = 3;
 inline constexpr std::uint64_t kScenarioVehicleVersion = 2;
+inline constexpr std::uint64_t kScenarioFlightVersion = 3;
+
+// The version the canonical text of `scenario` says: the lowest that can express it.
+std::uint64_t scenario_version(const Scenario& scenario);
+
+// True when the scenario has a mean wind or gusts.
+bool wind_used(const Scenario& scenario);
 
 // The full orbit parameters of a fixed-wing scenario: `scenario.orbit` with the center and
 // altitude of the mission's first waypoint, the mission speed, and the vehicle's speed limits.

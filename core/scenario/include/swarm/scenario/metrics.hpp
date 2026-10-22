@@ -72,6 +72,18 @@ struct MetricsResult {
   std::optional<double> orbit_altitude_rmse;
   std::optional<double> orbit_phase_rmse;
   std::optional<double> time_on_station;
+  // With a pattern other than the orbit (ADR 0011) the reference of a drone is its point on its
+  // stadium path, `orbit_radial_rmse` is the RMS cross-track error, and `orbit_phase_rmse` the RMS
+  // distance along the path to its reference point. The altitude reference is the nominal layer,
+  // so with terrain guidance `orbit_altitude_rmse` includes the climb over high ground.
+
+  // Height above ground, for a fixed-wing scenario whose scene can be built (a scene file that
+  // is missing leaves them empty). `min_agl` is the lowest height above the terrain of any
+  // aircraft in any record, meters; `ground_contacts` the number of aircraft that were at or
+  // below the ground in some record, which is the number that crashed when the scenario sets
+  // `ground_contact_crashes`.
+  std::optional<double> min_agl;
+  std::optional<std::uint32_t> ground_contacts;
 
   // Smallest true distance between any two drones, alive or failed, over every record with drone
   // state.

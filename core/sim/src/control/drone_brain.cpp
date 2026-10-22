@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -9,6 +10,10 @@
 namespace swarm {
 
 namespace {
+
+// An orbiting aircraft that is farther than this fraction of the radius from its circle is joining
+// it, and the terrain ahead along its heading counts as well as the circle.
+constexpr double kTerrainStraightFraction = 0.25;
 
 double max_axis(const Vec3& v) { return std::max({v.x, v.y, v.z}); }
 
@@ -252,6 +257,32 @@ std::vector<OrbitNeighbor> DroneBrain::neighbors_of(double own_sigma) const {
   return others;
 }
 
+double DroneBrain::terrain_floor_for(const PoseEstimate& pose, double cx, double cy,
+                                     double radius) const {
+  const TerrainGuidanceParams& params = config_.terrain_guidance;
+  if (!params.enabled || config_.terrain == nullptr) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  const double off = std::abs(std::hypot(pose.position.x - cx, pose.position.y - cy) - radius);
+  return terrain_floor_over(pose, circle_path(pose.position, cx, cy, radius, params), off, radius);
+}
+
+double DroneBrain::terrain_floor_over(const PoseEstimate& pose, std::vector<PathSample> path,
+                                      double off, double scale) const {
+  const TerrainGuidanceParams& params = config_.terrain_guidance;
+  if (!params.enabled || config_.terrain == nullptr) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  const double horizontal = std::hypot(pose.velocity.x, pose.velocity.y);
+  if (horizontal > 1e-9 && off > kTerrainStraightFraction * scale) {
+    const std::vector<PathSample> ahead = straight_path(pose.position, pose.velocity.x / horizontal,
+                                                        pose.velocity.y / horizontal, params);
+    path.insert(path.end(), ahead.begin(), ahead.end());
+  }
+  const double speed = std::max(horizontal, config_.orbit.min_speed);
+  return terrain_floor(*config_.terrain, params, path, speed);
+}
+
 Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                const FallbackBehavior& behavior, std::uint64_t tick) {
   const OrbitParams& orbit = config_.orbit;
@@ -267,10 +298,33 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
       hold_z_ = pose.position.z;
       hold_orbit_valid_ = true;
     }
+    const double z_hold =
+        std::max(hold_z_, terrain_floor_for(pose, hold_center_.x, hold_center_.y, orbit.radius));
     track = orbit_guidance(pose.position, pose.velocity, hold_center_, orbit.radius, orbit.speed,
-                           hold_z_, 0.0, orbit, 1.0);
+                           z_hold, 0.0, orbit, 1.0);
     target_ = FormationTarget{};
     target_.position = pose.position;
+  } else if (config_.pattern.kind != PatternKind::kOrbit) {
+    hold_orbit_valid_ = false;
+    const double time = static_cast<double>(tick) * config_.dt;
+    const PatternReference ref =
+        pattern_reference(config_.id, config_.num_drones, time, config_.pattern, orbit);
+    const StadiumPath path = pattern_path(config_.id, config_.num_drones, config_.pattern, orbit);
+    const double phase_error = path_phase_error(path, pose.position, ref.s);
+    const double slot_offset = ref.position.z - orbit.center.z;
+    double floor = -std::numeric_limits<double>::infinity();
+    if (config_.terrain_guidance.enabled && config_.terrain != nullptr) {
+      floor = terrain_floor_over(pose, path_samples(path, pose.position, config_.terrain_guidance),
+                                 path.nearest(pose.position.x, pose.position.y).distance,
+                                 path.radius()) +
+              slot_offset;
+    }
+    const double z_ref = std::max(ref.position.z, floor);
+    track = path_guidance(pose.position, pose.velocity, path, ref.speed, z_ref, phase_error,
+                          config_.pattern, orbit, behavior.gain_scale);
+    target_ = FormationTarget{};
+    target_.position = ref.position;
+    target_.velocity = ref.velocity;
   } else {
     hold_orbit_valid_ = false;
     const double time = static_cast<double>(tick) * config_.dt;
@@ -284,8 +338,14 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
       phase_error =
           (1.0 - orbit.consensus_weight) * phase_error + orbit.consensus_weight * consensus;
     }
-    track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed,
-                           ref.position.z, phase_error, orbit, behavior.gain_scale);
+    // Over high ground the altitude is raised to clear it, and the slot keeps its offset from the
+    // bottom layer so the layers stay apart.
+    const double slot_offset = ref.position.z - orbit.center.z;
+    const double z_ref =
+        std::max(ref.position.z,
+                 terrain_floor_for(pose, orbit.center.x, orbit.center.y, ref.radius) + slot_offset);
+    track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed, z_ref,
+                           phase_error, orbit, behavior.gain_scale);
     target_ = FormationTarget{};
     target_.position = ref.position;
     target_.velocity = ref.velocity;

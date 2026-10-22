@@ -45,7 +45,8 @@ std::string metrics_csv_header() {
          "messages_sent,messages_delivered,messages_in_flight,"
          "dropped_loss,dropped_rate,dropped_jam,"
          "delivery_ratio,latency_p50_s,latency_p95_s,"
-         "orbit_radial_rmse_m,orbit_altitude_rmse_m,orbit_phase_rmse_m,time_on_station\n";
+         "orbit_radial_rmse_m,orbit_altitude_rmse_m,orbit_phase_rmse_m,time_on_station,"
+         "min_agl_m,ground_contacts\n";
 }
 
 std::string metrics_csv_row(const MetricsResult& r) {
@@ -86,6 +87,8 @@ std::string metrics_csv_row(const MetricsResult& r) {
   push(optional_number(r.orbit_altitude_rmse));
   push(optional_number(r.orbit_phase_rmse));
   push(optional_number(r.time_on_station));
+  push(optional_number(r.min_agl));
+  push(r.ground_contacts ? whole(*r.ground_contacts) : std::string());
   return row + "\n";
 }
 

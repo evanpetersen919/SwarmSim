@@ -8,6 +8,9 @@ namespace swarm {
 
 std::unique_ptr<const IVehicle> DroneAgent::make_vehicle(const DroneAgentConfig& config) {
   if (config.vehicle_kind == VehicleKind::kFixedWing) {
+    if (config.dynamics == FixedWingDynamics::kEnergy) {
+      return std::make_unique<FixedWingEnergyVehicle>(config.fixed_wing, config.energy);
+    }
     return std::make_unique<FixedWingVehicle>(config.fixed_wing);
   }
   return std::make_unique<QuadVehicle>(config.vehicle);
@@ -17,8 +20,12 @@ DroneAgentConfig DroneAgent::prepared(DroneAgentConfig config) {
   if (config.fix_period_ticks == 0) {
     throw std::invalid_argument("DroneAgentConfig: fix_period_ticks must be positive");
   }
+  validate(config.wind);
   if (config.vehicle_kind == VehicleKind::kFixedWing) {
     validate(config.fixed_wing);
+    if (config.dynamics == FixedWingDynamics::kEnergy) {
+      validate(config.energy);
+    }
   }
   config.brain.launch.position = config.start;
   config.brain.launch.velocity = config.start_velocity;
@@ -41,11 +48,26 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
     fixer_.emplace(config_.fix, config_.seed, config_.brain.id);
   }
   config_.weather.validate();
+  const WindParams& w = config_.wind;
+  if (w.mean.x != 0.0 || w.mean.y != 0.0 || w.mean.z != 0.0 || w.gust_sigma != 0.0) {
+    wind_.emplace(w, config_.seed);
+  }
   truth_.pos = config_.start;
   truth_.vel = config_.start_velocity;
 }
 
+DroneState DroneAgent::advance(const DroneCommand& command, std::uint64_t tick) const {
+  if (!wind_) {
+    return vehicle_->step(truth_, command, config_.brain.dt);
+  }
+  const Vec3 wind = wind_->at(truth_.pos, static_cast<double>(tick) * config_.brain.dt);
+  return vehicle_->step_in_wind(truth_, command, config_.brain.dt, wind);
+}
+
 void DroneAgent::step(AgentContext& ctx) {
+  if (crashed_) {
+    return;  // it hit the ground and has not moved since
+  }
   if (failed_ || ctx.tick >= config_.fail_tick) {
     const bool first_tick = !failed_;
     failed_ = true;
@@ -53,7 +75,7 @@ void DroneAgent::step(AgentContext& ctx) {
       // An aircraft cannot hang in the air: with no one controlling it, it flies on with no
       // command, straight and at constant speed, until the end of the run. It senses and sends
       // nothing.
-      truth_ = vehicle_->step(truth_, DroneCommand{}, config_.brain.dt);
+      truth_ = advance(DroneCommand{}, ctx.tick);
     } else if (first_tick) {
       truth_.vel = Vec3{};
       truth_.accel = Vec3{};
@@ -93,7 +115,21 @@ void DroneAgent::step(AgentContext& ctx) {
   }
 
   const BrainOutput out = brain_.step(in, ctx.tick);
-  truth_ = vehicle_->step(truth_, out.command, config_.brain.dt);
+  truth_ = advance(out.command, ctx.tick);
+  if (config_.crash_on_ground) {
+    const double ground = scene_.ground_height(truth_.pos.x, truth_.pos.y);
+    if (truth_.pos.z <= ground) {
+      // Ground contact ends the flight: the aircraft stays where it hit, silent, from the next
+      // tick on.
+      truth_.pos.z = ground;
+      truth_.vel = Vec3{};
+      truth_.accel = Vec3{};
+      truth_.yaw_rate = 0.0;
+      failed_ = true;
+      crashed_ = true;
+      return;
+    }
+  }
 
   if (out.has_report) {
     Message m;
@@ -120,6 +156,9 @@ void DroneAgent::hash_state(Fnv1a64& hash) const {
   hash.update_f64(truth_.yaw);
   hash.update_f64(truth_.yaw_rate);
   hash.update_u64(failed_ ? 1 : 0);
+  if (crashed_) {
+    hash.update_u64(2);
+  }
   const Vec3 bias = imu_.accel_bias();
   hash.update_f64(bias.x);
   hash.update_f64(bias.y);

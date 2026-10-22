@@ -23,6 +23,12 @@ namespace swarm {
 using ChannelFactory =
     std::function<std::unique_ptr<IChannel>(std::uint32_t endpoints, const ChannelConfig& config)>;
 
+// The scene a scenario runs on: generated from its terrain and obstacle settings, or read from the
+// file it names. Returns false with `error` set when the file cannot be read or its hash differs
+// from the one the scenario expects. This is what build_world uses, and what metrics use to find
+// the ground under an aircraft.
+bool build_scene_data(const Scenario& scenario, SceneData& out, std::string& error);
+
 // A scenario turned into things that can run: the generated scene, the simulation configuration,
 // and one agent configuration per drone. The world owns the scene, and every simulation made from
 // it refers to that scene, so the world must outlive them.

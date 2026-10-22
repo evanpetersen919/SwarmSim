@@ -93,13 +93,14 @@ TEST(MetricsCsv, TheHeaderIsExactlyTheDocumentedColumns) {
             "messages_sent,messages_delivered,messages_in_flight,"
             "dropped_loss,dropped_rate,dropped_jam,"
             "delivery_ratio,latency_p50_s,latency_p95_s,"
-            "orbit_radial_rmse_m,orbit_altitude_rmse_m,orbit_phase_rmse_m,time_on_station\n");
+            "orbit_radial_rmse_m,orbit_altitude_rmse_m,orbit_phase_rmse_m,time_on_station,"
+            "min_agl_m,ground_contacts\n");
 }
 
 TEST(MetricsCsv, TheRowForAKnownResultIsExactlyThisText) {
   EXPECT_EQ(swarm::metrics_csv_row(known()),
             "demo,7,8,0.02,3000,60,0.25,0.125,7,2.5,0,2,12.5,1,1440,1000,10,300,100,30,0.7,0.04,"
-            "0.06,,,,\n");
+            "0.06,,,,,,\n");
 }
 
 TEST(MetricsCsv, TheOrbitColumnsAreFilledForAFixedWingResult) {
@@ -110,12 +111,13 @@ TEST(MetricsCsv, TheOrbitColumnsAreFilledForAFixedWingResult) {
   r.time_on_station = 0.875;
   EXPECT_EQ(swarm::metrics_csv_row(r),
             "demo,7,8,0.02,3000,60,0.25,0.125,7,2.5,0,2,12.5,1,1440,1000,10,300,100,30,0.7,0.04,"
-            "0.06,1.5,2.25,12,0.875\n");
+            "0.06,1.5,2.25,12,0.875,,\n");
 }
 
 TEST(MetricsCsv, ValuesThatDoNotExistAreEmptyCellsAndNotZeros) {
   // No state, no disturbance, no messages: every optional cell is empty; counts are zero.
-  EXPECT_EQ(swarm::metrics_csv_row(nothing()), "empty,1,1,0.5,4,2,,,0,,0,0,,,0,0,0,0,0,0,,,,,,,\n");
+  EXPECT_EQ(swarm::metrics_csv_row(nothing()),
+            "empty,1,1,0.5,4,2,,,0,,0,0,,,0,0,0,0,0,0,,,,,,,,,\n");
 }
 
 TEST(MetricsCsv, TheCensoringFlagIsOneZeroOrEmpty) {
@@ -133,7 +135,7 @@ TEST(MetricsCsv, TheCensoringFlagIsOneZeroOrEmpty) {
 
 TEST(MetricsCsv, EveryRowHasAsManyCellsAsTheHeader) {
   const std::size_t columns = split_row(swarm::metrics_csv_header()).size();
-  EXPECT_EQ(columns, 27U);
+  EXPECT_EQ(columns, 29U);
   EXPECT_EQ(split_row(swarm::metrics_csv_row(known())).size(), columns);
   EXPECT_EQ(split_row(swarm::metrics_csv_row(nothing())).size(), columns);
 }
@@ -155,7 +157,7 @@ TEST(MetricsCsv, NamesWithSeparatorsOrQuotesAreQuotedAndComeBackIntact) {
     const std::string row = swarm::metrics_csv_row(r);
     // The embedded line feed is inside quotes, so the only unquoted line feed is the last one.
     const std::vector<std::string> cells = split_row(row.substr(0, row.size() - 1));
-    ASSERT_EQ(cells.size(), 27U) << name;
+    ASSERT_EQ(cells.size(), 29U) << name;
     EXPECT_EQ(cells[0], name);
     EXPECT_EQ(cells[1], "7");
   }

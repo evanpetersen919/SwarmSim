@@ -39,6 +39,8 @@ METRIC_LABELS = {
     "orbit_altitude_rmse_m": "Orbit altitude error (m)",
     "orbit_phase_rmse_m": "Orbit phase error, arc length (m)",
     "time_on_station": "Fraction of time on station",
+    "min_agl_m": "Lowest height above ground (m)",
+    "ground_contacts": "Aircraft that reached the ground",
 }
 
 AXIS_LABELS = {

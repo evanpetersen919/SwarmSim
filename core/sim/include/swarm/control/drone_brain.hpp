@@ -15,7 +15,9 @@
 #include "swarm/control/formation_control.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/control/orbit.hpp"
+#include "swarm/control/path.hpp"
 #include "swarm/control/separation.hpp"
+#include "swarm/control/terrain_map.hpp"
 #include "swarm/drone_command.hpp"
 #include "swarm/estimation/neighbor_message.hpp"
 #include "swarm/estimation/neighbor_predictor.hpp"
@@ -80,6 +82,18 @@ struct BrainConfig {
   // neighbor, silent or not.
   Guidance guidance = Guidance::kFormation;
   OrbitParams orbit;
+  // The pattern the aircraft flies (ADR 0011). With kOrbit, the default, `orbit` alone describes
+  // the flight; with a racetrack or lanes the aircraft follows a stadium path and `orbit` still
+  // gives the center, the altitude layers, the speed, the gains, and the separation. Safe hold
+  // and a commanded hold fly a circle in every pattern.
+  PatternParams pattern;
+  // Terrain-aware altitude for orbit guidance (ADR 0011). When `terrain_guidance.enabled` and a
+  // map is given, the altitude command of an orbiting aircraft is raised to clear the highest
+  // ground along the circle it is flying, and along its heading while it is joining the circle.
+  // Each slot keeps its altitude offset from slot 0, so the layers of the swarm stay apart. The
+  // map is shared and immutable; it is prior map data, not a sensor.
+  std::shared_ptr<const TerrainMap> terrain;
+  TerrainGuidanceParams terrain_guidance;
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.
@@ -172,6 +186,14 @@ class DroneBrain {
                           std::uint64_t tick) const;
   Vec3 orbit_command(const PoseEstimate& pose, double own_sigma, const FallbackBehavior& behavior,
                      std::uint64_t tick);
+  // The lowest altitude that clears the terrain on the way around the circle at (cx, cy), or
+  // -infinity when terrain guidance is off.
+  double terrain_floor_for(const PoseEstimate& pose, double cx, double cy, double radius) const;
+  // The same over a path of samples. `off` is how far the aircraft is from the path, and `scale`
+  // the length that it is judged against: while the aircraft is well off the path, the way it is
+  // heading counts as well as the path.
+  double terrain_floor_over(const PoseEstimate& pose, std::vector<PathSample> path, double off,
+                            double scale) const;
 
   BrainConfig config_;
   MissionPath path_;

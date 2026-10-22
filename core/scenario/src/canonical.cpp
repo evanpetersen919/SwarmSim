@@ -90,13 +90,30 @@ const char* loss_name(LossModel m) {
 
 }  // namespace
 
+bool wind_used(const Scenario& s) {
+  return s.wind.mean.x != 0.0 || s.wind.mean.y != 0.0 || s.wind.gust_sigma != 0.0;
+}
+
+namespace {
+bool environment_used(const Scenario& s) { return wind_used(s) || s.ground_contact_crashes; }
+}  // namespace
+
+std::uint64_t scenario_version(const Scenario& s) {
+  if (s.vehicle.dynamics == FixedWingDynamics::kEnergy || environment_used(s) ||
+      s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit) {
+    return kScenarioFlightVersion;
+  }
+  return s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion;
+}
+
 std::string canonical_text(const Scenario& s) {
   const auto seconds = [&](std::uint64_t ticks) { return num(static_cast<double>(ticks) * s.dt); };
   std::string o;
   const auto line = [&](const std::string& text) { o += text + "\n"; };
 
-  // A scenario that uses no version 2 feature is written as version 1, as it always was.
-  line("version: " + uint(s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion));
+  // A scenario is written as the lowest version that can express it, so a scenario that uses no
+  // newer feature has the text, and the log header, it always had.
+  line("version: " + uint(scenario_version(s)));
   line("name: " + quoted(s.name));
   line("seed: " + uint(s.seed));
   line("dt: " + num(s.dt));
@@ -143,7 +160,9 @@ std::string canonical_text(const Scenario& s) {
     const FixedWingParams& p = s.vehicle.fixed_wing;
     line("vehicle:");
     line("  type: fixed_wing");
-    line("  min_speed_mps: " + num(p.min_speed));
+    if (s.vehicle.dynamics == FixedWingDynamics::kSimple) {
+      line("  min_speed_mps: " + num(p.min_speed));
+    }
     line("  max_speed_mps: " + num(p.max_speed));
     line("  max_accel_mps2: " + num(p.max_accel));
     line("  max_decel_mps2: " + num(p.max_decel));
@@ -151,6 +170,39 @@ std::string canonical_text(const Scenario& s) {
     line("  max_climb_rate_mps: " + num(p.max_climb_rate));
     line("  max_descent_rate_mps: " + num(p.max_descent_rate));
     line("  max_vertical_accel_mps2: " + num(p.max_vertical_accel));
+    if (s.vehicle.dynamics == FixedWingDynamics::kEnergy) {
+      const EnergyParams& e = s.vehicle.energy;
+      line("  dynamics: energy");
+      line("  energy:");
+      line("    mass_kg: " + num(e.mass));
+      line("    wing_area_m2: " + num(e.wing_area));
+      line("    wingspan_m: " + num(e.wingspan));
+      line("    cd0: " + num(e.cd0));
+      line("    oswald: " + num(e.oswald));
+      line("    cl_max: " + num(e.cl_max));
+      line("    air_density_kg_m3: " + num(e.air_density));
+      line("    max_thrust_n: " + num(e.max_thrust));
+      line("    max_power_w: " + num(e.max_power));
+      line("    stall_margin: " + num(e.stall_margin));
+      line("    max_roll_rate_rad_s: " + num(e.max_roll_rate));
+      line("    roll_tau_s: " + num(e.roll_tau));
+      line("    pitch_tau_s: " + num(e.pitch_tau));
+      line("    max_path_rate_rad_s: " + num(e.max_path_rate));
+      line("    max_path_angle_rad: " + num(e.max_path_angle));
+    }
+  }
+  if (environment_used(s)) {
+    line("environment:");
+    if (wind_used(s)) {
+      line("  wind:");
+      line("    mean_mps: [" + num(s.wind.mean.x) + ", " + num(s.wind.mean.y) + "]");
+      line("    gust_mps: " + num(s.wind.gust_sigma));
+      line("    gust_scale_m: " + num(s.wind.gust_scale));
+      line("    vertical_ratio: " + num(s.wind.vertical_ratio));
+    }
+    if (s.ground_contact_crashes) {
+      line("  ground_contact_crashes: true");
+    }
   }
   line("weather:");
   line("  visibility_m: " + num(s.weather.visibility_m));
@@ -227,6 +279,26 @@ std::string canonical_text(const Scenario& s) {
     line("    lookahead_s: " + num(orbit.lookahead_s));
     line("    consensus_weight: " + num(orbit.consensus_weight));
     line("    safe_distance_m: " + num(orbit.separation.d_safe));
+    if (s.pattern.kind != PatternKind::kOrbit) {
+      const PatternParams& q = s.pattern;
+      line("  pattern:");
+      line(std::string("    type: ") + (q.kind == PatternKind::kRacetrack ? "racetrack" : "lanes"));
+      line("    heading_deg: " + num(q.heading * 180.0 / kPi));
+      line("    leg_length_m: " + num(q.leg_length));
+      line("    turn_radius_m: " + num(q.turn_radius));
+      line("    lane_spacing_m: " + num(q.lane_spacing));
+      line("    stagger_s: " + num(q.stagger_s));
+      line("    join_fraction: " + num(q.join_fraction));
+    }
+    if (s.terrain_guidance.enabled) {
+      const TerrainGuidanceParams& t = s.terrain_guidance;
+      line("  terrain:");
+      line("    clearance_m: " + num(t.clearance));
+      line("    footprint_m: " + num(t.footprint));
+      line("    climb_fraction: " + num(t.climb_fraction));
+      line("    sample_spacing_m: " + num(t.sample_spacing));
+      line("    lookahead_m: " + num(t.lookahead));
+    }
   }
   line("  report_period_ticks: " + uint(s.report_period_ticks));
   line("  staleness_ticks: " + uint(s.staleness_ticks));

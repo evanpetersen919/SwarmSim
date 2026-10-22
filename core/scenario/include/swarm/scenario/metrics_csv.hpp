@@ -17,7 +17,8 @@ namespace swarm {
 //   messages_sent, messages_delivered, messages_in_flight,
 //   dropped_loss, dropped_rate, dropped_jam,
 //   delivery_ratio, latency_p50_s, latency_p95_s,
-//   orbit_radial_rmse_m, orbit_altitude_rmse_m, orbit_phase_rmse_m, time_on_station
+//   orbit_radial_rmse_m, orbit_altitude_rmse_m, orbit_phase_rmse_m, time_on_station, min_agl_m,
+//   ground_contacts
 // The last four are empty for a quad scenario (see MetricsResult).
 //
 // Rules: lines end with a line feed. Whole numbers are written in decimal. Other numbers are

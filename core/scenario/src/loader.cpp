@@ -558,9 +558,54 @@ void read_mission(Section& root, Scenario& s) {
   sec.finish();
 }
 
+// `dynamics: energy` and its `energy:` overrides, from a version 3 file. With the energy model the
+// minimum speed follows from the wing, so a file may not set it.
+void read_dynamics(Section& sec, Scenario& s, std::uint64_t version) {
+  const YAML::Node dynamics = sec.find("dynamics");
+  const YAML::Node energy = sec.find("energy");
+  if (!dynamics.IsDefined() && !energy.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    const YAML::Node at = dynamics.IsDefined() ? dynamics : energy;
+    sec.ctx().add(dynamics.IsDefined() ? "vehicle.dynamics" : "vehicle.energy", line_of(at),
+                  "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  read_choice<FixedWingDynamics>(
+      sec, "dynamics", s.vehicle.dynamics,
+      {{"simple", FixedWingDynamics::kSimple}, {"energy", FixedWingDynamics::kEnergy}});
+  if (energy.IsDefined()) {
+    if (s.vehicle.dynamics != FixedWingDynamics::kEnergy) {
+      sec.ctx().add("vehicle.energy", line_of(energy), "needs dynamics: energy");
+      return;
+    }
+    Section e(sec.ctx(), energy, "vehicle.energy");
+    if (e.valid()) {
+      EnergyParams& p = s.vehicle.energy;
+      read_double(e, "mass_kg", p.mass, greater_than(0.0));
+      read_double(e, "wing_area_m2", p.wing_area, greater_than(0.0));
+      read_double(e, "wingspan_m", p.wingspan, greater_than(0.0));
+      read_double(e, "cd0", p.cd0, greater_than(0.0));
+      read_double(e, "oswald", p.oswald, Bounds{0.0, 1.0, true, false});
+      read_double(e, "cl_max", p.cl_max, greater_than(0.0));
+      read_double(e, "air_density_kg_m3", p.air_density, greater_than(0.0));
+      read_double(e, "max_thrust_n", p.max_thrust, greater_than(0.0));
+      read_double(e, "max_power_w", p.max_power, greater_than(0.0));
+      read_double(e, "stall_margin", p.stall_margin, at_least(1.0));
+      read_double(e, "max_roll_rate_rad_s", p.max_roll_rate, greater_than(0.0));
+      read_double(e, "roll_tau_s", p.roll_tau, greater_than(0.0));
+      read_double(e, "pitch_tau_s", p.pitch_tau, greater_than(0.0));
+      read_double(e, "max_path_rate_rad_s", p.max_path_rate, greater_than(0.0));
+      read_double(e, "max_path_angle_rad", p.max_path_angle, Bounds{0.0, 1.5, true, false});
+      e.finish();
+    }
+  }
+}
+
 // `vehicle:` is read only from a version 2 file. `type: quad` takes no other key; `type:
 // fixed_wing` takes overrides of the ALTIUS-class defaults, in the units shown by the key names.
-void read_vehicle(Section& root, Scenario& s) {
+void read_vehicle(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("vehicle");
   if (!node.IsDefined()) {
     return;
@@ -573,7 +618,10 @@ void read_vehicle(Section& root, Scenario& s) {
                            {{"quad", VehicleKind::kQuad}, {"fixed_wing", VehicleKind::kFixedWing}});
   if (s.vehicle.kind == VehicleKind::kFixedWing) {
     FixedWingParams& p = s.vehicle.fixed_wing;
-    read_double(sec, "min_speed_mps", p.min_speed, greater_than(0.0));
+    bool min_speed_given = false;
+    if (read_double(sec, "min_speed_mps", p.min_speed, greater_than(0.0))) {
+      min_speed_given = true;
+    }
     read_double(sec, "max_speed_mps", p.max_speed, greater_than(0.0));
     read_double(sec, "max_accel_mps2", p.max_accel, greater_than(0.0));
     read_double(sec, "max_decel_mps2", p.max_decel, greater_than(0.0));
@@ -584,7 +632,49 @@ void read_vehicle(Section& root, Scenario& s) {
     read_double(sec, "max_climb_rate_mps", p.max_climb_rate, greater_than(0.0));
     read_double(sec, "max_descent_rate_mps", p.max_descent_rate, greater_than(0.0));
     read_double(sec, "max_vertical_accel_mps2", p.max_vertical_accel, greater_than(0.0));
+    read_dynamics(sec, s, version);
+    if (s.vehicle.dynamics == FixedWingDynamics::kEnergy) {
+      if (min_speed_given) {
+        sec.ctx().add("vehicle.min_speed_mps", line_of(sec.find("min_speed_mps")),
+                      "with dynamics: energy the minimum speed follows from the wing; set "
+                      "vehicle.energy instead");
+      }
+      p.min_speed = s.vehicle.energy.hold_speed(p.gravity);
+    }
   }
+  sec.finish();
+}
+
+// `environment:` (version 3) holds the wind: a mean vector and gusts.
+void read_environment(Section& root, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = root.find("environment");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    root.ctx().add("environment", line_of(node),
+                   "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  Section sec(root.ctx(), node, "environment");
+  if (!sec.valid()) {
+    return;
+  }
+  const YAML::Node wind = sec.find("wind");
+  if (wind.IsDefined()) {
+    Section w(sec.ctx(), wind, "environment.wind");
+    if (w.valid()) {
+      std::vector<double> mean;
+      if (read_numbers(w, "mean_mps", 2, mean)) {
+        s.wind.mean = {mean[0], mean[1], 0.0};
+      }
+      read_double(w, "gust_mps", s.wind.gust_sigma, at_least(0.0));
+      read_double(w, "gust_scale_m", s.wind.gust_scale, greater_than(0.0));
+      read_double(w, "vertical_ratio", s.wind.vertical_ratio, Bounds{0.0, 1.0, false, false});
+      w.finish();
+    }
+  }
+  read_bool(sec, "ground_contact_crashes", s.ground_contact_crashes);
   sec.finish();
 }
 
@@ -768,7 +858,73 @@ void read_orbit(Section& control, Scenario& s) {
   o.finish();
 }
 
-void read_control(Section& root, Scenario& s) {
+// `control.pattern` (version 3): the pattern a fixed-wing vehicle flies. The orbit section still
+// gives the center, the layers, the speed, the gains, and the separation.
+void read_pattern(Section& control, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = control.find("pattern");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    control.ctx().add("control.pattern", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    control.ctx().add("control.pattern", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section p(control.ctx(), node, "control.pattern");
+  if (!p.valid()) {
+    return;
+  }
+  PatternParams& q = s.pattern;
+  read_choice<PatternKind>(p, "type", q.kind,
+                           {{"orbit", PatternKind::kOrbit},
+                            {"racetrack", PatternKind::kRacetrack},
+                            {"lanes", PatternKind::kLanes}});
+  double heading_deg = q.heading * 180.0 / kPi;
+  if (read_double(p, "heading_deg", heading_deg, Bounds{-360.0, 360.0, false, false})) {
+    q.heading = heading_deg * kPi / 180.0;
+  }
+  read_double(p, "leg_length_m", q.leg_length, at_least(0.0));
+  read_double(p, "turn_radius_m", q.turn_radius, greater_than(0.0));
+  read_double(p, "lane_spacing_m", q.lane_spacing, greater_than(0.0));
+  read_double(p, "stagger_s", q.stagger_s, at_least(0.0));
+  read_double(p, "join_fraction", q.join_fraction, greater_than(0.0));
+  p.finish();
+}
+
+// `control.terrain` (version 3): terrain-aware altitude for orbit guidance.
+void read_terrain_guidance(Section& control, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = control.find("terrain");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    control.ctx().add("control.terrain", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    control.ctx().add("control.terrain", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section t(control.ctx(), node, "control.terrain");
+  if (!t.valid()) {
+    return;
+  }
+  TerrainGuidanceParams& p = s.terrain_guidance;
+  p.enabled = true;
+  read_double(t, "clearance_m", p.clearance, at_least(0.0));
+  read_double(t, "footprint_m", p.footprint, at_least(0.0));
+  read_double(t, "climb_fraction", p.climb_fraction, Bounds{0.0, 1.0, true, false});
+  read_double(t, "sample_spacing_m", p.sample_spacing, greater_than(0.0));
+  read_double(t, "lookahead_m", p.lookahead, greater_than(0.0));
+  t.finish();
+}
+
+void read_control(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("control");
   if (!node.IsDefined()) {
     return;
@@ -786,6 +942,8 @@ void read_control(Section& root, Scenario& s) {
   read_bool(sec, "fallback", s.fallback_enabled);
   read_bool(sec, "separation", s.separation_enabled);
   read_orbit(sec, s);
+  read_terrain_guidance(sec, s, version);
+  read_pattern(sec, s, version);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);
   sec.finish();
@@ -913,28 +1071,64 @@ void cross_validate(Context& ctx, const Scenario& s) {
     validate_with(ctx, "scene.obstacles", 0, [&] { validate(s.obstacles); });
   }
   validate_with(ctx, "weather", 0, [&] { s.weather.validate(); });
+  validate_with(ctx, "environment.wind", 0, [&] { validate(s.wind); });
+  if (s.terrain_guidance.enabled) {
+    validate_with(ctx, "control.terrain", 0, [&] {
+      TerrainGuidanceParams p = s.terrain_guidance;
+      p.climb_rate = s.vehicle.fixed_wing.max_climb_rate;
+      validate(p);
+    });
+  }
   if (s.vehicle.kind == VehicleKind::kFixedWing) {
     validate_with(ctx, "vehicle", 0, [&] { validate(s.vehicle.fixed_wing); });
+    if (s.vehicle.dynamics == FixedWingDynamics::kEnergy) {
+      validate_with(ctx, "vehicle.energy", 0, [&] { validate(s.vehicle.energy); });
+    }
     validate_with(ctx, "sensors.camera", 0, [&] { CameraFixSensor sensor(s.camera, 0, 0); });
     if (s.mission.waypoints.size() != 1) {
       ctx.add("mission.waypoints", 0,
               "a fixed-wing vehicle orbits the first waypoint, so there must be exactly one");
     } else {
-      validate_with(ctx, "control.orbit", 0, [&] {
-        const OrbitParams o = orbit_params(s);
-        validate(o);
-        // The aircraft must be able to fly the circle it is asked to: the sideways acceleration
-        // of the outer circle, omega^2 * (radius + step), within 80 percent of the bank limit,
-        // and its speed within the speed limit.
-        const double omega = o.speed / o.radius;
-        const double outer = o.radius + (s.drones > 1 ? o.radius_step : 0.0);
-        if (omega * omega * outer > 0.8 * s.vehicle.fixed_wing.max_lateral_accel()) {
-          throw std::invalid_argument("the orbit needs more than 80 percent of the bank limit");
-        }
-        if (omega * outer > s.vehicle.fixed_wing.max_speed - o.speed_margin) {
-          throw std::invalid_argument("the outer orbit needs more than the maximum speed");
-        }
-      });
+      if (s.pattern.kind != PatternKind::kOrbit) {
+        validate_with(ctx, "control.pattern", 0, [&] {
+          const OrbitParams o = orbit_params(s);
+          validate(o);
+          validate(s.pattern);
+          const double a_limit = 0.8 * s.vehicle.fixed_wing.max_lateral_accel();
+          for (std::uint32_t i = 0; i < s.drones; ++i) {
+            const PatternReference ref = pattern_reference(i, s.drones, 0.0, s.pattern, o);
+            const double radius = pattern_path(i, s.drones, s.pattern, o).radius();
+            if (ref.speed * ref.speed / radius > a_limit) {
+              throw std::invalid_argument(
+                  "a turn of the pattern needs more than 80 percent of the bank limit");
+            }
+            if (ref.speed > s.vehicle.fixed_wing.max_speed - o.speed_margin ||
+                ref.speed < s.vehicle.fixed_wing.min_speed + o.speed_margin) {
+              throw std::invalid_argument("a slot's speed on the pattern is outside the limits");
+            }
+          }
+          if (s.pattern.kind == PatternKind::kLanes && s.drones > 1 &&
+              s.pattern.lane_spacing < 2.0 * s.pattern.turn_radius + o.separation.d_safe) {
+            throw std::invalid_argument(
+                "lane_spacing must exceed twice the turn radius plus the safe distance");
+          }
+        });
+      } else
+        validate_with(ctx, "control.orbit", 0, [&] {
+          const OrbitParams o = orbit_params(s);
+          validate(o);
+          // The aircraft must be able to fly the circle it is asked to: the sideways acceleration
+          // of the outer circle, omega^2 * (radius + step), within 80 percent of the bank limit,
+          // and its speed within the speed limit.
+          const double omega = o.speed / o.radius;
+          const double outer = o.radius + (s.drones > 1 ? o.radius_step : 0.0);
+          if (omega * omega * outer > 0.8 * s.vehicle.fixed_wing.max_lateral_accel()) {
+            throw std::invalid_argument("the orbit needs more than 80 percent of the bank limit");
+          }
+          if (omega * outer > s.vehicle.fixed_wing.max_speed - o.speed_margin) {
+            throw std::invalid_argument("the outer orbit needs more than the maximum speed");
+          }
+        });
     }
   }
   validate_with(ctx, "mission", 0, [&] { MissionPath path(s.mission); });
@@ -1000,15 +1194,16 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   read_swarm(root, s);
   read_mission(root, s);
   if (version >= kScenarioVehicleVersion) {
-    read_vehicle(root, s);
+    read_vehicle(root, s, version);
   } else if (root.find("vehicle").IsDefined()) {
     ctx.add("vehicle", line_of(root.find("vehicle")),
             "needs version " + std::to_string(kScenarioVehicleVersion));
   }
+  read_environment(root, s, version);
   read_weather(root, s);
   read_sensors(root, s);
   read_comms(root, s, clock);
-  read_control(root, s);
+  read_control(root, s, version);
   read_faults(root, s, clock);
   read_commands(root, s, clock);
   read_metrics(root, s);

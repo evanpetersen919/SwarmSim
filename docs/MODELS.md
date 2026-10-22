@@ -882,7 +882,7 @@ Ground. At each sample a trace goes straight down. A trace stops at the first th
 
 Obstacles. Every static mesh component that touches the area, and every instance of an instanced one, is looked at. A mesh whose name contains one of `-SwarmExportTrees` becomes a cylinder from the bottom of its bounds to the top, with a radius of `-SwarmExportTrunk` (default 0.15) of its half width, limited to 0.2 to 1.5 m. A tree under `-SwarmExportMinTree` meters (default 3) is left out. A mesh whose name contains one of `-SwarmExportRocks` becomes the box of its bounds if its largest side is between `-SwarmExportMinRock` (default 1) and 60 m. Meshes are looked up by name once for each component, because a level's instanced components hold millions of instances. The log lists the meshes in the area by count, with their class, so patterns can be chosen for a level the exporter has not seen.
 
-Limits. A tree's crown is much wider than the cylinder the LiDAR sees; the trunk radius is a fraction of the width and does not come from the mesh. Rocks are boxes of their axis-aligned bounds, so a turned or leaning rock is a larger box than the rock. Vegetation other than trees and rocks (bushes, ferns, leaves) is not exported. The result is only as complete as what the level had streamed in and generated within the wait. The simulation has no terrain following, so a scenario sets its waypoint heights from the exported ground.
+Limits. A tree's crown is much wider than the cylinder the LiDAR sees; the trunk radius is a fraction of the width and does not come from the mesh. Rocks are boxes of their axis-aligned bounds, so a turned or leaning rock is a larger box than the rock. Vegetation other than trees and rocks (bushes, ferns, leaves) is not exported. The result is only as complete as what the level had streamed in and generated within the wait. A quad has no terrain following, so a quad scenario sets its waypoint heights from the exported ground. A fixed-wing scenario can use terrain-aware guidance (see below), which raises its altitude over high ground.
 
 Checked: an automation test (`SwarmSim.Export.RoundTrip`) builds a scene into a test level with the viewer, exports it again, and compares the ground heights (within 5 cm), and the position, height, and base of each tree. `SwarmSim.Export.Plan` tests the options, name matching, grid points (with numbers written out), hole filling, the obstacles from bounds, and the assembled scene. On Electric Dreams Environment (UE 5.4.4), with the anchor at (81187, -14778) cm and a 1000 m area, the export found ground at all but 34 of 15 876 samples (ground from 10.2 to 221.8 m), 35 130 trees (hornbeam meshes at least 8 m tall) and 46 063 rocks (boulders and rock formations of at least 3 m), and the file's hash is recorded in the log of a run on it. A six-drone scenario on that file ran for 140 s in 2 s of wall time, verified on 8 threads, and its drones stayed at least 42.8 m above the exported ground and never entered a tree cylinder (nearest pass 2.0 m); both figures come from a script over the log and the scene, sampled every 25 ticks.
 
@@ -968,9 +968,92 @@ For a fixed-wing scenario the formation error is measured against each aircraft'
 | `orbit_altitude_rmse_m` | RMS of the altitude minus the aircraft's slot altitude |
 | `orbit_phase_rmse_m` | RMS of the arc length of the phase error, radius times the angle from the aircraft to its reference; positive means behind |
 | `time_on_station` | The fraction of (aircraft, record) samples within 30 m of the orbit reference point |
+| `min_agl_m` | The lowest height above the terrain of any aircraft in any record. Needs the scene: generated from the scenario, or read from the file it names; empty when a scene file is missing |
+| `ground_contacts` | The number of aircraft that were at or below the ground in some record; with `ground_contact_crashes` it is the number that crashed |
 
-All four are over every alive aircraft and every record with state. The 30 m station radius is a constant, not a scenario setting, and is an assumption. `min_separation_m` and `collision_episodes` are the same for both vehicles. Failed aircraft are excluded from the error, as for a quad, but a failed aircraft is frozen where it stopped and still counts in the separation, which is the stated simple failure model and not what a real aircraft would do.
+The first four are over every alive aircraft and every record with state. The 30 m station radius is a constant, not a scenario setting, and is an assumption. `min_separation_m` and `collision_episodes` are the same for both vehicles. Failed aircraft are excluded from the error, as for a quad, but a failed aircraft is frozen where it stopped and still counts in the separation, which is the stated simple failure model and not what a real aircraft would do.
 
 The first columns of the CSV are unchanged, so existing tables still parse; code that reads columns by position past `latency_p95_s` is the only thing affected. The batch tables and the Python analysis package (`swarmsim_analysis`) carry the new columns, and the figure labels know their names.
 
 What the first runs show (`scenarios/fixed_wing_orbit.yaml`, 60 seconds, from the tests): an established swarm has formation error under 30 m, radial and altitude errors under 20 m, phase error under 30 m, and is on station more than 90 percent of the time; dense fog that blinds the camera raises the phase error. These are the thresholds the tests assert, not measured benchmark results.
+
+## Wind
+
+Source: `core/sim/include/swarm/wind.hpp`. Status: unit-tested; scenario version 3 (ADR 0011).
+
+The air is a steady wind vector plus a gust field. The gust field is a sum of eight traveling waves. Each wave has a seeded direction, a seeded phase, and a wavelength drawn log-uniformly between a fifth of `gust_scale` and `gust_scale`. The amplitudes are set so that each horizontal gust component has the rms `gust_sigma`, and the vertical rms is `vertical_ratio` times that. The waves are carried along by the steady wind (frozen turbulence) and also change slowly on their own, at a rate proportional to their wavenumber and the sigma. The result is a function of position, time, and the run seed alone, so every aircraft sees the same air and the thread count cannot matter. Every aircraft builds the same field from the seed; nothing is shared.
+
+This is not a turbulence spectrum. It has the requested rms and a largest scale and nothing more; it is not Dryden or von Karman, and the vertical component is independent of the horizontal ones. `mean_mps` is the direction the air moves toward, in the simulation's x and y. The default is no wind, and a scenario without wind steps its vehicles as before.
+
+A quad is not moved by wind. A fixed-wing aircraft flies in the air mass: its air velocity is its ground velocity minus the wind at its position and tick, and the wind is added back after the step. A gust therefore changes the airspeed at once, and a headwind lost to a gust costs the aircraft lift. The aircraft has no wind estimate, and its controller works in ground velocity, so a crosswind makes the ground track drift until the controller corrects it.
+
+Checked: the rms of the field over many seeds and places is within 25 percent of the sigma; the field is smooth within bounds that follow from the amplitude and shortest wavelength; the gusts move with the mean wind; the field is identical for equal seeds and differs for different seeds.
+
+## Fixed-wing energy model
+
+Source: `core/sim/include/swarm/fixed_wing_energy.hpp`. Status: unit-tested; scenario version 3, `vehicle.dynamics: energy` (ADR 0011). The default `simple` is the model of the section above and is unchanged.
+
+A point mass flown in the air mass with thrust, drag, and a lift limit. From the air velocity it takes the airspeed V, the heading, and the flight-path angle. The command's acceleration is the controller's wish, read in the frame of the heading:
+
+- The sideways part sets a bank angle atan(a / g), within the bank limit. The bank follows its command with a first-order lag (`roll_tau`) and a roll-rate limit, and starts each step from the bank that the last turn rate implies. The heading changes at g tan(bank) / V.
+- The bank is also held below acos((V_s / V)^2), where V_s is the stall speed in level flight, so the load factor 1 / cos(bank) does not stall the wing at the current speed. The limit matters only between the stall speed and about 1.1 times it, because the autopilot speeds up quickly there.
+- The vertical part becomes a climb-rate wish, then a flight-path angle that follows its command with a lag (`pitch_tau`) and a rate limit. The angle is capped by the thrust left after drag, with a small allowance for spending speed above the hold speed, so an aircraft that cannot climb is not asked to stall in the attempt.
+- Thrust makes up the drag and the weight along the path, plus the speed change that the along part of the command asks for, within min(max_thrust, max_power / V). Below the hold speed for the current load factor the autopilot raises thrust to recover speed.
+- Below the stall speed for the load factor the wing cannot carry the weight and the path angle falls.
+- Drag is q S (CD0 + k CL^2), with CL = n W / (q S), k = 1 / (pi AR e), and AR = wingspan^2 / wing area. Airspeed above `max_speed` is cut back, as if by brakes.
+
+The minimum speed of the aircraft is not a free setting under this model. It is the hold speed, `stall_margin` times the stall speed sqrt(2 m g / (rho S CLmax)), and the loader writes it into the vehicle's `min_speed`, which the orbit controller uses as its lower speed limit. A scenario that sets `min_speed_mps` together with `dynamics: energy` is an error.
+
+| Parameter | Value | Basis |
+|---|---|---|
+| mass | 12 kg | Published: press reports for the ALTIUS-600 give about 12 kg |
+| wingspan | 2.54 m | Published: press reports for the ALTIUS-600 |
+| wing area | 0.9 m^2 | Assumed. Chosen with the maximum lift coefficient so that the stall speed is about 12.4 m/s, below the published cruise of 60 km/h |
+| cl_max | 1.4 | Assumed |
+| cd0, oswald | 0.035, 0.8 | Assumed. Typical of a small clean fixed-wing UAV, not from a source for this aircraft |
+| max_thrust, max_power | 60 N, 600 W | Assumed. Chosen so that the power left over at cruise supports a climb of a few meters per second, near the 3 m/s climb limit of the simple model |
+| stall_margin | 1.15 | Assumed |
+| max_roll_rate, roll_tau | 1.2 rad/s, 0.3 s | Assumed |
+| pitch_tau, max_path_rate, max_path_angle | 0.6 s, 0.4 rad/s, 0.35 rad | Assumed |
+| max_speed, max_bank, climb and descent limits | as the simple model | See the section above |
+| air density | 1.225 kg/m^3 | Standard sea level |
+
+Everything marked assumed was chosen to give plausible behavior, not fitted to the aircraft. The model has no propeller model, no angle of attack, no sideslip, no ground effect, and no altitude dependence of density. The roll-in is a lag on the bank, not a roll-moment model. A test checks level flight at 17 m/s for 30 s (speed within 0.05 m/s), the coordinated turn rate of a held bank, that roll does not jump, that a turn costs speed when the thrust is at its limit, that a climb is limited by the thrust left after drag, the nose dropping below the stall speed, the drift of the ground track in wind, and the effect of a gust on the airspeed.
+
+## Terrain-aware guidance
+
+Source: `core/sim/include/swarm/control/terrain_map.hpp`, `drone_brain.cpp`. Status: unit and integration tested; scenario version 3, `control.terrain` (ADR 0011).
+
+The aircraft carries a map: a copy of the scene's heightfield, treated as prior elevation data and not a sensor. The scenario builder makes it from the scene the run uses, and it is exact. The map answers one question, the highest sample whose cell touches a disc, which bounds the height of the mesh in the disc (a cell's mesh never exceeds its highest corner).
+
+The altitude command of an orbiting aircraft is the larger of its nominal altitude and a terrain floor, plus the slot's offset from the bottom layer so the layers stay apart. The floor is the maximum, over points along the path ahead, of
+
+    highest ground within `footprint` of the point + `clearance` - climb_budget * distance / speed
+
+where distance is along the path to the point and climb_budget is `climb_fraction` times the vehicle's climb limit. A ridge far ahead lowers the floor by the height that a climb at the budget rate gains before reaching it, so the aircraft starts climbing early enough and no earlier. The path is the whole circle (or stadium) once around from the aircraft's nearest point. While the aircraft is more than a quarter of the radius off its path, the straight line along its heading is checked too. Safe hold uses the same floor over its circle. A pattern uses the stadium path.
+
+Because the path is the whole loop, a loop over uneven ground is flown at about the altitude of its highest point plus the clearance, less what the budget climb gains over the loop. It is not terrain following: the aircraft does not descend into valleys to keep a constant height above ground. An aircraft starts at the altitude that clears the ground under its start.
+
+| Parameter | Default | Basis |
+|---|---|---|
+| clearance_m | 60 | Assumed. Covers trees and the error of an aircraft's altitude estimate |
+| footprint_m | 40 | Assumed |
+| climb_fraction | 0.6 | Assumed. The part of the climb limit a planned climb may use |
+| sample_spacing_m, lookahead_m | 20, 600 | Assumed |
+
+Limits. The map has no error and no obstacle: trees and rocks are covered only by the clearance, and a scene's boxes and cylinders are not in the map. A ridge steeper than the budget climb that appears within the aircraft's turning circle cannot be cleared. The orbit altitude error metric includes the climb. With `environment.ground_contact_crashes` an aircraft that reaches the ground stops there for good and stays silent, which is how a run shows that a scenario without terrain guidance flew into the ground.
+
+## Patterns
+
+Source: `core/sim/include/swarm/control/path.hpp`. Status: unit and integration tested; scenario version 3, `control.pattern` (ADR 0011). Public sources do not describe what the real aircraft fly, so these are standard patterns and assumptions. The only formation fact used is that launches were reported 10 to 15 s apart (press).
+
+A stadium path is two straights of `leg_length` joined by semicircles of radius R; with a zero leg length it is the circle of the orbit. Position, tangent, and curvature are closed-form in the distance along the path, and the nearest point of a path to a position is found per part.
+
+- `racetrack`: every aircraft flies a stadium around the center, counterclockwise. Odd slots fly a stadium wider by `orbit.radius_step`, and the layers stack by `orbit.altitude_step`, as for orbits.
+- `lanes`: each aircraft flies its own stadium, centered across the heading `lane_spacing` apart, with adjacent lanes flown in opposite directions. The loader requires the spacing to exceed twice the turn radius plus the safe distance.
+
+Reference. Every slot completes a loop in the same time, the length of slot 0's loop over the mission speed, so a longer loop is flown faster and the spacing along the loops does not drift. With `stagger_s` above zero, aircraft i is i times that many seconds of flying behind aircraft 0; with zero, the aircraft are spread evenly along the loop. The loader checks that each slot's speed is inside the vehicle's limits and each turn needs under 80 percent of the bank limit.
+
+Tracking. A path-following law like the orbit's: the nearest point gives the tangent, the curvature, and the cross-track error e. The desired direction is the tangent turned toward the path in proportion to the error (at most 45 degrees); the desired speed is the slot's speed adjusted in proportion to the phase error (the distance along the path to the reference point); the horizontal acceleration is the centripetal term v^2 times the curvature plus a velocity-error term; the vertical part is the orbit's. An aircraft more than `join_fraction` times the turn radius from its path flies at the nominal speed toward it and does not try to hold its phase. Separation is the orbit's closest-approach rule.
+
+Limits. Phase consensus over the neighbors is used only by the orbit pattern: a racetrack and lanes fly their phase from the shared clock, so with them the neighbor predictors and the comms conditions affect only separation. There is no launch: aircraft start on their paths. There is no lawnmower with a return leg, which would need a path planner (ADR 0010 and 0011 leave it out). Metrics measure the cross-track error and the distance along the path to the reference point; the altitude reference is the nominal layer.

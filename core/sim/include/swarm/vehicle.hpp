@@ -25,6 +25,14 @@ class IVehicle {
   // limits.
   virtual DroneState step(const DroneState& state, const DroneCommand& command,
                           double dt) const = 0;
+
+  // The same step in air that moves at `wind` (ADR 0011). The state and the result are in the
+  // ground frame. The default flies the vehicle's own model in the air mass: the air velocity is
+  // the ground velocity minus the wind, and the wind is added back to the result. A vehicle that
+  // has no use for wind overrides this and ignores it. Throws as step() does, and for a
+  // non-finite wind.
+  virtual DroneState step_in_wind(const DroneState& state, const DroneCommand& command, double dt,
+                                  const Vec3& wind) const;
 };
 
 // The kinematic point mass of dynamics.hpp: it can accelerate in any direction, stop, and hover.
@@ -33,6 +41,12 @@ class QuadVehicle final : public IVehicle {
   explicit QuadVehicle(const DroneParams& params) : params_(params) {}
 
   DroneState step(const DroneState& state, const DroneCommand& command, double dt) const override {
+    return swarm::step(state, command, params_, dt);
+  }
+
+  // A quadrotor holds its position against the wind, so the wind does not change its motion.
+  DroneState step_in_wind(const DroneState& state, const DroneCommand& command, double dt,
+                          const Vec3&) const override {
     return swarm::step(state, command, params_, dt);
   }
 

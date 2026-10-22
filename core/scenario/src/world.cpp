@@ -33,7 +33,10 @@ std::vector<Vec3> start_positions(const Scenario& s) {
       // An aircraft starts on station: on its slot of the orbit, with the jitter added. Launching
       // and joining the orbit are not part of what is studied, and a swarm launched in a grid at
       // one altitude has to cross itself to spread onto its circles. The grid keys do not apply.
-      const Vec3 slot = orbit_reference(i, s.drones, 0.0, orbit_params(s)).position;
+      const Vec3 slot =
+          s.pattern.kind == PatternKind::kOrbit
+              ? orbit_reference(i, s.drones, 0.0, orbit_params(s)).position
+              : pattern_reference(i, s.drones, 0.0, s.pattern, orbit_params(s)).position;
       starts.push_back({slot.x + jx * layout.jitter_m, slot.y + jy * layout.jitter_m,
                         slot.z + jz * layout.altitude_jitter_m});
       continue;
@@ -66,32 +69,48 @@ OrbitParams orbit_params(const Scenario& s) {
   return p;
 }
 
+bool build_scene_data(const Scenario& s, SceneData& data, std::string& error) {
+  if (s.scene_file.used) {
+    if (!read_scene_file(s.scene_file.path, data, error)) {
+      return false;
+    }
+    const std::uint64_t hash = scene_hash(data);
+    if (s.scene_file.hash && *s.scene_file.hash != hash) {
+      error = "the scene file " + s.scene_file.path + " has hash " + hash_text(hash) +
+              " but the scenario expects " + hash_text(*s.scene_file.hash);
+      return false;
+    }
+    return true;
+  }
+  data = generate_terrain(s.terrain, s.seed);
+  ObstacleConfig obstacles = s.obstacles;
+  obstacles.spawn_x = s.mission.waypoints.front().x;  // keep the start area clear
+  obstacles.spawn_y = s.mission.waypoints.front().y;
+  place_obstacles(data, obstacles, s.seed);
+  return true;
+}
+
 ScenarioWorld build_world(const Scenario& s) {
   ScenarioWorld world;
   world.scenario = s;
 
   SceneData data;
+  std::string scene_error;
+  if (!build_scene_data(s, data, scene_error)) {
+    throw std::invalid_argument("build_world: " + scene_error);
+  }
   if (s.scene_file.used) {
-    std::string error;
-    if (!read_scene_file(s.scene_file.path, data, error)) {
-      throw std::invalid_argument("build_world: " + error);
-    }
     // The world's scenario records the file's hash, so a log's header names the exact scene.
-    const std::uint64_t hash = scene_hash(data);
-    if (s.scene_file.hash && *s.scene_file.hash != hash) {
-      throw std::invalid_argument("build_world: the scene file " + s.scene_file.path +
-                                  " has hash " + hash_text(hash) + " but the scenario expects " +
-                                  hash_text(*s.scene_file.hash));
-    }
-    world.scenario.scene_file.hash = hash;
-  } else {
-    data = generate_terrain(s.terrain, s.seed);
-    ObstacleConfig obstacles = s.obstacles;
-    obstacles.spawn_x = s.mission.waypoints.front().x;  // keep the start area clear
-    obstacles.spawn_y = s.mission.waypoints.front().y;
-    place_obstacles(data, obstacles, s.seed);
+    world.scenario.scene_file.hash = scene_hash(data);
   }
   world.scene = std::make_unique<Scene>(std::move(data));
+  std::shared_ptr<const TerrainMap> terrain_map;
+  if (s.terrain_guidance.enabled) {
+    const Heightfield& field = world.scene->data().terrain;
+    terrain_map =
+        std::make_shared<const TerrainMap>(field.cells_x, field.cells_y, field.origin_x,
+                                           field.origin_y, field.cell_size, field.heights);
+  }
 
   world.sim.dt = s.dt;
   world.sim.seed = s.seed;
@@ -134,14 +153,33 @@ ScenarioWorld build_world(const Scenario& s) {
     if (s.vehicle.kind == VehicleKind::kFixedWing) {
       c.brain.guidance = Guidance::kOrbit;
       c.brain.orbit = orbit_params(s);
+      c.brain.pattern = s.pattern;
     }
     c.camera = s.camera;
     c.fixed_wing = s.vehicle.fixed_wing;
+    c.crash_on_ground = s.ground_contact_crashes;
+    if (s.terrain_guidance.enabled && s.vehicle.kind == VehicleKind::kFixedWing) {
+      c.brain.terrain = terrain_map;
+      c.brain.terrain_guidance = s.terrain_guidance;
+      c.brain.terrain_guidance.climb_rate = s.vehicle.fixed_wing.max_climb_rate;
+    }
+    c.dynamics = s.vehicle.dynamics;
+    c.energy = s.vehicle.energy;
+    c.wind = s.wind;
     if (s.vehicle.kind == VehicleKind::kFixedWing) {
       // An aircraft starts flying along its orbit, at the speed of its slot. At rest it would be at
       // minimum speed along its heading after one step, and the pose estimator would start with the
       // wrong velocity.
-      c.start_velocity = orbit_reference(i, s.drones, 0.0, c.brain.orbit).velocity;
+      c.start_velocity =
+          s.pattern.kind == PatternKind::kOrbit
+              ? orbit_reference(i, s.drones, 0.0, c.brain.orbit).velocity
+              : pattern_reference(i, s.drones, 0.0, s.pattern, c.brain.orbit).velocity;
+      if (s.terrain_guidance.enabled) {
+        // Over high ground an aircraft starts at the altitude that clears it, with its layer.
+        const double ground = world.scene->ground_height(starts[i].x, starts[i].y);
+        const double slot_offset = static_cast<double>(i) * c.brain.orbit.altitude_step;
+        c.start.z = std::max(c.start.z, ground + s.terrain_guidance.clearance + slot_offset);
+      }
     }
     c.lidar.beams = s.lidar_beams;
     c.lidar.azimuth_samples = s.lidar_azimuth_samples;

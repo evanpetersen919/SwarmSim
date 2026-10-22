@@ -9,3 +9,4 @@ Scenario files for `swarm_sim`. The format is described in [docs/MODELS.md](../d
 | `hills_fog_fault.yaml` | Six drones in a grid over hills in fog and rain, independent loss, a pulsed local jammer, and one drone failing |
 | `hold_resume.yaml` | A ground station holds six drones at 30 s and resumes them at 36 s, through half the beacons lost in bursts and a jam of every link |
 | `fixed_wing_orbit.yaml` | Eight fixed-wing aircraft of the ALTIUS class orbiting a point over hills in haze, with camera position fixes, a constant jammer, and independent packet loss (scenario version 2) |
+| `fixed_wing_flight.yaml` | Eight fixed-wing aircraft on a racetrack launched 12 s apart over hills, with the energy model, a steady wind with gusts, a terrain map that raises their altitude over high ground, and ground contact that ends a flight (scenario version 3) |

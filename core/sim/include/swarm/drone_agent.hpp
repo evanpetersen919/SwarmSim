@@ -10,12 +10,14 @@
 #include "swarm/control/drone_brain.hpp"
 #include "swarm/dynamics.hpp"
 #include "swarm/fixed_wing.hpp"
+#include "swarm/fixed_wing_energy.hpp"
 #include "swarm/imu.hpp"
 #include "swarm/lidar.hpp"
 #include "swarm/position_fix.hpp"
 #include "swarm/scene.hpp"
 #include "swarm/vehicle.hpp"
 #include "swarm/weather.hpp"
+#include "swarm/wind.hpp"
 
 namespace swarm {
 
@@ -31,6 +33,16 @@ struct DroneAgentConfig {
   VehicleKind vehicle_kind = VehicleKind::kQuad;
   DroneParams vehicle;
   FixedWingParams fixed_wing;
+  // Which model flies a fixed-wing aircraft, and the energy model's parameters when it is chosen.
+  FixedWingDynamics dynamics = FixedWingDynamics::kSimple;
+  EnergyParams energy;
+  // The air the aircraft flies in (ADR 0011). With no mean wind and no gusts the vehicle is
+  // stepped as it was before wind existed, so a run without wind is unchanged. A quad is not
+  // moved by wind.
+  WindParams wind;
+  // An aircraft that reaches the ground stops there for good, as a failed quad does, and stays
+  // silent. Off by default, so runs before ADR 0011 are unchanged.
+  bool crash_on_ground = false;
   ImuParams imu = ImuParams::typical_mems();
   // A quad senses with the LiDAR and fixes its position from the scan (`lidar`, `fix`). A
   // fixed-wing aircraft has no LiDAR: it fixes its position with a downward camera (`camera`).
@@ -83,14 +95,19 @@ class DroneAgent : public IAgent {
   const DroneBrain& brain() const { return brain_; }
   // False from the tick the drone fails; true before.
   bool alive() const { return !failed_; }
+  // True from the tick the drone reached the ground, when that ends its flight.
+  bool crashed() const { return crashed_; }
 
  private:
   static DroneAgentConfig prepared(DroneAgentConfig config);
   static std::unique_ptr<const IVehicle> make_vehicle(const DroneAgentConfig& config);
+  // The truth one tick on under `command`, in the wind there is at the current position and tick.
+  DroneState advance(const DroneCommand& command, std::uint64_t tick) const;
 
   DroneAgentConfig config_;
   const IScene& scene_;
   std::unique_ptr<const IVehicle> vehicle_;
+  std::optional<WindField> wind_;  // present only when there is wind
   Imu imu_;
   std::optional<Lidar> lidar_;
   std::optional<PositionFixSensor> fixer_;
@@ -98,6 +115,7 @@ class DroneAgent : public IAgent {
   DroneBrain brain_;
   DroneState truth_;
   bool failed_ = false;
+  bool crashed_ = false;
 };
 
 }  // namespace swarm

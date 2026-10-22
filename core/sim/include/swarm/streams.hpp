@@ -11,6 +11,7 @@ inline constexpr std::uint64_t kStreamChannelJitter = 0x101;
 inline constexpr std::uint64_t kStreamChannelJam = 0x103;
 inline constexpr std::uint64_t kStreamScene = 0x104;
 inline constexpr std::uint64_t kStreamStart = 0x105;  // where scenario drones start
+inline constexpr std::uint64_t kStreamWind = 0x106;   // the gust field
 
 // Per-agent streams: agent i uses base + i. Each base has room for kMaxAgents ids, which keeps
 // the ranges from colliding; Simulation rejects more agents than that.

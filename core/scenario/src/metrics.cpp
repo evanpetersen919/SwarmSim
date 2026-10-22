@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -11,10 +12,13 @@
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/control/orbit.hpp"
+#include "swarm/control/path.hpp"
 #include "swarm/format/log.hpp"
 #include "swarm/format/snapshot.hpp"
 #include "swarm/scenario/run.hpp"
 #include "swarm/scenario/scenario.hpp"
+#include "swarm/scenario/world.hpp"
+#include "swarm/scene.hpp"
 #include "swarm/vec3.hpp"
 
 namespace swarm {
@@ -77,6 +81,19 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   const double radius = scenario.metrics.collision_radius_m;
   const bool fixed_wing = scenario.vehicle.kind == VehicleKind::kFixedWing;
   const OrbitParams orbit = fixed_wing ? orbit_params(scenario) : OrbitParams{};
+
+  // The ground under the aircraft, when the scene can be built.
+  std::unique_ptr<Scene> scene;
+  if (fixed_wing) {
+    SceneData ground;
+    std::string scene_error;
+    if (build_scene_data(scenario, ground, scene_error)) {
+      scene = std::make_unique<Scene>(std::move(ground));
+    }
+  }
+  std::vector<char> touched(n, 0);
+  double lowest_agl = std::numeric_limits<double>::infinity();
+  const bool pattern = fixed_wing && scenario.pattern.kind != PatternKind::kOrbit;
 
   MetricsOutcome outcome;
   MetricsResult& out = outcome.result;
@@ -157,9 +174,13 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     const bool settled = time >= scenario.metrics.settle_s;
     // Where each drone should be: its slot on the mission reference, or its point on the orbit.
     std::vector<OrbitReference> orbit_refs;
+    std::vector<PatternReference> pattern_refs;
     std::vector<Vec3> targets(n);
     for (std::uint32_t i = 0; i < n; ++i) {
-      if (fixed_wing) {
+      if (pattern) {
+        pattern_refs.push_back(pattern_reference(i, n, time, scenario.pattern, orbit));
+        targets[i] = pattern_refs.back().position;
+      } else if (fixed_wing) {
         orbit_refs.push_back(orbit_reference(i, n, time, orbit));
         targets[i] = orbit_refs.back().position;
       } else {
@@ -169,12 +190,31 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     std::uint32_t alive = 0;
     for (std::uint32_t i = 0; i < n; ++i) {
       const AgentSnapshot& a = snapshot.agents[i];
+      if (scene) {
+        const double agl = a.position[2] - scene->ground_height(a.position[0], a.position[1]);
+        lowest_agl = std::min(lowest_agl, agl);
+        if (agl <= 0.0) {
+          touched[i] = 1;
+        }
+      }
       if (!a.alive) {
         continue;
       }
       ++alive;
       const double e2 = norm_squared(to_vec(a.position) - targets[i]);
-      if (fixed_wing) {
+      if (pattern) {
+        const PatternReference& ref = pattern_refs[i];
+        const Vec3 p = to_vec(a.position);
+        const StadiumPath own = pattern_path(i, n, scenario.pattern, orbit);
+        const double cross = own.nearest(p.x, p.y).cross_track;
+        const double altitude = p.z - ref.position.z;
+        const double phase = path_phase_error(own, p, ref.s);
+        sum_radial += cross * cross;
+        sum_altitude += altitude * altitude;
+        sum_phase += phase * phase;
+        count_on_station += e2 <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        ++count_orbit;
+      } else if (fixed_wing) {
         const OrbitReference& ref = orbit_refs[i];
         const Vec3 p = to_vec(a.position);
         const double dx = p.x - orbit.center.x;
@@ -239,6 +279,10 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     out.orbit_altitude_rmse = std::sqrt(sum_altitude / samples);
     out.orbit_phase_rmse = std::sqrt(sum_phase / samples);
     out.time_on_station = static_cast<double>(count_on_station) / samples;
+  }
+  if (scene) {
+    out.min_agl = lowest_agl;
+    out.ground_contacts = static_cast<std::uint32_t>(std::count(touched.begin(), touched.end(), 1));
   }
 
   // Messages. The last tick in the log is out.ticks - 1; anything scheduled after it is in flight.

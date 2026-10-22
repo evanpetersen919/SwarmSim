@@ -1,0 +1,54 @@
+# Eight fixed-wing aircraft of the ALTIUS class flying a racetrack over hills, launched 12 s apart
+# along the loop, in a steady wind with gusts. The aircraft use the energy model (thrust, drag,
+# roll dynamics, a stall speed that grows with bank), carry a terrain map and climb to clear the
+# ground, and stop where they touch it. Scenario version 3; every flight parameter is an assumption
+# (docs/MODELS.md).
+version: 3
+seed: 7
+dt: 0.02
+duration_s: 300
+
+scene:
+  type: hills
+  size_m: [3000, 3000]
+  cell_m: 10
+  amplitude_m: 40
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 8
+
+mission:
+  waypoints:
+    - [0, 0, 100]
+  speed_mps: 17
+
+vehicle:
+  type: fixed_wing
+  dynamics: energy
+
+environment:
+  wind: {mean_mps: [4, -2], gust_mps: 1.2, gust_scale_m: 150}
+  ground_contact_crashes: true
+
+weather: {visibility_m: 5000}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.1
+
+control:
+  predictor: kalman
+  orbit:
+    radius_step_m: 12
+    altitude_step_m: 10
+  pattern:
+    type: racetrack
+    heading_deg: 20
+    leg_length_m: 600
+    turn_radius_m: 100
+    stagger_s: 12
+  terrain:
+    clearance_m: 60
