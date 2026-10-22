@@ -2,10 +2,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
 #include "swarm/format/log.hpp"
+#include "swarm/scenario/metrics.hpp"
 #include "swarm/scenario/run.hpp"
 #include "swarm/scenario/scenario.hpp"
 #include "swarm/scenario/world.hpp"
@@ -158,4 +161,21 @@ TEST(ScenarioFlight, ASimpleFixedWingRunWithoutWindIsTheSameAsBefore) {
   EXPECT_EQ(swarm::canonical_text(swarm::load_scenario(v2).scenario),
             swarm::canonical_text(swarm::load_scenario(v3).scenario));
   EXPECT_EQ(hash_of(v2, 1), hash_of(v3, 1));
+}
+
+TEST(ScenarioFlight, TheFlightScenarioFileFliesItsPatternAboveTheGround) {
+  std::ifstream in(std::string(SWARM_SCENARIO_DIR) + "/fixed_wing_flight.yaml", std::ios::binary);
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  LoadResult r = swarm::load_scenario(text);
+  ASSERT_TRUE(r.ok());
+  r.scenario.duration_ticks = 4500;  // 90 s, enough to join the racetrack and settle
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(swarm::run_scenario(r.scenario, 2, bytes), swarm::LogStatus::kOk);
+  const swarm::MetricsOutcome m = swarm::analyze_log(bytes.data(), bytes.size());
+  ASSERT_TRUE(m.ok()) << m.message;
+  EXPECT_EQ(m.result.alive_at_end, 8U);
+  EXPECT_EQ(m.result.collision_episodes, 0U);
+  EXPECT_EQ(*m.result.ground_contacts, 0U);
+  EXPECT_GT(*m.result.min_agl, 40.0);
+  EXPECT_LT(*m.result.orbit_radial_rmse, 10.0);
 }

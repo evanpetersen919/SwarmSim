@@ -967,7 +967,7 @@ For a fixed-wing scenario the formation error is measured against each aircraft'
 | `orbit_radial_rmse_m` | RMS of the horizontal distance from the center minus the aircraft's orbit radius |
 | `orbit_altitude_rmse_m` | RMS of the altitude minus the aircraft's slot altitude |
 | `orbit_phase_rmse_m` | RMS of the arc length of the phase error, radius times the angle from the aircraft to its reference; positive means behind |
-| `time_on_station` | The fraction of (aircraft, record) samples within 30 m of the orbit reference point |
+| `time_on_station` | The fraction of (aircraft, record) samples within 30 m of the orbit reference point; with terrain guidance only the horizontal distance counts, because the altitude is raised over high ground |
 | `min_agl_m` | The lowest height above the terrain of any aircraft in any record. Needs the scene: generated from the scenario, or read from the file it names; empty when a scene file is missing |
 | `ground_contacts` | The number of aircraft that were at or below the ground in some record; with `ground_contact_crashes` it is the number that crashed |
 

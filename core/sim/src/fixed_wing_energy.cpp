@@ -109,8 +109,10 @@ DroneState FixedWingEnergyVehicle::step_in_wind(const DroneState& state,
   // speed it must not spend.
   const double vertical_accel =
       std::clamp(command.accel.z, -limits_.max_vertical_accel, limits_.max_vertical_accel);
-  const double climb_wish =
-      std::clamp(air.z + vertical_accel * dt, -limits_.max_descent_rate, limits_.max_climb_rate);
+  // The climb rate that, reached through the pitch lag, gives the wished acceleration: a lag of
+  // time constant tau moves toward its target at (target - current) / tau.
+  const double climb_wish = std::clamp(air.z + vertical_accel * energy_.pitch_tau,
+                                       -limits_.max_descent_rate, limits_.max_climb_rate);
   double gamma_cmd = std::asin(std::clamp(climb_wish / speed, -1.0, 1.0));
   const double surplus = (thrust_available - drag_now) / weight +
                          kEnergyTradeGain * (speed - hold) / std::max(hold, kMinAirspeed);

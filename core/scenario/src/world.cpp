@@ -203,7 +203,8 @@ ScenarioWorld build_world(const Scenario& s) {
               : pattern_reference(i, s.drones, 0.0, s.pattern, c.brain.orbit).velocity;
       if (s.terrain_guidance.enabled) {
         // Over high ground an aircraft starts at the altitude that clears it, with its layer.
-        const double ground = world.scene->ground_height(starts[i].x, starts[i].y);
+        const double ground =
+            terrain_map->max_height_near(starts[i].x, starts[i].y, s.terrain_guidance.footprint);
         const double slot_offset = static_cast<double>(i) * c.brain.orbit.altitude_step;
         c.start.z = std::max(c.start.z, ground + s.terrain_guidance.clearance + slot_offset);
       }

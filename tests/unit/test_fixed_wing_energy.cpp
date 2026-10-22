@@ -272,3 +272,15 @@ TEST(FixedWingEnergy, RejectsBadInput) {
   EXPECT_THROW(FixedWingEnergyVehicle(FixedWingParams{}, p).step(flying(17.0), DroneCommand{}, kDt),
                std::invalid_argument);
 }
+
+TEST(FixedWingEnergy, AVerticalAccelerationCommandIsFollowedNotSmoothedAway) {
+  // A command of 1 m/s^2 upward, held for 2 s from level flight, gives a climb rate of about 1 to 2
+  // m/s once the pitch lag is through: the command is read as a wish for acceleration, and the
+  // lag must not eat it. (A first version took only a fiftieth of it.)
+  const auto v = make();
+  DroneCommand up;
+  up.accel = {0.0, 0.0, 1.0};
+  const DroneState after = run(v, flying(17.0), up, 2.0);
+  EXPECT_GT(after.vel.z, 0.9);
+  EXPECT_LT(after.vel.z, 2.5);
+}

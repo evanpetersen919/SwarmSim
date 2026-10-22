@@ -151,3 +151,7 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 | 72 | 30-seed run if time allows | Same command, config change only |
 | 73 | Hero GIF, Docker verified, limitations reviewed | `docker run` works on a clean machine |
 | 74 | Tag `v0.1.0` | CI green on the tagged commit |
+
+## Fixed-wing vehicle and flight realism
+
+Not part of the original phase order. The fixed-wing vehicle (ADR 0010) is described in [phases/fixed-wing-vehicle.md](phases/fixed-wing-vehicle.md): a vehicle interface, a coordinated-turn model, a camera position fix, orbit guidance with closest-approach separation, a turning neighbor predictor, orbit metrics, and three experiments. The flight realism work (ADR 0011) is described in [phases/flight-realism.md](phases/flight-realism.md): wind, an energy model, terrain-aware guidance, patterns, and ground-contact metrics.

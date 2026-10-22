@@ -94,6 +94,17 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   std::vector<char> touched(n, 0);
   double lowest_agl = std::numeric_limits<double>::infinity();
   const bool pattern = fixed_wing && scenario.pattern.kind != PatternKind::kOrbit;
+  // With terrain guidance the altitude is raised over high ground, so the distance to the nominal
+  // reference would count the climb as being off station; then only the horizontal distance counts.
+  const bool horizontal_station = scenario.terrain_guidance.enabled;
+  const auto station_error2 = [&](double e2_full, const Vec3& p, const Vec3& target) {
+    if (!horizontal_station) {
+      return e2_full;
+    }
+    const double dx = p.x - target.x;
+    const double dy = p.y - target.y;
+    return dx * dx + dy * dy;
+  };
 
   MetricsOutcome outcome;
   MetricsResult& out = outcome.result;
@@ -212,7 +223,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         sum_radial += cross * cross;
         sum_altitude += altitude * altitude;
         sum_phase += phase * phase;
-        count_on_station += e2 <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        count_on_station +=
+            station_error2(e2, p, targets[i]) <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
         ++count_orbit;
       } else if (fixed_wing) {
         const OrbitReference& ref = orbit_refs[i];
@@ -225,7 +237,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         sum_radial += radial * radial;
         sum_altitude += altitude * altitude;
         sum_phase += phase * phase;
-        count_on_station += e2 <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        count_on_station +=
+            station_error2(e2, p, targets[i]) <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
         ++count_orbit;
       }
       sum_all += e2;
