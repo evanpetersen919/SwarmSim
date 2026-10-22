@@ -6,7 +6,10 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "swarm/control/path.hpp"
+#include "swarm/control/terrain_map.hpp"
 #include "swarm/rng.hpp"
 #include "swarm/scenario/scene_file.hpp"
 #include "swarm/streams.hpp"
@@ -69,6 +72,15 @@ OrbitParams orbit_params(const Scenario& s) {
   return p;
 }
 
+double terrain_climb_rate(const Scenario& s) {
+  const FixedWingParams& wing = s.vehicle.fixed_wing;
+  double rate = wing.max_climb_rate;
+  if (s.vehicle.dynamics == FixedWingDynamics::kEnergy) {
+    rate = std::min(rate, s.vehicle.energy.steady_climb_rate(s.mission.speed, wing.gravity));
+  }
+  return rate;
+}
+
 bool build_scene_data(const Scenario& s, SceneData& data, std::string& error) {
   if (s.scene_file.used) {
     if (!read_scene_file(s.scene_file.path, data, error)) {
@@ -118,6 +130,35 @@ TerrainMap make_terrain_map(const SceneData& scene) {
   }
   return TerrainMap(field.cells_x, field.cells_y, field.origin_x, field.origin_y, field.cell_size,
                     std::move(heights));
+}
+
+// The lowest altitude that clears the terrain along the path slot `slot` flies from `start`, the
+// slot's layer included: the floor of its guidance at time 0, built from the same path samples the
+// brain uses.
+double start_altitude(const Scenario& s, const OrbitParams& orbit, const TerrainMap& map,
+                      std::uint32_t slot, const Vec3& start, const Vec3& velocity) {
+  TerrainGuidanceParams params = s.terrain_guidance;
+  params.climb_rate = terrain_climb_rate(s);
+  const double speed = std::max(std::hypot(velocity.x, velocity.y), orbit.min_speed);
+  std::vector<PathSample> path;
+  double layer = static_cast<double>(slot) * orbit.altitude_step;
+  switch (s.pattern.kind) {
+    case PatternKind::kOrbit: {
+      const OrbitReference ref = orbit_reference(slot, s.drones, 0.0, orbit);
+      path = circle_path(start, orbit.center.x, orbit.center.y, ref.radius, params);
+      break;
+    }
+    case PatternKind::kFormation:
+      path = formation_samples(slot, 0.0, s.pattern, orbit, params);
+      layer = pattern_reference(slot, s.drones, 0.0, s.pattern, orbit).position.z - orbit.center.z;
+      break;
+    case PatternKind::kRacetrack:
+    case PatternKind::kLanes:
+      path = path_samples(pattern_path(slot, s.drones, s.pattern, orbit), start, params);
+      layer = pattern_reference(slot, s.drones, 0.0, s.pattern, orbit).position.z - orbit.center.z;
+      break;
+  }
+  return terrain_floor(map, params, path, speed) + layer;
 }
 
 ScenarioWorld build_world(const Scenario& s) {
@@ -188,7 +229,7 @@ ScenarioWorld build_world(const Scenario& s) {
     if (s.terrain_guidance.enabled && s.vehicle.kind == VehicleKind::kFixedWing) {
       c.brain.terrain = terrain_map;
       c.brain.terrain_guidance = s.terrain_guidance;
-      c.brain.terrain_guidance.climb_rate = s.vehicle.fixed_wing.max_climb_rate;
+      c.brain.terrain_guidance.climb_rate = terrain_climb_rate(s);
     }
     c.dynamics = s.vehicle.dynamics;
     c.energy = s.vehicle.energy;
@@ -202,11 +243,12 @@ ScenarioWorld build_world(const Scenario& s) {
               ? orbit_reference(i, s.drones, 0.0, c.brain.orbit).velocity
               : pattern_reference(i, s.drones, 0.0, s.pattern, c.brain.orbit).velocity;
       if (s.terrain_guidance.enabled) {
-        // Over high ground an aircraft starts at the altitude that clears it, with its layer.
-        const double ground =
-            terrain_map->max_height_near(starts[i].x, starts[i].y, s.terrain_guidance.footprint);
-        const double slot_offset = static_cast<double>(i) * c.brain.orbit.altitude_step;
-        c.start.z = std::max(c.start.z, ground + s.terrain_guidance.clearance + slot_offset);
+        // An aircraft starts at the altitude its own guidance would ask for at time 0, which is
+        // the floor over the whole of its path and not only over the ground beneath it: a start
+        // that clears the ground at the start point but not the ridge a lap ahead is a start the
+        // aircraft cannot recover from, because it climbs more slowly than the ridge rises.
+        c.start.z = std::max(c.start.z, start_altitude(s, c.brain.orbit, *terrain_map, i, starts[i],
+                                                       c.start_velocity));
       }
     }
     c.lidar.beams = s.lidar_beams;

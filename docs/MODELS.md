@@ -1024,15 +1024,15 @@ Everything marked assumed was chosen to give plausible behavior, not fitted to t
 
 Source: `core/sim/include/swarm/control/terrain_map.hpp`, `drone_brain.cpp`. Status: unit and integration tested; scenario version 3, `control.terrain` (ADR 0011).
 
-The aircraft carries a map: a copy of the scene's heightfield, treated as prior elevation data and not a sensor. The scenario builder makes it from the scene the run uses, and it is exact. The map answers one question, the highest sample whose cell touches a disc, which bounds the height of the mesh in the disc (a cell's mesh never exceeds its highest corner).
+The aircraft carries a map: a copy of the scene's heightfield with the tops of the scene's obstacles raised into it (every sample whose cell the footprint of a box or cylinder touches is raised to the obstacle's top), treated as prior elevation data and not a sensor. The scenario builder makes it from the scene the run uses, and it is exact. The map answers one question, the highest sample whose cell touches a disc, which bounds the height of the mesh in the disc (a cell's mesh never exceeds its highest corner).
 
 The altitude command of an orbiting aircraft is the larger of its nominal altitude and a terrain floor, plus the slot's offset from the bottom layer so the layers stay apart. The floor is the maximum, over points along the path ahead, of
 
     highest ground within `footprint` of the point + `clearance` - climb_budget * distance / speed
 
-where distance is along the path to the point and climb_budget is `climb_fraction` times the vehicle's climb limit. A ridge far ahead lowers the floor by the height that a climb at the budget rate gains before reaching it, so the aircraft starts climbing early enough and no earlier. The path is the whole circle (or stadium) once around from the aircraft's nearest point. While the aircraft is more than a quarter of the radius off its path, the straight line along its heading is checked too. Safe hold uses the same floor over its circle. A pattern uses the stadium path.
+where distance is along the path to the point and climb_budget is `climb_fraction` times the climb the vehicle can plan on: its climb limit and, with the energy model, also the climb its propulsion can hold at the mission speed, `(min(max_thrust, max_power / v) - drag) * v / weight`. A scenario whose aircraft cannot climb at the mission speed is refused when terrain guidance is on. A ridge far ahead lowers the floor by the height that a climb at the budget rate gains before reaching it, so the aircraft starts climbing early enough and no earlier. The path is the whole circle (or stadium) once around from the aircraft's nearest point. While the aircraft is more than a quarter of the radius off its path, the straight line along its heading is checked too. Safe hold uses the same floor over its circle. A pattern uses the stadium path.
 
-Because the path is the whole loop, a loop over uneven ground is flown at about the altitude of its highest point plus the clearance, less what the budget climb gains over the loop. It is not terrain following: the aircraft does not descend into valleys to keep a constant height above ground. An aircraft starts at the altitude that clears the ground under its start.
+Because the path is the whole loop, a loop over uneven ground is flown at about the altitude of its highest point plus the clearance, less what the budget climb gains over the loop. It is not terrain following: the aircraft does not descend into valleys to keep a constant height above ground. An aircraft starts at the floor of its own path at time 0, the same floor its guidance asks for, and not at the altitude that clears only the ground under its start point: on hills that rise faster than the aircraft can climb, a start that cleared only the start point left the aircraft too low to recover.
 
 | Parameter | Default | Basis |
 |---|---|---|
@@ -1041,7 +1041,7 @@ Because the path is the whole loop, a loop over uneven ground is flown at about 
 | climb_fraction | 0.6 | Assumed. The part of the climb limit a planned climb may use |
 | sample_spacing_m, lookahead_m | 20, 600 | Assumed |
 
-Limits. The map has no error and no obstacle: trees and rocks are covered only by the clearance, and a scene's boxes and cylinders are not in the map. A ridge steeper than the budget climb that appears within the aircraft's turning circle cannot be cleared. The orbit altitude error metric includes the climb. With `environment.ground_contact_crashes` an aircraft that reaches the ground stops there for good and stays silent, which is how a run shows that a scenario without terrain guidance flew into the ground.
+Limits. The map has no error. Obstacles are in it as raised samples, which overstates a small obstacle to the size of its cell. A ridge steeper than the budget climb that appears within the aircraft's turning circle cannot be cleared. The orbit altitude error metric includes the climb. With `environment.ground_contact_crashes` an aircraft that reaches the ground stops there for good and stays silent, which is how a run shows that a scenario without terrain guidance flew into the ground.
 
 ## Patterns
 

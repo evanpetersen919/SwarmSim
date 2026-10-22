@@ -188,6 +188,11 @@ bool wind_used(const Scenario& scenario);
 // altitude of the mission's first waypoint, the mission speed, and the vehicle's speed limits.
 OrbitParams orbit_params(const Scenario& scenario);
 
+// The climb rate in m/s that terrain guidance may plan against for a fixed-wing scenario: the
+// vehicle's climb limit, and with the energy model also the climb its propulsion can hold at the
+// mission speed. Zero or negative when the aircraft cannot climb at that speed.
+double terrain_climb_rate(const Scenario& scenario);
+
 // Parses and validates scenario text. Never throws: every problem, including malformed YAML, comes
 // back as an entry in `errors`, in file order where there is one. Unknown keys are errors.
 // `default_name` is used when the file has no `name`.

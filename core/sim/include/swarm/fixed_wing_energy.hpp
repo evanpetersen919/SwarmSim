@@ -42,6 +42,14 @@ struct EnergyParams {
   // The stall speed in level flight, and the speed the autopilot will not fly below in it.
   double stall_speed(double gravity) const;
   double hold_speed(double gravity) const;
+
+  // The drag in N at airspeed `speed` carrying `load_factor` times the weight.
+  double drag(double speed, double load_factor, double gravity) const;
+
+  // The climb rate in m/s the propulsion can hold at airspeed `speed` in level-speed flight: the
+  // thrust left after drag, through the power limit, times the speed over the weight. Negative when
+  // the aircraft cannot hold the speed in level flight. Terrain guidance plans against it.
+  double steady_climb_rate(double speed, double gravity) const;
 };
 
 // Throws std::invalid_argument unless every value is finite and positive, the margin is at least

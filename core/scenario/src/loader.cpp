@@ -1132,7 +1132,12 @@ void cross_validate(Context& ctx, const Scenario& s) {
   if (s.terrain_guidance.enabled) {
     validate_with(ctx, "control.terrain", 0, [&] {
       TerrainGuidanceParams p = s.terrain_guidance;
-      p.climb_rate = s.vehicle.fixed_wing.max_climb_rate;
+      p.climb_rate = terrain_climb_rate(s);
+      if (!(p.climb_rate > 0.0)) {
+        throw std::invalid_argument(
+            "the aircraft cannot climb at the mission speed with the thrust and power of the "
+            "energy model, so terrain guidance has no climb to plan with");
+      }
       validate(p);
     });
   }

@@ -50,7 +50,7 @@ On the scene exported from the Electric Dreams level (17 849 trees and 102 819 r
 - The orbit controller, its gains, and the consensus weights were tuned without wind or energy. They fly the scenarios above; they were not retuned or optimized, and no sweep was run.
 - The elevation map is exact. A real aircraft's would have errors.
 - Terrain guidance flies at about the altitude of the highest ground on the loop plus the clearance. It does not follow terrain down into valleys, so on high, uneven ground the aircraft is much higher above the valleys than the clearance.
-- Trees and rocks are boxes and cylinders, and the clearance covers the rest.
+- Trees and rocks are boxes and cylinders, and their tops are raised into the terrain map, so the guidance clears them as it clears ground.
 - Phase consensus over the neighbors is used only by the orbit pattern. With a racetrack or lanes the neighbor predictors and the comms conditions affect only separation, which is the situation the first probe of ADR 0010 found and fixed for orbits.
 - The energy model's parameters are assumed, except the mass and wingspan. No claim is made that it flies like an ALTIUS.
 - The experiments of ADR 0010 (216, 72, and 48 cells) were run with the simple model and no wind. Their results are not comparable with a run under the energy model, and they have not been rerun. The 30-seed fixed-wing runs and the quad's 432-cell matrix are still to do.

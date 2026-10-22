@@ -10,6 +10,7 @@
 
 #include "swarm/control/terrain_map.hpp"
 #include "swarm/drone_agent.hpp"
+#include "swarm/fixed_wing_energy.hpp"
 #include "swarm/format/scene.hpp"
 #include "swarm/scenario/scenario.hpp"
 #include "swarm/scenario/world.hpp"
@@ -199,6 +200,18 @@ TEST(TerrainGuidanceFlight, WithGuidanceTheAircraftStayWellAboveTheGround) {
   EXPECT_GT(with.min_agl, 25.0);
 }
 
+TEST(TerrainGuidanceFlight, SteepHillsAreClearedBecauseTheAircraftStartsAboveTheWholeLap) {
+  // Hills of 500 m rise faster than the aircraft can climb. An aircraft that started at the
+  // altitude that clears only the ground under the start point would hit them; one that starts at
+  // the floor of its whole lap does not.
+  std::string text = hilly("  terrain: {clearance_m: 50}\n");
+  const std::string from = "amplitude_m: 100";
+  text.replace(text.find(from), from.size(), "amplitude_m: 500");
+  const Flown flown = fly(text);
+  EXPECT_EQ(flown.crashed, 0);
+  EXPECT_GT(flown.min_agl, 30.0);
+}
+
 TEST(TerrainGuidanceFlight, ARunWithGuidanceIsRepeatable) {
   const std::string text = hilly("  terrain: {clearance_m: 50}\n");
   const swarm::LoadResult r = swarm::load_scenario(text);
@@ -268,4 +281,88 @@ TEST(TerrainGuidance, ObstacleTopsAreRaisedIntoTheMap) {
   const TerrainMap with_slab = swarm::make_terrain_map(scene);
   EXPECT_EQ(with_slab.max_height_near(-20.0, -20.0, 1.0), 50.0);
   EXPECT_EQ(with_slab.max_height_near(-32.0, -20.0, 1.0), 50.0);
+}
+
+namespace {
+
+swarm::EnergyParams light_aircraft() {
+  return swarm::EnergyParams{};  // 12 kg, 60 N, 600 W
+}
+
+swarm::EnergyParams heavy_aircraft() {
+  swarm::EnergyParams e;
+  e.mass = 28.5;
+  e.wing_area = 1.0;
+  e.wingspan = 3.0;
+  e.max_thrust = 90.0;
+  e.max_power = 3500.0;
+  return e;
+}
+
+}  // namespace
+
+TEST(SteadyClimb, IsTheThrustLeftAfterDragThroughTheSpeedOverTheWeight) {
+  const swarm::EnergyParams e = light_aircraft();
+  const double g = 9.80665;
+  for (const double v : {14.0, 16.7, 20.0, 25.0}) {
+    const double thrust = std::min(e.max_thrust, e.max_power / v);
+    EXPECT_NEAR(e.steady_climb_rate(v, g) * e.mass * g / v, thrust - e.drag(v, 1.0, g), 1e-9);
+  }
+  // Climbing is cheaper than flying fast: the climb the propulsion can hold falls with speed.
+  EXPECT_GT(e.steady_climb_rate(16.7, g), e.steady_climb_rate(25.0, g));
+}
+
+TEST(SteadyClimb, AnAircraftWithTheDefaultPropulsionCannotClimbAtThirtyThreeMetersPerSecond) {
+  const double g = 9.80665;
+  EXPECT_GT(light_aircraft().steady_climb_rate(16.7, g), 3.0);
+  EXPECT_LT(light_aircraft().steady_climb_rate(33.0, g), 0.0);
+  // The heavier aircraft with the power for its maximum speed can.
+  EXPECT_GT(heavy_aircraft().steady_climb_rate(33.0, g), 3.0);
+}
+
+namespace {
+
+std::string guided(const std::string& vehicle, double speed) {
+  return "version: 3\n"
+         "seed: 1\n"
+         "duration_s: 5\n"
+         "scene: {type: hills, size_m: [2000, 2000], cell_m: 20, amplitude_m: 50,\n"
+         "        obstacles: {density_per_m2: 0.0}}\n"
+         "swarm: {drones: 2}\n"
+         "mission:\n"
+         "  waypoints:\n"
+         "    - [0, 0, 150]\n"
+         "  speed_mps: " +
+         std::to_string(speed) + "\n" + vehicle +
+         "control:\n"
+         "  orbit: {radius_m: 300, radius_step_m: 12, altitude_step_m: 10}\n"
+         "  terrain: {clearance_m: 50}\n";
+}
+
+}  // namespace
+
+TEST(SteadyClimb, GuidanceCannotPlanAClimbThatTheEnergyModelCannotFly) {
+  // A climb capability at the mission speed is what the guidance plans against.
+  const std::string weak = "vehicle: {type: fixed_wing, max_speed_mps: 51, dynamics: energy}\n";
+  const swarm::LoadResult refused = swarm::load_scenario(guided(weak, 33.0));
+  EXPECT_FALSE(refused.ok());
+  EXPECT_TRUE(swarm::load_scenario(guided(weak, 16.7)).ok());
+
+  const std::string strong =
+      "vehicle: {type: fixed_wing, max_speed_mps: 51, dynamics: energy,\n"
+      "          energy: {mass_kg: 28.5, wing_area_m2: 1.0, wingspan_m: 3.0, max_thrust_n: 90,\n"
+      "                   max_power_w: 3500}}\n";
+  const swarm::LoadResult accepted = swarm::load_scenario(guided(strong, 33.0));
+  ASSERT_TRUE(accepted.ok()) << (accepted.errors.empty()
+                                     ? ""
+                                     : swarm::to_string(accepted.errors.front()));
+  // The planned climb is the vehicle's limit when the propulsion can deliver it, and less when it
+  // cannot.
+  EXPECT_DOUBLE_EQ(swarm::terrain_climb_rate(accepted.scenario),
+                   accepted.scenario.vehicle.fixed_wing.max_climb_rate);
+  const swarm::LoadResult low = swarm::load_scenario(guided(weak, 25.0));
+  ASSERT_TRUE(low.ok()) << (low.errors.empty() ? "" : swarm::to_string(low.errors.front()));
+  EXPECT_LT(swarm::terrain_climb_rate(low.scenario),
+            low.scenario.vehicle.fixed_wing.max_climb_rate);
+  EXPECT_GT(swarm::terrain_climb_rate(low.scenario), 0.0);
 }

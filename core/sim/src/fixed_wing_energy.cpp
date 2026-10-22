@@ -28,6 +28,21 @@ double EnergyParams::hold_speed(double gravity) const {
   return stall_margin * stall_speed(gravity);
 }
 
+double EnergyParams::drag(double speed, double load_factor, double gravity) const {
+  const double v = std::max(speed, kMinAirspeed);
+  const double q = 0.5 * air_density * v * v;
+  const double cl = load_factor * mass * gravity / (q * wing_area);
+  const double aspect = wingspan * wingspan / wing_area;
+  const double k = 1.0 / (kPi * aspect * oswald);
+  return q * wing_area * (cd0 + k * cl * cl);
+}
+
+double EnergyParams::steady_climb_rate(double speed, double gravity) const {
+  const double v = std::max(speed, kMinAirspeed);
+  const double thrust = std::min(max_thrust, max_power / v);
+  return (thrust - drag(v, 1.0, gravity)) * v / (mass * gravity);
+}
+
 void validate(const EnergyParams& p) {
   const auto ok = [](double v) { return std::isfinite(v) && v > 0.0; };
   if (!ok(p.mass) || !ok(p.wing_area) || !ok(p.wingspan) || !ok(p.cd0) || !ok(p.oswald) ||
@@ -48,13 +63,7 @@ void validate(const EnergyParams& p) {
 }
 
 double FixedWingEnergyVehicle::drag(double v, double load_factor) const {
-  const double speed = std::max(v, kMinAirspeed);
-  const double q = 0.5 * energy_.air_density * speed * speed;
-  const double lift = load_factor * energy_.mass * limits_.gravity;
-  const double cl = lift / (q * energy_.wing_area);
-  const double aspect = energy_.wingspan * energy_.wingspan / energy_.wing_area;
-  const double k = 1.0 / (kPi * aspect * energy_.oswald);
-  return q * energy_.wing_area * (energy_.cd0 + k * cl * cl);
+  return energy_.drag(v, load_factor, limits_.gravity);
 }
 
 DroneState FixedWingEnergyVehicle::step_in_wind(const DroneState& state,
