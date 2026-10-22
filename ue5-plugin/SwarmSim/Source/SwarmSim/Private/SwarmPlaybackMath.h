@@ -31,6 +31,13 @@ constexpr double kMinHeadingSpeed = 0.5;
 FDroneAttitude AttitudeFromMotion(const FVector& VelocityUe, const FVector& AccelerationUe,
                                   double PreviousYawDeg, double MaxTiltDeg);
 
+// The attitude of a fixed-wing aircraft, for display only. Heading and roll are as above (an
+// aircraft in a coordinated turn banks by the angle whose tangent is the sideways acceleration over
+// gravity), but pitch is the flight-path angle, positive nose up when climbing, because a wing
+// does not tip its nose down to speed up. The pitch is limited to `MaxTiltDeg`.
+FDroneAttitude AircraftAttitudeFromMotion(const FVector& VelocityUe, const FVector& AccelerationUe,
+                                          double PreviousYawDeg, double MaxTiltDeg);
+
 // Moves `Current` toward `Target` by the fraction 1 - exp(-DeltaSeconds / TimeConstant), so the
 // result does not depend on the frame rate. Angles are shortest-way.
 double SmoothAngleDeg(double Current, double Target, double DeltaSeconds, double TimeConstant);

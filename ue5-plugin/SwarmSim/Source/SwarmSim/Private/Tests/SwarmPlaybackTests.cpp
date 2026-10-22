@@ -46,6 +46,28 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
                AttitudeFromMotion(FVector(0, 0, 8), FVector::ZeroVector, 40.0, 30.0).YawDeg, 40.0,
                1e-9));
 
+  // An aircraft's pitch is its flight-path angle: climbing at 45 degrees is 45 degrees nose up,
+  // forward acceleration does not tip it, and a turn still banks it.
+  const FDroneAttitude Climb =
+      AircraftAttitudeFromMotion(FVector(10, 0, 10), FVector(kGravity, 0, 0), 0.0, 60.0);
+  TestTrue(TEXT("an aircraft's pitch is its flight-path angle"),
+           FMath::IsNearlyEqual(Climb.PitchDeg, 45.0, 1e-6));
+  TestTrue(TEXT("forward acceleration does not change it"),
+           FMath::IsNearlyEqual(
+               AircraftAttitudeFromMotion(FVector(10, 0, 0), FVector(kGravity, 0, 0), 0.0, 60.0)
+                   .PitchDeg,
+               0.0, 1e-9));
+  TestTrue(
+      TEXT("an aircraft banks into a turn"),
+      FMath::IsNearlyEqual(
+          AircraftAttitudeFromMotion(FVector(10, 0, 0), FVector(0, kGravity, 0), 0.0, 60.0).RollDeg,
+          45.0, 1e-6));
+  TestTrue(
+      TEXT("and the pitch is limited"),
+      FMath::IsNearlyEqual(
+          AircraftAttitudeFromMotion(FVector(1, 0, 10), FVector::ZeroVector, 0.0, 30.0).PitchDeg,
+          30.0, 1e-9));
+
   // No acceleration, no lean. Forward acceleration of one g tips the nose down 45 degrees; right
   // acceleration of one g rolls right 45 degrees; the lean is limited.
   const FDroneAttitude Level = AttitudeFromMotion(FVector(5, 0, 0), FVector::ZeroVector, 0.0, 30.0);

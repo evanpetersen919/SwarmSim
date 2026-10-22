@@ -22,6 +22,16 @@ FDroneAttitude AttitudeFromMotion(const FVector& VelocityUe, const FVector& Acce
   return Out;
 }
 
+FDroneAttitude AircraftAttitudeFromMotion(const FVector& VelocityUe, const FVector& AccelerationUe,
+                                          double PreviousYawDeg, double MaxTiltDeg) {
+  FDroneAttitude Out = AttitudeFromMotion(VelocityUe, AccelerationUe, PreviousYawDeg, MaxTiltDeg);
+  const double Horizontal = FMath::Sqrt(VelocityUe.X * VelocityUe.X + VelocityUe.Y * VelocityUe.Y);
+  const double Limit = FMath::Max(MaxTiltDeg, 0.0);
+  Out.PitchDeg =
+      FMath::Clamp(FMath::RadiansToDegrees(FMath::Atan2(VelocityUe.Z, Horizontal)), -Limit, Limit);
+  return Out;
+}
+
 double SmoothAngleDeg(double Current, double Target, double DeltaSeconds, double TimeConstant) {
   if (!(TimeConstant > 0.0) || !(DeltaSeconds > 0.0)) {
     return Target;

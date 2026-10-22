@@ -166,6 +166,10 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
     bool bAlive = true;
   };
 
+  // Whether the drone model is an aircraft, which is tilted by its flight path and not by its
+  // acceleration. True when a folder model is drawn.
+  bool bAircraftAttitude = false;
+
   void BuildDrones(int32 Count);
   void DestroyDrones();
   void ApplyFrame(double DeltaSeconds, bool bFirst);

@@ -35,7 +35,7 @@ constexpr double kAccelerationWindowTicks = 5.0;
 // Time constant of the display attitude's smoothing, in seconds.
 constexpr double kAttitudeSmoothing = 0.2;
 // The propeller of a folder model turns this many degrees per meter per second of airspeed.
-constexpr double kPropellerDegPerMps = 60.0;
+constexpr double kPropellerDegPerMps = 140.0;
 // Mesh-name prefixes of the ALTIUS model's propeller: two blades and their two hubs. The glTF
 // gives its nodes generic names; these were found from the world-space bounds of each mesh.
 const TCHAR* const kPropellerParts[] = {TEXT("C-Ext001"), TEXT("C-Ext002"), TEXT("Cylinder015"),
@@ -213,6 +213,7 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
   const FRotator ModelTurn = kModelTurn();
   const FVector ModelOffset = ModelTurn.RotateVector(-ModelBox.GetCenter() * ModelScale);
 
+  bAircraftAttitude = !ModelMeshes.IsEmpty();
   Drones.SetNum(Count);
   for (int32 I = 0; I < Count; ++I) {
     FDrone& Drone = Drones[I];
@@ -443,7 +444,9 @@ void ASwarmPlayback::ApplyFrame(double DeltaSeconds, bool bFirst) {
                              (A.velocity[2] - B.velocity[2]) / Window);
     }
     const SwarmSim::FDroneAttitude Target =
-        SwarmSim::AttitudeFromMotion(Velocity, Acceleration, Drone.YawDeg, MaxTiltDeg);
+        bAircraftAttitude
+            ? SwarmSim::AircraftAttitudeFromMotion(Velocity, Acceleration, Drone.YawDeg, MaxTiltDeg)
+            : SwarmSim::AttitudeFromMotion(Velocity, Acceleration, Drone.YawDeg, MaxTiltDeg);
     if (bFirst) {
       Drone.YawDeg = Target.YawDeg;
       Drone.PitchDeg = Target.PitchDeg;
