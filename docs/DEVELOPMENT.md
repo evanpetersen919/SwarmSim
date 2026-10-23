@@ -101,6 +101,14 @@ UnrealEditor.exe PROJECT.uproject /Game/Levels/MAP -game -windowed -EnablePlugin
 
 Add `-SwarmShotDir=DIR -SwarmShotDelay=30 -SwarmShotCount=2` to save renders of the game and quit. The options are listed in `docs/MODELS.md`, under the Unreal viewer: playback.
 
+The aircraft model of the viewer is not in the repository. It is "Anduril ALTIUS 700M" by KillCaptureDestroy (CC-BY-4.0, https://sketchfab.com/3d-models/anduril-altius-700m-4e7fe35b0279418d85af34d33faa9db5), and its credit line is in the README. Unreal's glTF import composes the model's nested non-uniform node scales wrongly: the tail surfaces came out 4.3 and 4.55 times too large and the propeller blades 1.2 to 1.5 times too long. Bake the transforms into the vertices before importing. Download the glTF into a folder, then:
+
+```
+python scripts/bake_gltf_transforms.py DOWNLOADED_FOLDER BAKED_FOLDER
+```
+
+Import `BAKED_FOLDER/scene.gltf` into a content folder of the level's project, for example with the editor's Python (`unreal.AssetImportTask` with `destination_path="/Game/AltiusFixed"`, `automated=True`), and start the game with `-SwarmDroneModel=/Game/AltiusFixed`. To check the import, print each static mesh's `get_bounds()` and compare it with the sizes in the glTF, with x as x, glTF z as Unreal y, glTF y as Unreal z, and 100 Unreal units per glTF unit. The viewer picks the propeller by mesh name (see `SwarmPlayback.cpp`), so the names must be kept, as the script does.
+
 To write the scene file of a level for a scenario, run the game with the export options and the same anchor the playback will use:
 
 ```
