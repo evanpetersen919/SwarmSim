@@ -62,6 +62,11 @@ struct AvoidParams {
   // the rule may use and the aircraft slows, instead of the turn proportional to the angle. Zero
   // means off, which is the behavior of ADR 0015.
   double urgent_s = 0.0;
+
+  // ADR 0018. While avoiding, the braking is limited so that the braking, the sideways, and the
+  // vertical commands together stay within the brain's acceleration limit, with the sideways and
+  // the vertical first. Off is the behavior of ADR 0017. The brain applies it.
+  bool turn_first = false;
 };
 
 // Throws std::invalid_argument unless the horizon, hold, and turn time are finite and positive, the

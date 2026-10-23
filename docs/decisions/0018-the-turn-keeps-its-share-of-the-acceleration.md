@@ -1,6 +1,6 @@
 # 0018. The turn keeps its share of the acceleration limit while slowing
 
-Date: 2026-10-23. Status: proposed.
+Date: 2026-10-23. Status: accepted.
 
 ## Context
 

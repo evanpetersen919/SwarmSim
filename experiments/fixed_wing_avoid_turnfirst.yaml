@@ -1,0 +1,39 @@
+# The turn-first experiment (ADR 0018): does keeping the turn's share of the acceleration limit while
+# slowing keep more aircraft off the ground, and what does it cost? 2 weather levels x 3 steepness
+# levels x 2 maps x 3 arms = 36 cells. Run with 30 seeds, 1,080 runs, on base_fixed_wing_avoid.yaml.
+# Compare arms with `paired_difference` on the arm axis, within each weather, steepness, and map
+# level.
+#
+# The criteria V1 to V5 were written in ADR 0018 before this file was run. They apply to the arm
+# turnfirst against all3; turnfirst_urgent6 is compared with turnfirst and is not part of the
+# criteria.
+#
+# weather:   clear air, and fog of 375 m visibility.
+# amplitude: hills of 40 (a gentle control), 400, and 480 m.
+# map:       none (no terrain guidance; the aircraft fly at 100 m and only a sensor can react), and
+#            exact (terrain guidance from an exact map, where every trigger is a false alarm).
+# arm:       all3 (avoidance with the three changes of ADR 0015); turnfirst (the same with
+#            turn_first); turnfirst_urgent6 (turn_first and urgent_s of 6 s).
+version: 1
+name: fixed_wing_avoid_turnfirst
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+  - name: arm
+    levels:
+      - {label: all3, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: turnfirst, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}
+      - {label: turnfirst_urgent6, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, urgent_s: 6}}}}

@@ -300,6 +300,25 @@ double turn_command(double urgent_s) {
 
 }  // namespace
 
+TEST(AvoidBrain, TurnFirstKeepsTheTurnWhenBrakingWouldTakeTheAccelerationLimit) {
+  const auto sideways = [](bool turn_first) {
+    BrainConfig c = avoiding_brain(true);
+    c.avoid.urgent_s = 12.0;  // the whole bank, and slowing
+    c.avoid.turn_first = turn_first;
+    c.orbit.max_accel = 6.5;  // the bank is 6.17, so braking at the same time would scale it down
+    DroneBrain brain(c);
+    const ForwardSample none;
+    for (std::uint64_t t = 0; t < 5; ++t) {
+      command(brain, t, none);
+    }
+    return command(brain, 5, blocked_center()).x;
+  };
+  const double squeezed = sideways(false);
+  const double kept = sideways(true);
+  EXPECT_GT(kept, squeezed + 0.3);
+  EXPECT_LE(kept, 6.5 + 1e-9);
+}
+
 TEST(AvoidBrain, LittleTimeUsesTheWholeBankAndMoreTimeLeavesTheTurnAlone) {
   const double proportional = turn_command(0.0);
   // The threat is 150 m / 16.7 m/s = 9 s away: not urgent at 5 s, urgent at 12 s.
@@ -621,9 +640,10 @@ TEST(AvoidBrain, OnItsCircleTheRejoinTurnIsTowardTheCenterAndTheOldTieIsAwayFrom
 TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhenSet) {
   const std::string fw = "vehicle: {type: fixed_wing}\n";
   const std::string forward = "  forward: {period_ticks: 5}\n";
-  const swarm::LoadResult r = swarm::load_scenario(avoid_scenario(
-      3, fw, forward,
-      "  avoid: {rejoin: true, feasibility: kinematic, clearance_m: 30, urgent_s: 6}\n"));
+  const swarm::LoadResult r =
+      swarm::load_scenario(avoid_scenario(3, fw, forward,
+                                          "  avoid: {rejoin: true, feasibility: kinematic, "
+                                          "clearance_m: 30, urgent_s: 6, turn_first: true}\n"));
   ASSERT_TRUE(r.ok()) << first_error(r);
   EXPECT_DOUBLE_EQ(r.scenario.avoid.urgent_s, 6.0);
   EXPECT_TRUE(r.scenario.avoid.rejoin);
@@ -635,6 +655,8 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_NE(text.find("feasibility: kinematic"), std::string::npos);
   EXPECT_NE(text.find("clearance_m: 30"), std::string::npos);
   EXPECT_NE(text.find("urgent_s: 6"), std::string::npos);
+  EXPECT_NE(text.find("turn_first: true"), std::string::npos);
+  EXPECT_TRUE(r.scenario.avoid.turn_first);
   const swarm::LoadResult again = swarm::load_scenario(text);
   ASSERT_TRUE(again.ok()) << first_error(again);
   EXPECT_EQ(swarm::canonical_text(again.scenario), text);
@@ -651,6 +673,8 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_EQ(bare.scenario.avoid.feasibility, swarm::AvoidFeasibility::kBudget);
   EXPECT_FALSE(bare.scenario.avoid.clearance_m.has_value());
   EXPECT_DOUBLE_EQ(bare.scenario.avoid.urgent_s, 0.0);
+  EXPECT_FALSE(bare.scenario.avoid.turn_first);
+  EXPECT_EQ(swarm::canonical_text(bare.scenario).find("turn_first"), std::string::npos);
   EXPECT_EQ(swarm::canonical_text(bare.scenario).find("urgent_s"), std::string::npos);
 
   for (const char* bad : {"feasibility: fast", "clearance_m: -1", "rejoin: maybe"}) {

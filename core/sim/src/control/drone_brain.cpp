@@ -625,6 +625,13 @@ Vec3 DroneBrain::apply_avoidance(const Vec3& track, const PoseEstimate& pose, st
   }
   const double vertical =
       std::clamp(track.z, -params.max_vertical_accel, params.max_vertical_accel);
+  if (params.turn_first) {
+    // The turn and the climb take the acceleration limit first; the braking gets what is left, so
+    // that the limit applied to the whole command does not scale the turn down.
+    const double left = config_.orbit.max_accel * config_.orbit.max_accel - sideways * sideways -
+                        vertical * vertical;
+    along = std::max(along, -std::sqrt(std::max(0.0, left)));
+  }
   return Vec3{hx * along - hy * sideways, hy * along + hx * sideways, vertical};
 }
 

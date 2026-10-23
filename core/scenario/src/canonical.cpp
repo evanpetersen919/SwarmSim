@@ -393,6 +393,9 @@ std::string canonical_text(const Scenario& s) {
       if (av.urgent_s > 0.0) {
         line("    urgent_s: " + num(av.urgent_s));
       }
+      if (av.turn_first) {
+        line("    turn_first: true");
+      }
     }
     if (s.share.mode != ShareMode::kOff) {
       const ShareParams& sh = s.share;
