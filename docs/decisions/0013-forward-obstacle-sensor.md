@@ -1,6 +1,6 @@
 # 0013. A forward obstacle sensor for the fixed-wing aircraft, and a prior map that can be wrong
 
-Date: 2026-10-23. Status: proposed.
+Date: 2026-10-23. Status: accepted.
 
 ## Context
 
@@ -24,22 +24,38 @@ Two things are missing for a sensor like this to be worth building: the sensor i
 4. **Output type** `ForwardSample` in `swarm/sensor_data.hpp`: whether a reading is available, and for each ray its unit direction in the world frame, the measured range or no-return, and the standard deviation. That header stays the only place sensor output can live and still be visible to controllers; estimators and controllers never see the scene.
 5. **Noise and dropout** come from a new Rng stream (`kStreamForwardBase + drone id`) with a fixed number of draws per ray, whether or not the ray hits anything, as the LiDAR and altimeter do, so results do not depend on scene contents or thread scheduling.
 6. **Use by the controller, first step.** The brain keeps the map as the plan and the altimeter as the floor on the present. The forward sensor adds a second floor on the present: each return gives a measured hit point; if a hit lies within `lookahead` of the aircraft and its height is above the aircraft's altitude less the clearance, the altitude command is raised to the hit height plus the clearance, never lowered. The existing altitude control and climb limit set how fast. This is vertical avoidance only, the same limit as before, now driven by a measurement and so correct where the map is wrong. Turning or slowing for terrain is not in this decision (see below).
-7. **A prior map with errors.** Terrain guidance gains optional map faults under `terrain`: an `offset_m` added to every height of the map and a list of `omit` rectangles in which the map shows no obstacle and the terrain flat at its edge height. Both are written to the canonical text only when used. Without them the map is exact, as now. This is the test bed: without a wrong map the altimeter and the forward sensor have nothing to correct.
+7. **A prior map with errors, in three kinds.** Terrain guidance gains optional map faults under `terrain`, each written to the canonical text only when used. Without them the map is exact, as now. This is the test bed: without a wrong map the altimeter and the forward sensor have nothing to correct.
+   - `offset_m`: a constant added to every height of the map (a datum or survey bias).
+   - `error_sigma_m` with `error_correlation_m`: a smooth random error with that standard deviation and correlation length (survey noise and interpolation error). It is drawn from a new Rng stream with a fixed number of draws per grid node, so it does not depend on the scene or thread scheduling.
+   - `omit`: a list of rectangles in which the map shows no obstacle and the terrain flat at its edge height (something built or grown since the survey).
+
+   One kind of error at one size would say little, because the value of a sensor depends on how wrong the map is. The pilot sweeps each kind over several sizes (see below).
 8. **Scenario and log.** New keys are written to the canonical text only when used, in the same scenario version as the altimeter, so earlier scenarios and logs are unchanged. The binary log format does not change in this step: the sensor affects the run only through the aircraft's motion, as the camera fix does. Consequence: detections cannot be counted from the log. Metrics that matter here (`min_agl_m`, `ground_contacts`, crashes) come from the logged state and the scene as before. If detection statistics are wanted later, that is a log version bump and its own decision.
 9. **Estimator rule.** The sensor is not fused into the pose estimator. Any later filter lives under `core/sim/**/estimation/` and sees only `ForwardSample`.
 
 ## How it will be judged
 
-A pilot before anything is called a benefit, paired by seed on the dense fixed-wing scenario: forward sensor off and on, map exact and map wrong (an `offset_m` of -30 m, and an `omit` rectangle over the ridge the aircraft flies at), clear air and fog at a visibility that shortens the sensor's range. Measured: `min_agl_m`, `ground_contacts`, crashes, time below the clearance. Report paired differences with intervals, including a null result. The altimeter is run alone and together with the forward sensor, since the altimeter's own value was undecided. The offset and rectangle are chosen before the run and not tuned afterward.
+An experiment before anything is called a benefit, on the dense fixed-wing scenario, 30 seeds per cell as in the quadrotor benchmark, paired by seed, with the experiment file written and its levels fixed before the first run.
+
+- **Sensor arms:** none, altimeter only, forward sensor only, both. The altimeter's own value was undecided, so it is measured here too.
+- **Map error, as a dose response:** an exact map as the control; `offset_m` at three sizes, from smaller than the clearance to larger than it; `error_sigma_m` at three sizes with one correlation length; one `omit` rectangle over the ridge the aircraft crosses. The sizes are chosen so that the exact-map and the largest-error cells bracket the range from no contact to certain contact for the sensor-free aircraft, found with a short probe that is not part of the reported results.
+- **Weather:** clear air, and a fog visibility that shortens the forward sensor's range to about half.
+- **Safety measures:** `min_agl_m`, `ground_contacts`, crashes, time below the clearance.
+- **Cost measures.** A sensor that always climbs is safe and useless, so the cost of the safety is measured next to it: `orbit_altitude_rmse_m` and `time_on_station` (existing), and a new `mean_agl_m`, the mean height above the surface over all aircraft and records, computed from the log and the scene like `min_agl_m`.
+- **The exact-map control** shows whether the sensors do harm when the map is right.
+- **A sensitivity sweep** of the forward sensor's assumed range and dropout probability, since both are assumptions, so a result is reported as holding or not holding across them.
+
+Report paired differences with 95 percent intervals, including null results, and say which cells the sensor cannot save (ground that rises faster than the aircraft can climb), because that is what decides whether turning or slowing is the next decision.
 
 ## Not in scope
 
-Imagery, target detection or classification, a gimbal, tracking, any claim about the real aircraft's payload or range, turning or slowing down for terrain (a separate decision once a forward sensor exists), cooperative sensing between aircraft, a forward sensor for the quadrotor (it has the LiDAR), and viewer drawing of the field of view. A drone's-eye picture in the viewer was tried with a scene capture and dropped (the level's terrain did not render in a second capture); it is a presentation matter and unrelated to this sensor.
+Imagery, target detection or classification, a gimbal, tracking, any claim about the real aircraft's payload or range, turning or slowing down for terrain (a separate decision once a forward sensor exists), cooperative sensing between aircraft, a forward sensor for the quadrotor (it has the LiDAR, and the experiment compares aircraft only), and viewer drawing of the field of view. A drone's-eye picture in the viewer was tried with a scene capture and dropped (the level's terrain did not render in a second capture); it is a presentation matter and unrelated to this sensor.
 
 ## Consequences
 
 - Runs with `sensors.forward` are not comparable with runs without it. Runs without the section are unchanged, and the new scenario keys do not change any existing canonical text or golden.
-- Cost per reading is tens of ray casts at `period_ticks`. A 30-seed fixed-wing benchmark, not yet run, will show what that does to batch time.
+- Cost per reading is tens of ray casts at `period_ticks`. The 30-seed experiment above will show what that does to batch time.
+- The new `mean_agl_m` metric adds a column to the metrics CSV, which changes the column count that some tests check. Runs and logs are unchanged; only the table gains a column.
 - Vertical-only avoidance remains the limit: ground that rises faster than the aircraft can climb still ends in contact. The pilot will show how often, and that result decides whether a turn or speed change is the next decision.
 - Terrain guidance gets a third input and a way to be wrong, so its tests must cover an offset map, an omitted rectangle, a dropout, a return at the edge of the range, and fog that removes the sensor.
 - Everything about the sensor's accuracy, range, and field of view is a modeling choice. The results say what such a sensor would do in this simulator, not what the real aircraft's payload does.
