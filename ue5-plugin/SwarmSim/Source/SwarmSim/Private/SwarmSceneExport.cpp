@@ -57,6 +57,30 @@ bool GroundHeightCm(UWorld* World, const FExportOptions& Options, const FVector2
   return false;
 }
 
+// The highest thing a trace straight down meets at a point, and its name.
+bool TopSurfaceCm(UWorld* World, const FVector2D& PointCm, double& OutZ, FString& OutName) {
+  FCollisionQueryParams Params(SCENE_QUERY_STAT(SwarmAudit), /*bTraceComplex=*/true);
+  FHitResult Hit;
+  const FVector Start(PointCm.X, PointCm.Y, kTraceHalfLengthCm);
+  const FVector End(PointCm.X, PointCm.Y, -kTraceHalfLengthCm);
+  if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params)) {
+    return false;
+  }
+  OutZ = Hit.ImpactPoint.Z;
+  if (Cast<ULandscapeHeightfieldCollisionComponent>(Hit.GetComponent()) != nullptr ||
+      Cast<ALandscapeProxy>(Hit.GetActor()) != nullptr) {
+    OutName = TEXT("Landscape");
+  } else if (const UStaticMeshComponent* Component = Cast<UStaticMeshComponent>(Hit.GetComponent());
+             Component != nullptr && Component->GetStaticMesh() != nullptr) {
+    OutName = Component->GetStaticMesh()->GetName();
+  } else if (Hit.GetComponent() != nullptr) {
+    OutName = Hit.GetComponent()->GetName();
+  } else {
+    OutName = TEXT("unknown");
+  }
+  return true;
+}
+
 struct FSurveyEntry {
   int32 Count = 0;
   EObstacleClass Class = EObstacleClass::None;
@@ -69,6 +93,50 @@ void FGroundSamples::Reset(int32 InCells) {
   HeightsM.Init(0.0, N * N);
   Known.Init(false, N * N);
   RowsDone = 0;
+}
+
+void FTopSamples::Reset(int32 InCells) {
+  Cells = InCells;
+  const int32 N = Samples();
+  HeightsM.Init(0.0, N * N);
+  Known.Init(false, N * N);
+  Names.Init(FString(), N * N);
+  RowsDone = 0;
+}
+
+void SampleTopRows(UWorld* World, const FExportOptions& Options, int32 RowCount,
+                   FTopSamples& Samples) {
+  const int32 N = Samples.Samples();
+  const int32 Last = FMath::Min(Samples.RowsDone + RowCount, N);
+  for (int32 J = Samples.RowsDone; J < Last; ++J) {
+    for (int32 I = 0; I < N; ++I) {
+      double Z = 0.0;
+      FString Name;
+      if (TopSurfaceCm(World, GridPointCm(Options, Samples.Cells, I, J), Z, Name)) {
+        Samples.HeightsM[J * N + I] = Z / MetersToCentimeters;
+        Samples.Known[J * N + I] = true;
+        Samples.Names[J * N + I] = Name;
+      }
+    }
+  }
+  Samples.RowsDone = Last;
+}
+
+FString TopSamplesToCsv(const FExportOptions& Options, const FTopSamples& Samples) {
+  const int32 N = Samples.Samples();
+  FString Out = TEXT("x_m,y_m,top_m,name\n");
+  for (int32 J = 0; J < N; ++J) {
+    for (int32 I = 0; I < N; ++I) {
+      if (!Samples.Known[J * N + I]) {
+        continue;
+      }
+      const double X = -0.5 * Samples.Cells * Options.CellM + I * Options.CellM;
+      const double Y = -0.5 * Samples.Cells * Options.CellM + J * Options.CellM;
+      Out += FString::Printf(TEXT("%.2f,%.2f,%.3f,%s\n"), X, Y, Samples.HeightsM[J * N + I],
+                             *Samples.Names[J * N + I]);
+    }
+  }
+  return Out;
 }
 
 void SampleGroundRows(UWorld* World, const FExportOptions& Options, int32 RowCount,

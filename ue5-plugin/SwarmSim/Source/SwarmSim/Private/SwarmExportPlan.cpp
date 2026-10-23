@@ -30,6 +30,7 @@ bool NameMatchesAny(const FString& Name, const TArray<FString>& Patterns) {
 FExportOptions ParseExportOptions(const TCHAR* CommandLine) {
   FExportOptions Options;
   FParse::Value(CommandLine, TEXT("SwarmExportScene="), Options.OutPath);
+  FParse::Value(CommandLine, TEXT("SwarmAuditScene="), Options.AuditPath);
 
   FString Text;
   if (FParse::Value(CommandLine, TEXT("SwarmAnchor="), Text, /*bShouldStopOnSeparator=*/false)) {

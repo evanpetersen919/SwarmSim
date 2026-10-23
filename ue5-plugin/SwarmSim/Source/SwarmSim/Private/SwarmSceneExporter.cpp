@@ -14,13 +14,14 @@ ASwarmSceneExporter::ASwarmSceneExporter() { PrimaryActorTick.bCanEverTick = tru
 
 bool ASwarmSceneExporter::Configure(const FString& CommandLine, FString& OutError) {
   Ground = MakeShared<SwarmSim::FGroundSamples>();
+  Top = MakeShared<SwarmSim::FTopSamples>();
   Options = MakeShared<SwarmSim::FExportOptions>(SwarmSim::ParseExportOptions(*CommandLine));
   if (!Options->bValid) {
     OutError = Options->Problem;
     return false;
   }
-  if (Options->OutPath.IsEmpty()) {
-    OutError = TEXT("-SwarmExportScene needs a file path");
+  if (Options->OutPath.IsEmpty() && Options->AuditPath.IsEmpty()) {
+    OutError = TEXT("-SwarmExportScene or -SwarmAuditScene needs a file path");
     return false;
   }
   return true;
@@ -53,6 +54,26 @@ void ASwarmSceneExporter::Tick(float DeltaSeconds) {
   if (Clock < Options->WaitSeconds) {
     return;
   }
+  if (!Options->AuditPath.IsEmpty()) {
+    if (!Top->Complete() || Top->HeightsM.IsEmpty()) {
+      if (Top->HeightsM.IsEmpty()) {
+        Top->Reset(SwarmSim::CellsFor(Options->SizeM, Options->CellM));
+        UE_LOG(LogSwarmSim, Display, TEXT("audit: sampling %d x %d top surfaces"), Top->Samples(),
+               Top->Samples());
+      }
+      SwarmSim::SampleTopRows(GetWorld(), *Options, 10, *Top);
+      if (Top->RowsDone % 20 == 0 || Top->Complete()) {
+        UE_LOG(LogSwarmSim, Display, TEXT("audit: %d of %d rows"), Top->RowsDone, Top->Samples());
+      }
+      if (!Top->Complete()) {
+        return;
+      }
+    }
+    bDone = true;
+    WriteAudit();
+    FPlatformMisc::RequestExit(false);
+    return;
+  }
   // The ground is sampled a few rows a frame, so the game keeps running and the log shows how far
   // it has got; a whole level's area in one frame can take minutes.
   if (!Ground->Complete()) {
@@ -71,6 +92,20 @@ void ASwarmSceneExporter::Tick(float DeltaSeconds) {
   bDone = true;
   Export();
   FPlatformMisc::RequestExit(false);
+}
+
+void ASwarmSceneExporter::WriteAudit() {
+  const FString Csv = SwarmSim::TopSamplesToCsv(*Options, *Top);
+  if (!FFileHelper::SaveStringToFile(Csv, *Options->AuditPath)) {
+    UE_LOG(LogSwarmSim, Error, TEXT("cannot write %s"), *Options->AuditPath);
+    return;
+  }
+  int32 Known = 0;
+  for (bool B : Top->Known) {
+    Known += B ? 1 : 0;
+  }
+  UE_LOG(LogSwarmSim, Display, TEXT("Wrote the audit to %s: %d of %d samples have a surface"),
+         *Options->AuditPath, Known, Top->Known.Num());
 }
 
 void ASwarmSceneExporter::Export() {

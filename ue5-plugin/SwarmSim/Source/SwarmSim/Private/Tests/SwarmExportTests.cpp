@@ -33,6 +33,10 @@ bool FSwarmExportPlanTest::RunTest(const FString& Parameters) {
            "-SwarmExportMinTree=5 -SwarmExportWait=10"));
   TestTrue(TEXT("the options are valid"), Parsed.bValid);
   TestEqual(TEXT("path"), Parsed.OutPath, FString(TEXT("C:/x/a.swscene")));
+  TestTrue(TEXT("no audit by default"), Parsed.AuditPath.IsEmpty());
+  TestEqual(TEXT("audit path"),
+            ParseExportOptions(TEXT("-SwarmAuditScene=C:/x/audit.csv -SwarmAnchor=1,2")).AuditPath,
+            FString(TEXT("C:/x/audit.csv")));
   TestEqual(TEXT("anchor x"), Parsed.AnchorCm.X, 81187.0);
   TestEqual(TEXT("anchor y"), Parsed.AnchorCm.Y, -14778.0);
   TestEqual(TEXT("size"), Parsed.SizeM, 600.0);

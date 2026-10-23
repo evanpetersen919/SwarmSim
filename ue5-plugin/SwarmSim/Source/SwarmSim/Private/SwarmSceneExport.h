@@ -33,6 +33,29 @@ struct FGroundSamples {
   bool Complete() const { return RowsDone >= Samples(); }
 };
 
+// The top surface of the level at each sample of the grid, found by one trace straight down from
+// far above: the highest thing an aircraft over that point would meet, tree, rock, or ground. The
+// audit of an export compares it with the scene the simulation runs on.
+struct FTopSamples {
+  int32 Cells = 0;
+  TArray<double> HeightsM;
+  TArray<bool> Known;
+  TArray<FString> Names;  // the static mesh (or component) that was hit
+  int32 RowsDone = 0;
+
+  void Reset(int32 InCells);
+  int32 Samples() const { return Cells + 1; }
+  bool Complete() const { return RowsDone >= Samples(); }
+};
+
+// Samples the next `RowCount` rows of the top surface (fewer at the end).
+void SampleTopRows(UWorld* World, const FExportOptions& Options, int32 RowCount,
+                   FTopSamples& Samples);
+
+// The audit as CSV text: a header, then one line per sample with x and y in the simulation's
+// frame in meters, the top height in meters, and the name. Samples with no hit are left out.
+FString TopSamplesToCsv(const FExportOptions& Options, const FTopSamples& Samples);
+
 // Samples the next `RowCount` rows (fewer at the end). The ground is found by tracing straight
 // down at each sample and keeping the Landscape's surface, so trees and rocks above it do not
 // count as ground.

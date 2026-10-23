@@ -13,6 +13,9 @@
 //
 // Command line options (the anchor is the viewer's -SwarmAnchor):
 //   -SwarmExportScene=PATH   write the scene file here and quit
+//   -SwarmAuditScene=PATH    instead of a scene, write a CSV of the top surface of the level at
+//                            every grid point (what an aircraft would hit), and quit. Uses the
+//                            same size, cell, wait, and anchor, so its grid is the export's.
 //   -SwarmExportSize=M       side of the square, in meters (default 1000)
 //   -SwarmExportCell=M       distance between height samples, in meters (default 8)
 //   -SwarmExportWait=S       seconds to let the level stream in before sampling (default 45)
@@ -30,6 +33,7 @@
 namespace SwarmSim {
 struct FExportOptions {
   FString OutPath;
+  FString AuditPath;  // when set, the audit CSV is written instead of a scene
   FVector2D AnchorCm = FVector2D::ZeroVector;
   double SizeM = 1000.0;
   double CellM = 8.0;

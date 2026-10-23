@@ -7,6 +7,7 @@
 namespace SwarmSim {
 struct FExportOptions;
 struct FGroundSamples;
+struct FTopSamples;
 }  // namespace SwarmSim
 
 // Writes the scene file of the level it is in, then quits the game.
@@ -30,9 +31,11 @@ class SWARMSIM_API ASwarmSceneExporter : public AActor {
  private:
   void MovePlayerToAnchor() const;
   void Export();
+  void WriteAudit();
 
   TSharedPtr<SwarmSim::FExportOptions> Options;
   TSharedPtr<SwarmSim::FGroundSamples> Ground;
+  TSharedPtr<SwarmSim::FTopSamples> Top;
   double Clock = 0.0;
   double MoveClock = 0.0;
   bool bDone = false;

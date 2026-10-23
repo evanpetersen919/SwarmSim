@@ -16,12 +16,14 @@ bool USwarmPlaybackSubsystem::ShouldCreateSubsystem(UObject* Outer) const {
   }
   return FParse::Param(FCommandLine::Get(), TEXT("SwarmLog")) ||
          !SwarmSim::ParseLaunchOptions(FCommandLine::Get()).LogPath.IsEmpty() ||
-         !SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty();
+         !SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty() ||
+         !SwarmSim::ParseExportOptions(FCommandLine::Get()).AuditPath.IsEmpty();
 }
 
 void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
   Super::OnWorldBeginPlay(InWorld);
-  if (!SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty()) {
+  if (!SwarmSim::ParseExportOptions(FCommandLine::Get()).OutPath.IsEmpty() ||
+      !SwarmSim::ParseExportOptions(FCommandLine::Get()).AuditPath.IsEmpty()) {
     ASwarmSceneExporter* Exporter = InWorld.SpawnActor<ASwarmSceneExporter>();
     FString ExportError;
     if (Exporter == nullptr || !Exporter->Configure(FCommandLine::Get(), ExportError)) {
