@@ -101,7 +101,7 @@ bool environment_used(const Scenario& s) { return wind_used(s) || s.ground_conta
 
 std::uint64_t scenario_version(const Scenario& s) {
   if (s.vehicle.dynamics == FixedWingDynamics::kEnergy || environment_used(s) ||
-      s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit) {
+      s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit || s.altimeter_used) {
     return kScenarioFlightVersion;
   }
   return s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion;
@@ -223,6 +223,15 @@ std::string canonical_text(const Scenario& s) {
     line("    min_transmission: " + num(f.min_transmission));
     line("    max_sigma_m: " + num(f.max_sigma_m));
     line("    dropout_probability: " + num(f.dropout_probability));
+    if (s.altimeter_used) {
+      const RadarAltimeterConfig& a = s.altimeter;
+      line("  radar_altimeter:");
+      line("    sigma_floor_m: " + num(a.sigma_floor_m));
+      line("    sigma_per_m: " + num(a.sigma_per_m));
+      line("    max_range_m: " + num(a.max_range_m));
+      line("    dropout_probability: " + num(a.dropout_probability));
+      line("    period_ticks: " + uint(a.period_ticks));
+    }
   } else {
     line("  lidar:");
     line("    beams: " + uint(s.lidar_beams));

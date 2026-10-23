@@ -717,7 +717,36 @@ void read_camera(Section& sensors, Scenario& s) {
   c.finish();
 }
 
-void read_sensors(Section& root, Scenario& s) {
+// `sensors.radar_altimeter` (version 3): a nadir height sensor on a fixed-wing vehicle.
+void read_altimeter(Section& sensors, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = sensors.find("radar_altimeter");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    sensors.ctx().add("sensors.radar_altimeter", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    sensors.ctx().add("sensors.radar_altimeter", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section a(sensors.ctx(), node, "sensors.radar_altimeter");
+  if (!a.valid()) {
+    return;
+  }
+  s.altimeter_used = true;
+  RadarAltimeterConfig& c = s.altimeter;
+  read_double(a, "sigma_floor_m", c.sigma_floor_m, greater_than(0.0));
+  read_double(a, "sigma_per_m", c.sigma_per_m, greater_than(0.0));
+  read_double(a, "max_range_m", c.max_range_m, greater_than(0.0));
+  read_double(a, "dropout_probability", c.dropout_probability, Bounds{0.0, 1.0, false, true});
+  read_u32(a, "period_ticks", c.period_ticks, 1, 1000000);
+  a.finish();
+}
+
+void read_sensors(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("sensors");
   if (!node.IsDefined()) {
     return;
@@ -738,6 +767,7 @@ void read_sensors(Section& root, Scenario& s) {
     }
   }
   read_camera(sec, s);
+  read_altimeter(sec, s, version);
   read_uint(sec, "fix_period_ticks", s.fix_period_ticks, 1, 1000000);
   sec.finish();
 }
@@ -1311,7 +1341,7 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   }
   read_environment(root, s, version);
   read_weather(root, s);
-  read_sensors(root, s);
+  read_sensors(root, s, version);
   read_comms(root, s, clock);
   read_control(root, s, version);
   read_faults(root, s, clock);

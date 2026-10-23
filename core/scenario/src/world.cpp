@@ -224,6 +224,10 @@ ScenarioWorld build_world(const Scenario& s) {
       c.brain.pattern = s.pattern;
     }
     c.camera = s.camera;
+    if (s.altimeter_used && s.vehicle.kind == VehicleKind::kFixedWing) {
+      c.altimeter = s.altimeter;
+      c.brain.use_altimeter = true;
+    }
     c.fixed_wing = s.vehicle.fixed_wing;
     c.crash_on_ground = s.ground_contact_crashes;
     if (s.terrain_guidance.enabled && s.vehicle.kind == VehicleKind::kFixedWing) {

@@ -88,6 +88,10 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   if (input.fix.available) {
     last_fix_tick_ = tick;
   }
+  if (input.altimeter.available) {
+    altimeter_ = input.altimeter;
+    altimeter_tick_ = tick;
+  }
   const PoseEstimate pose = pose_.estimate();
   const double own_sigma = max_axis(pose.position_sigma);
 
@@ -267,6 +271,19 @@ double DroneBrain::terrain_floor_for(const PoseEstimate& pose, double cx, double
   return terrain_floor_over(pose, circle_path(pose.position, cx, cy, radius, params), off, radius);
 }
 
+double DroneBrain::altimeter_floor(const PoseEstimate& pose, std::uint64_t tick) const {
+  if (!config_.use_altimeter || !altimeter_.available ||
+      tick - altimeter_tick_ > config_.altimeter_valid_ticks) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  const double measured = altimeter_.height - config_.altimeter_margin_sigmas * altimeter_.sigma;
+  const double shortfall = config_.terrain_guidance.clearance - measured;
+  if (!(shortfall > 0.0)) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  return pose.position.z + shortfall;
+}
+
 double DroneBrain::terrain_floor_over(const PoseEstimate& pose, std::vector<PathSample> path,
                                       double off, double scale) const {
   const TerrainGuidanceParams& params = config_.terrain_guidance;
@@ -299,7 +316,8 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
       hold_orbit_valid_ = true;
     }
     const double z_hold =
-        std::max(hold_z_, terrain_floor_for(pose, hold_center_.x, hold_center_.y, orbit.radius));
+        std::max({hold_z_, terrain_floor_for(pose, hold_center_.x, hold_center_.y, orbit.radius),
+                  altimeter_floor(pose, tick)});
     track = orbit_guidance(pose.position, pose.velocity, hold_center_, orbit.radius, orbit.speed,
                            z_hold, 0.0, orbit, 1.0);
     target_ = FormationTarget{};
@@ -318,7 +336,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                  0.0, 1.0) +
               slot_offset;
     }
-    const double z_ref = std::max(ref.position.z, floor);
+    const double z_ref = std::max({ref.position.z, floor, altimeter_floor(pose, tick)});
     track = formation_guidance(pose.position, pose.velocity, ref, z_ref, config_.pattern, orbit,
                                behavior.gain_scale);
     target_ = FormationTarget{};
@@ -339,7 +357,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                  path.radius()) +
               slot_offset;
     }
-    const double z_ref = std::max(ref.position.z, floor);
+    const double z_ref = std::max({ref.position.z, floor, altimeter_floor(pose, tick)});
     track = path_guidance(pose.position, pose.velocity, path, ref.speed, z_ref, phase_error,
                           config_.pattern, orbit, behavior.gain_scale);
     target_ = FormationTarget{};
@@ -362,8 +380,9 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     // bottom layer so the layers stay apart.
     const double slot_offset = ref.position.z - orbit.center.z;
     const double z_ref =
-        std::max(ref.position.z,
-                 terrain_floor_for(pose, orbit.center.x, orbit.center.y, ref.radius) + slot_offset);
+        std::max({ref.position.z,
+                  terrain_floor_for(pose, orbit.center.x, orbit.center.y, ref.radius) + slot_offset,
+                  altimeter_floor(pose, tick)});
     track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed, z_ref,
                            phase_error, orbit, behavior.gain_scale);
     target_ = FormationTarget{};

@@ -19,6 +19,7 @@ inline constexpr std::uint64_t kStreamAgentBase = 0x1000;
 inline constexpr std::uint64_t kStreamImuBase = 0x2000;
 inline constexpr std::uint64_t kStreamLidarBase = 0x3000;
 inline constexpr std::uint64_t kStreamFixBase = 0x4000;
+inline constexpr std::uint64_t kStreamAltimeterBase = 0x5000;
 inline constexpr std::uint32_t kMaxAgents = 4096;
 
 }  // namespace swarm

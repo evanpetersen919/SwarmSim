@@ -917,6 +917,20 @@ Camera position fix. A fixed-wing aircraft has no LiDAR in this model. Public re
 
 Limits. The failure is independent per fix, not correlated in time, so a long fog bank is not modeled as a persistent bad state. The camera points straight down. There is no latency and no motion blur. No source ties airborne feature matching to visibility in meters, so the transmission threshold is the part with the least support.
 
+Radar altimeter (ADR 0012, scenario version 3). A fixed-wing aircraft may carry a radar altimeter, set under `sensors.radar_altimeter`; without the section there is none. Public reports describe the ALTIUS payload only as an EO/IR camera and say nothing about a radar altimeter, so this sensor is a modeling choice and not a description of the aircraft. It measures straight down from the aircraft to the highest solid surface below it, the terrain or the top of an obstacle (`Scene::surface_height`), and reports the height h plus noise, or no reading. There is no reading when h is not above zero or is above `max_range_m`, or when a dropout draw hits. Otherwise sigma = max(sigma_floor_m, sigma_per_m * h) and the reading is h + sigma * N(0, 1). It is a radar, so weather does not affect it. Each call draws one normal and one uniform on its own stream, so a reading does not depend on earlier outcomes. A reading is attempted every `period_ticks`.
+
+| Parameter | Default | Basis |
+|---|---|---|
+| sigma_floor_m | 1 m | Assumed |
+| sigma_per_m | 0.01 | Assumed |
+| max_range_m | 1500 m | Assumed |
+| dropout_probability | 0.02 | Assumed |
+| period_ticks | 10 | Assumed |
+
+Use by the controller. The map floor stays the plan. With a recent reading (younger than `altimeter_valid_ticks`, 50 ticks) the brain also computes a floor on the present: if the measured height less two standard deviations is below `control.terrain.clearance_m` (default 60 m), the altitude command is raised by the shortfall, so the aircraft climbs toward the clearance it measures. It never lowers a command, and with no reading the plan alone applies. The altimeter is not fused into the pose estimator. The clearance is the terrain section's value whether or not terrain guidance is on, so an aircraft with an altimeter and no terrain section uses the default.
+
+Tests and what they show. The unit tests check the noise, the range and dropout rules, the draw order, and that a map which says the ground is flat is overridden by a measured 20 m height. `AltimeterFlight` flies four aircraft at 8 m over 100 m hills with no map: without the altimeter two are lost, and with it none. In scratch runs of the same scene (`swarm_sim run` and `metrics`), 60 m hills lost one aircraft without it and none with it, and 200 m hills lost four without it and three with it. Limit: the altimeter only reacts, at the climb rate of the aircraft, so terrain that rises faster than that is still hit. Turning or slowing down for terrain is not built.
+
 ## Fixed-wing orbit guidance
 
 Source: `core/sim/include/swarm/control/orbit.hpp`, `drone_brain.hpp` (`Guidance::kOrbit`). Status: unit and integration tested; scenario version 2 (ADR 0010). A drone's guidance is `kOrbit` when its vehicle is fixed-wing; the formation guidance of a quad is unchanged and every earlier log is byte-identical.

@@ -94,6 +94,14 @@ struct BrainConfig {
   // map is shared and immutable; it is prior map data, not a sensor.
   std::shared_ptr<const TerrainMap> terrain;
   TerrainGuidanceParams terrain_guidance;
+  // The altimeter as a floor on the present (ADR 0012). When set, an altitude command is raised
+  // whenever the measured height above the surface, less `altimeter_margin_sigmas` standard
+  // deviations of the reading, is below `terrain_guidance.clearance`: by the shortfall, so the
+  // aircraft climbs to the clearance it measures. It never lowers a command, whatever the map says.
+  // A reading older than `altimeter_valid_ticks` is not used.
+  bool use_altimeter = false;
+  double altimeter_margin_sigmas = 2.0;
+  std::uint64_t altimeter_valid_ticks = 50;
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.
@@ -111,6 +119,8 @@ struct InboundReport {
 struct BrainInput {
   ImuSample imu;
   PositionFix fix;
+  // A radar altimeter reading, present on the ticks the sensor made one (ADR 0012).
+  AltimeterSample altimeter;
   std::vector<InboundReport> inbox;
   // Neighbor estimates supplied from outside, indexed by drone id (the entry for this drone is
   // ignored). When present they replace the predictors, every neighbor counts as fresh, and the
@@ -189,6 +199,9 @@ class DroneBrain {
   // The lowest altitude that clears the terrain on the way around the circle at (cx, cy), or
   // -infinity when terrain guidance is off.
   double terrain_floor_for(const PoseEstimate& pose, double cx, double cy, double radius) const;
+  // The altitude the radar altimeter's latest reading says is needed now, or -infinity when the
+  // altimeter is not in use, has no recent reading, or measures enough clearance.
+  double altimeter_floor(const PoseEstimate& pose, std::uint64_t tick) const;
   // The same over a path of samples. `off` is how far the aircraft is from the path, and `scale`
   // the length that it is judged against: while the aircraft is well off the path, the way it is
   // heading counts as well as the path.
@@ -205,6 +218,8 @@ class DroneBrain {
   std::vector<NeighborEstimate> estimates_;
   std::uint32_t fresh_ = 0;
   std::uint64_t last_fix_tick_ = 0;
+  AltimeterSample altimeter_;         // the latest reading that was available
+  std::uint64_t altimeter_tick_ = 0;  // the tick it was taken
   std::uint64_t last_tick_ = 0;
   bool started_ = false;
   bool has_hold_ = false;

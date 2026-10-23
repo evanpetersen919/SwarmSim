@@ -19,6 +19,7 @@ add_library(swarm_core STATIC
   sim/src/dynamics.cpp
   sim/src/fixed_wing.cpp
   sim/src/camera_fix.cpp
+  sim/src/radar_altimeter.cpp
   sim/src/wind.cpp
   sim/src/vehicle.cpp
   sim/src/control/terrain_map.cpp

@@ -22,4 +22,13 @@ struct PositionFix {
   double sigma = 0.0;  // standard deviation per axis, meters
 };
 
+// A height measurement from a radar altimeter: the distance straight down to the highest solid
+// surface below the aircraft. When `available` is false there is no reading and the other fields
+// must not be used.
+struct AltimeterSample {
+  bool available = false;
+  double height = 0.0;  // meters above the surface
+  double sigma = 0.0;   // standard deviation, meters
+};
+
 }  // namespace swarm

@@ -43,6 +43,9 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
       brain_(config_.brain) {
   if (config_.vehicle_kind == VehicleKind::kFixedWing) {
     camera_.emplace(config_.camera, config_.seed, config_.brain.id);
+    if (config_.altimeter) {
+      altimeter_.emplace(*config_.altimeter, config_.seed, config_.brain.id);
+    }
   } else {
     lidar_.emplace(config_.lidar, config_.seed, config_.brain.id);
     fixer_.emplace(config_.fix, config_.seed, config_.brain.id);
@@ -95,6 +98,10 @@ void DroneAgent::step(AgentContext& ctx) {
       const Scan scan = lidar_->scan(truth_.pos, truth_.yaw, scene_, config_.weather);
       in.fix = fixer_->measure(truth_.pos, scan);
     }
+  }
+  if (altimeter_ && ctx.tick % altimeter_->config().period_ticks == 0) {
+    in.altimeter =
+        altimeter_->measure(truth_.pos, scene_.surface_height(truth_.pos.x, truth_.pos.y));
   }
   in.inbox.reserve(ctx.inbox.size());
   for (Message& m : ctx.inbox) {

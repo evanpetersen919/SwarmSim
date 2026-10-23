@@ -15,6 +15,7 @@
 #include "swarm/fixed_wing.hpp"
 #include "swarm/fixed_wing_energy.hpp"
 #include "swarm/obstacles.hpp"
+#include "swarm/radar_altimeter.hpp"
 #include "swarm/terrain.hpp"
 #include "swarm/vehicle.hpp"
 #include "swarm/weather.hpp"
@@ -122,6 +123,11 @@ struct Scenario {
   // The camera fix of a fixed-wing vehicle, which has no LiDAR. Written to the canonical text
   // only for a fixed-wing vehicle.
   CameraFixConfig camera;
+  // The radar altimeter of a fixed-wing vehicle (ADR 0012), with the keys of
+  // `sensors.radar_altimeter`. `altimeter_used` is set by that section; the canonical text writes
+  // it only when set.
+  bool altimeter_used = false;
+  RadarAltimeterConfig altimeter;
   // Orbit guidance of a fixed-wing vehicle. Only the shape is set here (radius, steps, gains,
   // separation distance); the center, altitude, speed, and speed limits come from the mission
   // and the vehicle through orbit_params(). Written to the canonical text only for a
