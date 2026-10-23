@@ -489,6 +489,12 @@ void ASwarmPlayback::ApplyFrame(double DeltaSeconds, bool bFirst) {
     }
     Drone.FallbackState = A.fallback_state;
     Drone.SpeedMps = FVector(A.velocity[0], A.velocity[1], A.velocity[2]).Size();
+    Drone.AltitudeM = A.position[2];
+    Drone.ClimbMps = A.velocity[2];
+    if (A.velocity[0] != 0.0 || A.velocity[1] != 0.0) {
+      Drone.HeadingDeg = FMath::Fmod(
+          FMath::RadiansToDegrees(FMath::Atan2(A.velocity[0], A.velocity[1])) + 360.0, 360.0);
+    }
     const FVector Location = DroneWorldLocation(A.position[0], A.position[1], A.position[2]);
 
     // Display attitude from the velocity and the change of velocity over the last window.
@@ -747,6 +753,10 @@ void ASwarmPlayback::BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) co
   Add(FString::Printf(TEXT("drone %d speed %.1f m/s (%.0f km/h, %.0f mph)"), Followed, Own.SpeedMps,
                       Own.SpeedMps * 3.6, Own.SpeedMps * 2.2369363),
       FColor::White);
+  Add(FString::Printf(TEXT("drone %d altitude %.0f m   climb %+.1f m/s   heading %03d deg"),
+                      Followed, Own.AltitudeM, Own.ClimbMps,
+                      FMath::RoundToInt(Own.HeadingDeg) % 360),
+      FColor::White);
 
   // The fallback states. A model drawn from a folder has no color to show them, so they are words
   // here: green while every drone is nominal, red as soon as one is not.
@@ -784,7 +794,7 @@ void ASwarmPlayback::BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) co
                         }
                       });
   Add(FString::Printf(TEXT("messages, last 1 s: delivered %d   lost %d   jammed %d%s"), Delivered,
-                      Lost, Jammed, bShowMessages ? TEXT("") : TEXT("   (M draws them)")),
+                      Lost, Jammed, bShowMessages ? TEXT("") : TEXT("   (M draws them in 3D)")),
       Jammed > 0 ? FColor::Red : FColor::White);
   const bool bOut = !Own.bAlive || Own.FallbackState != 0;
   const FString OwnState = Own.bAlive ? FString(FallbackName(Own.FallbackState)) : TEXT("failed");

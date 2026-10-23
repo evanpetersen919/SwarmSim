@@ -318,6 +318,11 @@ bool FSwarmPlaybackActorTest::RunTest(const FString& Parameters) {
              Lines.ContainsByPredicate([](const FString& Line) {
                return Line.Contains(TEXT("drone 0 speed 5.0 m/s (18 km/h, 11 mph)"));
              }));
+    TestTrue(TEXT("the followed drone's altitude, climb, and heading are shown"),
+             Lines.ContainsByPredicate([](const FString& Line) {
+               return Line.StartsWith(TEXT("drone 0 altitude")) &&
+                      Line.EndsWith(TEXT("heading 090 deg"));
+             }));
   }
 
   // A drone fails: dark, and no longer counted.

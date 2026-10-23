@@ -189,6 +189,9 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
     bool bAlive = true;
     uint8 FallbackState = 0;  // the logged fallback state, 0 nominal to 3 safe hold
     double SpeedMps = 0.0;    // the speed in the log, in meters per second
+    double AltitudeM = 0.0;   // the logged height (z), in meters
+    double ClimbMps = 0.0;    // the logged vertical speed, in meters per second
+    double HeadingDeg = 0.0;  // compass heading of the velocity, north (+Y) 0, east 90
   };
 
   // Whether the drone model is an aircraft, which is tilted by its flight path and not by its
