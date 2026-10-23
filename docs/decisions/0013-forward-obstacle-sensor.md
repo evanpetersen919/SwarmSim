@@ -59,3 +59,7 @@ Imagery, target detection or classification, a gimbal, tracking, any claim about
 - Vertical-only avoidance remains the limit: ground that rises faster than the aircraft can climb still ends in contact. The pilot will show how often, and that result decides whether a turn or speed change is the next decision.
 - Terrain guidance gets a third input and a way to be wrong, so its tests must cover an offset map, an omitted rectangle, a dropout, a return at the edge of the range, and fog that removes the sensor.
 - Everything about the sensor's accuracy, range, and field of view is a modeling choice. The results say what such a sensor would do in this simulator, not what the real aircraft's payload does.
+
+## Outcome
+
+Recorded on 2026-10-23 after the experiment ran; the numbers are in docs/RESULTS.md. With a wrong map, either sensor keeps most aircraft off the ground and the forward sensor is not shown to be safer than the altimeter, though it holds the orbit better; staying clear costs tens of meters of height; a random map error costs height and not safety; fog at 750 m visibility changed nothing that mattered; the result did not depend on the forward sensor's range or dropout probability within the swept values. Part of the remaining ground contact is aircraft that launch below the real ground because the start altitude is computed from the map, which no sensor can fix. The probe also showed that at the dense base's mission altitude of 100 m the map decides nothing, so the experiment uses a 20 m mission altitude (`base_fixed_wing_forward.yaml`).
