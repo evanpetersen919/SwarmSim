@@ -1,0 +1,29 @@
+# The fallback state machine where it has something to do: the full controller and the variant
+# without the fallback, in fog thick enough to lose the LiDAR position fix (the fog check of
+# fog_convention.yaml puts that between 200 and 150 m of visibility at the 20 m flight altitude),
+# with and without pulsed jamming. 2 variants x 4 visibilities x 2 jamming = 16 cells.
+# ablation.yaml found that the fallback changed nothing in scenarios where a drone only ever
+# reaches the degraded-comms state.
+version: 1
+name: ablation_fog
+base: base.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: variant
+    levels:
+      - {label: full, set: {}}
+      - {label: no_fallback, set: {control: {fallback: false}}}
+  - name: visibility
+    levels:
+      - {label: v200, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+      - {label: v150, set: {weather: {visibility_m: 150, rain_mm_h: 0}}}
+      - {label: v130, set: {weather: {visibility_m: 130, rain_mm_h: 0}}}
+      - {label: v110, set: {weather: {visibility_m: 110, rain_mm_h: 0}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: pulsed
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}

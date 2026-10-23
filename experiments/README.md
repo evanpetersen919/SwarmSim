@@ -10,6 +10,7 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `fog_convention.yaml` | The fog constant 3.912 against 3.0 at six visibilities; where the position fix is lost |
 | `ablation.yaml` | The full controller and three variants that each disable one component; 48 cells |
 | `baselines.yaml` | Hold-last, dead reckoning, Kalman, and the oracle predictors; 48 cells |
+| `ablation_fog.yaml` | The fallback state machine in fog thick enough to lose the LiDAR position fix: the full controller and the variant without the fallback, four visibilities, with and without pulsed jamming; 16 cells |
 | `baselines_burst.yaml` | The same four predictors under bursty loss (mean burst of 6) at the same average rates; 48 cells |
 | `base_fixed_wing.yaml` | The fixed-wing scenario (scenario version 2) that the fixed-wing experiments vary |
 | `matrix_fixed_wing.yaml` | Weather, jamming, loss, drone count, and faults for the default fixed-wing controller; 216 cells |

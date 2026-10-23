@@ -297,3 +297,32 @@ TEST(MetricsFormation, AMovingMissionIsEvaluatedAtTheTimeTheStateDescribes) {
   EXPECT_EQ(*analyze(make_log(s, exact)).result.formation_rmse, 0.0);
   EXPECT_DOUBLE_EQ(*analyze(make_log(s, lagging)).result.formation_rmse, 2.0);
 }
+
+TEST(MetricsFormation, FallbackOccupancyIsTheShareOfAliveDronesInEachState) {
+  const Scenario s = make_scenario(5, 4);
+  std::vector<Snapshot> snaps(4, on_slots(s));
+  for (Snapshot& snap : snaps) {
+    snap.agents[0].fallback_state = 1;  // degraded comms in every record
+    snap.agents[4].alive = false;  // a failed drone that reports safe hold, which is not counted
+    snap.agents[4].fallback_state = 3;
+  }
+  snaps[0].agents[1].fallback_state = 2;  // degraded navigation in two records
+  snaps[1].agents[1].fallback_state = 2;
+  snaps[2].agents[2].fallback_state = 3;  // safe hold in one record
+  const auto out = analyze(make_log(s, snaps));
+  ASSERT_TRUE(out.ok()) << out.message;
+  // Four alive drones in each of four records.
+  ASSERT_TRUE(out.result.fallback_comms.has_value());
+  EXPECT_DOUBLE_EQ(*out.result.fallback_comms, 4.0 / 16.0);
+  EXPECT_DOUBLE_EQ(*out.result.fallback_navigation, 2.0 / 16.0);
+  EXPECT_DOUBLE_EQ(*out.result.fallback_safe_hold, 1.0 / 16.0);
+}
+
+TEST(MetricsFormation, ANominalRunHasZeroFallbackOccupancy) {
+  const Scenario s = make_scenario(5, 4);
+  const auto out = analyze(make_log(s, std::vector<Snapshot>(4, on_slots(s))));
+  ASSERT_TRUE(out.ok()) << out.message;
+  EXPECT_EQ(*out.result.fallback_comms, 0.0);
+  EXPECT_EQ(*out.result.fallback_navigation, 0.0);
+  EXPECT_EQ(*out.result.fallback_safe_hold, 0.0);
+}

@@ -93,6 +93,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   std::vector<char> touched(n, 0);
   double lowest_agl = std::numeric_limits<double>::infinity();
+  // Alive drones in every record with drone state, by fallback state (0 nominal to 3 safe hold).
+  std::uint64_t fallback_records[4] = {0, 0, 0, 0};
   const bool pattern = fixed_wing && scenario.pattern.kind != PatternKind::kOrbit;
   // With terrain guidance the altitude is raised over high ground, so the distance to the nominal
   // reference would count the climb as being off station; then only the horizontal distance counts.
@@ -212,6 +214,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         continue;
       }
       ++alive;
+      ++fallback_records[a.fallback_state & 3U];
       const double e2 = norm_squared(to_vec(a.position) - targets[i]);
       if (pattern) {
         const PatternReference& ref = pattern_refs[i];
@@ -305,6 +308,14 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     out.orbit_altitude_rmse = std::sqrt(sum_altitude / samples);
     out.orbit_phase_rmse = std::sqrt(sum_phase / samples);
     out.time_on_station = static_cast<double>(count_on_station) / samples;
+  }
+  const std::uint64_t alive_records =
+      fallback_records[0] + fallback_records[1] + fallback_records[2] + fallback_records[3];
+  if (alive_records > 0) {
+    const double total = static_cast<double>(alive_records);
+    out.fallback_comms = static_cast<double>(fallback_records[1]) / total;
+    out.fallback_navigation = static_cast<double>(fallback_records[2]) / total;
+    out.fallback_safe_hold = static_cast<double>(fallback_records[3]) / total;
   }
   if (scene) {
     out.min_agl = lowest_agl;

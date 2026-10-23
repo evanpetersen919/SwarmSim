@@ -85,6 +85,15 @@ struct MetricsResult {
   std::optional<double> min_agl;
   std::optional<std::uint32_t> ground_contacts;
 
+  // The share of the alive drones, counted over every record with drone state, that were in each
+  // fallback state: degraded communication, degraded navigation, and safe hold. The rest of the
+  // share is the nominal state. Empty when no drone was alive in any record. A run in which no
+  // drone left the nominal state has 0 in all three, and a run with the fallback switched off
+  // still reports the state its machine reached.
+  std::optional<double> fallback_comms;
+  std::optional<double> fallback_navigation;
+  std::optional<double> fallback_safe_hold;
+
   // Smallest true distance between any two drones, alive or failed, over every record with drone
   // state.
   std::optional<double> min_separation;
