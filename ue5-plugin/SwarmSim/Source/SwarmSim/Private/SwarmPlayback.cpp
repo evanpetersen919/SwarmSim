@@ -36,11 +36,17 @@ constexpr double kAccelerationWindowTicks = 5.0;
 constexpr double kAttitudeSmoothing = 0.2;
 // The propeller of a folder model turns this many degrees per meter per second of airspeed.
 constexpr double kPropellerDegPerMps = 140.0;
-// Mesh-name prefixes of the ALTIUS model's propeller: two blades and their two hubs. The glTF
-// gives its nodes generic names; these were found from the world-space bounds of each mesh.
-const TCHAR* const kPropellerParts[] = {TEXT("C-Ext001"), TEXT("C-Ext002"), TEXT("Cylinder015"),
-                                        TEXT("Cylinder016")};
-const TCHAR* const kPropellerHubs[] = {TEXT("Cylinder015"), TEXT("Cylinder016")};
+// Mesh-name prefixes of the ALTIUS model's pusher propeller: two thin blades (Cylinder006 and
+// Cylinder012) and the four small cylinders at their roots, at the very tail of the fuselage. The
+// spinner (Mesh002) is nearly round about the axis and stays still. The glTF gives its nodes
+// generic names; these were found from the world-space bounds of each mesh. C-Ext001 and C-Ext002,
+// with Cylinder015 and Cylinder016, are tail surfaces further forward and must not turn.
+const TCHAR* const kPropellerParts[] = {TEXT("Cylinder006"), TEXT("Cylinder007"),
+                                        TEXT("Cylinder008"), TEXT("Cylinder010"),
+                                        TEXT("Cylinder011"), TEXT("Cylinder012")};
+// The root cylinders; the center of their bounds is the propeller's hub on the fuselage axis.
+const TCHAR* const kPropellerHubs[] = {TEXT("Cylinder007"), TEXT("Cylinder008"),
+                                       TEXT("Cylinder010"), TEXT("Cylinder011")};
 
 bool NameStartsWithAny(const UStaticMesh* Mesh, const TCHAR* const* Prefixes, int32 Count) {
   const FString Name = Mesh->GetName();
