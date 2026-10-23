@@ -17,6 +17,10 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `probe_fixed_wing_map_errors.yaml` | A probe of how wrong the prior map must be before aircraft without a forward sensor reach the ground; 13 cells, five seeds, not a result (ADR 0013) |
 | `fixed_wing_forward.yaml` | The forward obstacle sensor experiment: 8 map levels, 4 sensor arms, 2 weather levels; 64 cells (ADR 0013) |
 | `fixed_wing_forward_sensitivity.yaml` | The forward sensor's range and dropout against four maps; 36 cells (ADR 0013) |
+| `base_fixed_wing_avoid.yaml` | Six ALTIUS-700-class aircraft at 70 mph on a 300 m orbit over generated hills, flown at 100 m with no map (ADR 0014) |
+| `probe_fixed_wing_avoid.yaml` | A probe of how steep the hills must be before aircraft without avoidance reach the ground; 12 cells, five seeds, not a result (ADR 0014) |
+| `fixed_wing_avoid.yaml` | The avoidance experiment: 4 steepness levels, 4 maps, 3 sensor arms, 2 weather levels; 96 cells (ADR 0014) |
+| `fixed_wing_avoid_sensitivity.yaml` | The avoidance rule's horizon and bank fraction on 400 m hills; 12 cells (ADR 0014) |
 | `base_fixed_wing.yaml` | The fixed-wing scenario (scenario version 2) that the fixed-wing experiments vary |
 | `matrix_fixed_wing.yaml` | Weather, jamming, loss, drone count, and faults for the default fixed-wing controller; 216 cells |
 | `baselines_fixed_wing.yaml` | Four neighbor predictors against three consensus weights, under jamming and loss; 72 cells |

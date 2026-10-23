@@ -1084,6 +1084,36 @@ void read_terrain_guidance(Section& control, Scenario& s, std::uint64_t version)
   t.finish();
 }
 
+// `control.avoid` (version 3): turning and slowing for what climbing cannot clear (ADR 0014).
+void read_avoid(Section& control, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = control.find("avoid");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    control.ctx().add("control.avoid", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    control.ctx().add("control.avoid", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  if (!s.forward_used) {
+    control.ctx().add("control.avoid", line_of(node), "needs sensors.forward");
+    return;
+  }
+  Section a(control.ctx(), node, "control.avoid");
+  if (!a.valid()) {
+    return;
+  }
+  s.avoid.enabled = true;
+  read_double(a, "horizon_s", s.avoid.horizon_s, greater_than(0.0));
+  read_double(a, "hold_s", s.avoid.hold_s, greater_than(0.0));
+  read_double(a, "bank_fraction", s.avoid.bank_fraction, Bounds{0.0, 1.0, true, false});
+  a.finish();
+}
+
 void read_control(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("control");
   if (!node.IsDefined()) {
@@ -1103,6 +1133,7 @@ void read_control(Section& root, Scenario& s, std::uint64_t version) {
   read_bool(sec, "separation", s.separation_enabled);
   read_orbit(sec, s);
   read_terrain_guidance(sec, s, version);
+  read_avoid(sec, s, version);
   read_pattern(sec, s, version);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);

@@ -326,6 +326,11 @@ ScenarioWorld build_world(const Scenario& s) {
     if (s.forward_used && s.vehicle.kind == VehicleKind::kFixedWing) {
       c.forward = s.forward;
       c.brain.use_forward_sensor = true;
+      if (s.avoid.enabled) {
+        c.brain.avoid = s.avoid;
+        c.brain.avoid.max_lateral_accel = s.vehicle.fixed_wing.max_lateral_accel();
+        c.brain.avoid.max_vertical_accel = s.vehicle.fixed_wing.max_vertical_accel;
+      }
       if (!s.terrain_guidance.enabled) {
         // The clearance and the climb budget of the guidance, without a map.
         c.brain.terrain_guidance = s.terrain_guidance;

@@ -105,6 +105,10 @@ TEST(FlightPatterns, TheMetricsReportHeightAboveGroundAndContacts) {
   EXPECT_GT(*m.result.mean_agl, 80.0);
   ASSERT_TRUE(m.result.ground_contacts.has_value());
   EXPECT_EQ(*m.result.ground_contacts, 0U);
+  // No contact, so none at launch and no time of a first contact.
+  ASSERT_TRUE(m.result.launch_contacts.has_value());
+  EXPECT_EQ(*m.result.launch_contacts, 0U);
+  EXPECT_FALSE(m.result.first_ground_contact_s.has_value());
 }
 
 TEST(FlightPatterns, ACrashIsCountedAsAGroundContact) {
@@ -119,4 +123,51 @@ TEST(FlightPatterns, ACrashIsCountedAsAGroundContact) {
   ASSERT_TRUE(m.ok()) << m.message;
   EXPECT_GT(*m.result.ground_contacts, 0U);
   EXPECT_LE(*m.result.min_agl, 0.0);
+  // Launch contacts are among the contacts, and the first contact is when a launch contact is, at
+  // the first record, or later.
+  ASSERT_TRUE(m.result.launch_contacts.has_value());
+  EXPECT_LE(*m.result.launch_contacts, *m.result.ground_contacts);
+  ASSERT_TRUE(m.result.first_ground_contact_s.has_value());
+  EXPECT_GE(*m.result.first_ground_contact_s, 0.0);
+  if (*m.result.launch_contacts > 0U) {
+    EXPECT_EQ(*m.result.first_ground_contact_s, 0.0);
+  }
+}
+
+namespace {
+
+// Eight aircraft orbiting at `altitude` over hills of 200 m with no terrain guidance.
+swarm::MetricsOutcome fly_over_hills(double altitude) {
+  return fly(
+      "version: 3\nseed: 5\nduration_s: 5\n"
+      "scene: {type: hills, size_m: [2000, 2000], cell_m: 10, amplitude_m: 200, "
+      "obstacles: {density_per_m2: 0.0}}\n"
+      "swarm: {drones: 8}\nmission:\n  waypoints:\n    - [0, 0, " +
+      std::to_string(altitude) +
+      "]\n  speed_mps: 17\n"
+      "vehicle: {type: fixed_wing}\nenvironment: {ground_contact_crashes: true}\n"
+      "weather: {visibility_m: 20000}\n");
+}
+
+}  // namespace
+
+TEST(FlightPatterns, AnAircraftThatStartsBelowTheGroundIsALaunchContactAtTimeZero) {
+  // Hills stay within +-200 m, so at -250 m every start is under the ground.
+  const swarm::MetricsOutcome m = fly_over_hills(-250.0);
+  ASSERT_TRUE(m.ok()) << m.message;
+  ASSERT_TRUE(m.result.launch_contacts.has_value());
+  EXPECT_EQ(*m.result.launch_contacts, 8U);
+  ASSERT_TRUE(m.result.first_ground_contact_s.has_value());
+  EXPECT_EQ(*m.result.first_ground_contact_s, 0.0);
+}
+
+TEST(FlightPatterns, ACrashAfterLaunchIsNotALaunchContactAndHasATime) {
+  // At 0 m the aircraft start above the ground where it is below 0 m and crash a little later.
+  const swarm::MetricsOutcome m = fly_over_hills(0.0);
+  ASSERT_TRUE(m.ok()) << m.message;
+  ASSERT_TRUE(m.result.ground_contacts.has_value());
+  EXPECT_GT(*m.result.ground_contacts, *m.result.launch_contacts);
+  ASSERT_TRUE(m.result.first_ground_contact_s.has_value());
+  EXPECT_GT(*m.result.first_ground_contact_s, 0.0);
+  EXPECT_LT(*m.result.first_ground_contact_s, 5.0);
 }

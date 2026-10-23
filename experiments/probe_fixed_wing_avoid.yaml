@@ -1,0 +1,21 @@
+# A probe, not a result: how steep the terrain has to be before aircraft with no sensor, and with
+# the forward sensor and its altitude floor only, reach the ground (ADR 0014). It finds the levels of
+# fixed_wing_avoid.yaml. Four amplitudes of hills (the generator's hills peak at about a third of their amplitude under the orbit), three sensor arms, five seeds on
+# base_fixed_wing_avoid.yaml. The probe is run before the experiment and its numbers are not
+# reported as findings.
+version: 1
+name: probe_fixed_wing_avoid
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a240, set: {scene: {amplitude_m: 240}}}
+      - {label: a320, set: {scene: {amplitude_m: 320}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: sensors
+    levels:
+      - {label: none, set: {}}
+      - {label: forward, set: {sensors: {forward: {period_ticks: 5}}}}
+      - {label: avoid, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12}}}}

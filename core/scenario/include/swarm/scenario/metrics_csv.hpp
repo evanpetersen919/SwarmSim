@@ -18,9 +18,10 @@ namespace swarm {
 //   dropped_loss, dropped_rate, dropped_jam,
 //   delivery_ratio, latency_p50_s, latency_p95_s,
 //   orbit_radial_rmse_m, orbit_altitude_rmse_m, orbit_phase_rmse_m, time_on_station, min_agl_m,
-//   mean_agl_m, ground_contacts, fallback_comms, fallback_navigation, fallback_safe_hold
-// The four orbit columns, min_agl_m, mean_agl_m, and ground_contacts are empty for a quad scenario
-// (see MetricsResult).
+//   mean_agl_m, ground_contacts, launch_contacts, first_ground_contact_s, fallback_comms,
+//   fallback_navigation, fallback_safe_hold
+// The four orbit columns, min_agl_m, mean_agl_m, ground_contacts, launch_contacts, and
+// first_ground_contact_s are empty for a quad scenario (see MetricsResult).
 //
 // Rules: lines end with a line feed. Whole numbers are written in decimal. Other numbers are
 // written with "%.9g", which does not depend on the locale because the project never sets one. A

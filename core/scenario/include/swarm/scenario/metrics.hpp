@@ -87,6 +87,12 @@ struct MetricsResult {
   // of the ground costs in height (ADR 0013).
   std::optional<double> mean_agl;
   std::optional<std::uint32_t> ground_contacts;
+  // Of those, the aircraft at or below the surface in the first record that holds drone state:
+  // they started on the ground, so no sensor or maneuver could have kept them off it (ADR 0014).
+  std::optional<std::uint32_t> launch_contacts;
+  // The time of the first record in which any aircraft is at or below the surface, in seconds;
+  // empty when none is.
+  std::optional<double> first_ground_contact_s;
 
   // The share of the alive drones, counted over every record with drone state, that were in each
   // fallback state: degraded communication, degraded navigation, and safe hold. The rest of the

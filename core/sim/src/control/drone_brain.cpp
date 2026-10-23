@@ -45,6 +45,12 @@ void validate(const BrainConfig& c) {
   if (!(std::isfinite(c.speed_limit_factor) && c.speed_limit_factor >= 1.0)) {
     throw std::invalid_argument("BrainConfig: speed_limit_factor must be at least 1");
   }
+  if (c.avoid.enabled) {
+    validate(c.avoid);
+    if (!c.use_forward_sensor) {
+      throw std::invalid_argument("BrainConfig: avoidance needs the forward sensor");
+    }
+  }
   if (c.report_period_ticks == 0 || c.staleness_ticks == 0) {
     throw std::invalid_argument("BrainConfig: report period and staleness must be positive");
   }
@@ -430,12 +436,59 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     target_.velocity = ref.velocity;
   }
 
+  if (config_.avoid.enabled) {
+    track = apply_avoidance(track, pose, tick);
+  }
+
   Vec3 push;
   if (config_.separation_enabled) {
     push = orbit_separation_accel(config_.id, pose.position, pose.velocity, neighbors_of(own_sigma),
                                   orbit, behavior.margin_scale);
   }
   return combine_accel(track, push, orbit.max_accel);
+}
+
+Vec3 DroneBrain::apply_avoidance(const Vec3& track, const PoseEstimate& pose, std::uint64_t tick) {
+  const AvoidParams& params = config_.avoid;
+  AvoidResult result;
+  if (config_.use_forward_sensor && forward_.available &&
+      tick - forward_tick_ <= config_.forward_valid_ticks) {
+    AvoidInput input;
+    input.sample = &forward_;
+    input.sample_position = forward_position_;
+    input.position = pose.position;
+    input.velocity = pose.velocity;
+    input.clearance = config_.terrain_guidance.clearance;
+    input.climb_budget =
+        config_.terrain_guidance.climb_fraction * config_.terrain_guidance.climb_rate;
+    input.margin_sigmas = config_.forward_margin_sigmas;
+    input.min_speed = config_.orbit.min_speed;
+    result = assess_avoidance(params, input);
+  }
+  const double horizontal = std::hypot(pose.velocity.x, pose.velocity.y);
+  if (result.threatened) {
+    avoid_armed_ = true;
+    avoid_until_tick_ = tick + static_cast<std::uint64_t>(std::ceil(params.hold_s / config_.dt));
+  } else if (!avoid_armed_ || tick > avoid_until_tick_ || !(horizontal > 1e-9)) {
+    return track;
+  }
+  // The aircraft's heading and its left. While a threat is seen the sideways acceleration turns
+  // toward the chosen column and the speed comes down if there is no time; after it the heading is
+  // held, with no horizontal acceleration, until the hold runs out.
+  const double hx = pose.velocity.x / horizontal;
+  const double hy = pose.velocity.y / horizontal;
+  double sideways = 0.0;
+  double along = 0.0;
+  if (result.threatened) {
+    sideways = result.turn_accel;
+    if (result.slow) {
+      const double target_speed = config_.orbit.min_speed + config_.orbit.speed_margin;
+      along = -std::max(0.0, horizontal - target_speed);
+    }
+  }
+  const double vertical =
+      std::clamp(track.z, -params.max_vertical_accel, params.max_vertical_accel);
+  return Vec3{hx * along - hy * sideways, hy * along + hx * sideways, vertical};
 }
 
 void DroneBrain::apply_command(const InboundReport& in, const Vec3& position) {
@@ -478,6 +531,10 @@ void DroneBrain::hash_state(Fnv1a64& hash) const {
     hash.update_u64(hold_orbit_valid_ ? 1 : 0);
     hash_vec(hash, hold_center_);
     hash.update_f64(hold_z_);
+  }
+  if (config_.avoid.enabled) {
+    hash.update_u64(avoid_armed_ ? 1 : 0);
+    hash.update_u64(avoid_until_tick_);
   }
   hash.update_u64(has_command_ ? 1 : 0);
   hash.update_u64(last_command_tick_);

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "swarm/camera_fix.hpp"
+#include "swarm/control/avoid.hpp"
 #include "swarm/control/command.hpp"
 #include "swarm/control/formation.hpp"
 #include "swarm/control/mission.hpp"
@@ -159,6 +160,10 @@ struct Scenario {
   // when set.
   bool forward_used = false;
   ForwardSensorConfig forward;
+  // Turning and slowing for what climbing cannot clear (ADR 0014), with the keys of
+  // `control.avoid`; `avoid.enabled` is set by that section. The canonical text writes it only
+  // when set. It needs `forward_used`.
+  AvoidParams avoid;
   // Orbit guidance of a fixed-wing vehicle. Only the shape is set here (radius, steps, gains,
   // separation distance); the center, altitude, speed, and speed limits come from the mission
   // and the vehicle through orbit_params(). Written to the canonical text only for a

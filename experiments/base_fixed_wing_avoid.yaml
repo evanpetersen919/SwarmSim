@@ -1,0 +1,62 @@
+# The scenario of the avoidance experiment (ADR 0014), on the current model (scenario version 3):
+# six ALTIUS-700-class aircraft (the figures supplied without a source, see docs/MODELS.md) at 31.3
+# m/s (70 mph) on one 300 m orbit, which is wider than the 143 m turn radius at that speed, over
+# generated hills whose amplitude is the steepness axis, flown at 100 m with no prior map, so the
+# ground that rises above the aircraft is met by the sensor and not by a plan. Energy model, a steady
+# wind with gusts, ground contact that ends a flight. The axes replace parts of it; its seed is
+# ignored.
+version: 3
+name: fixed_wing_avoid_base
+seed: 1
+dt: 0.02
+duration_s: 90
+
+scene:
+  type: hills
+  size_m: [2000, 2000]
+  cell_m: 10
+  amplitude_m: 80
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 6
+
+mission:
+  waypoints:
+    - [0, 0, 100]
+  speed_mps: 31.3
+
+vehicle:
+  type: fixed_wing
+  max_speed_mps: 51
+  dynamics: energy
+  energy: {mass_kg: 28.5, wing_area_m2: 1.0, wingspan_m: 3.0, max_thrust_n: 90, max_power_w: 3500}
+
+environment:
+  wind: {mean_mps: [2, -1], gust_mps: 0.8, gust_scale_m: 150}
+  ground_contact_crashes: true
+
+weather: {visibility_m: 20000, rain_mm_h: 0}
+
+comms:
+  latency_ticks: 2
+  loss_model: independent
+  loss: 0.05
+  jammers: []
+
+control:
+  predictor: kalman
+  orbit:
+    radius_m: 300
+    radius_step_m: 0
+    altitude_step_m: 8
+    safe_distance_m: 20
+
+faults: []
+
+metrics:
+  settle_s: 20
+  collision_radius_m: 10.0
+  recovery_threshold_m: 40.0
+  recovery_hold_s: 5.0

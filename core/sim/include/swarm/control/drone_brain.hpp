@@ -10,6 +10,7 @@
 #include <optional>
 #include <vector>
 
+#include "swarm/control/avoid.hpp"
 #include "swarm/control/command.hpp"
 #include "swarm/control/fallback.hpp"
 #include "swarm/control/formation_control.hpp"
@@ -109,6 +110,8 @@ struct BrainConfig {
   // is taken `forward_margin_sigmas` standard deviations of the range in the higher direction.
   // It never lowers a command. A reading older than `forward_valid_ticks` is not used.
   bool use_forward_sensor = false;
+  // Turning and slowing for what climbing cannot clear (ADR 0014). Needs the forward sensor.
+  AvoidParams avoid;
   double forward_margin_sigmas = 2.0;
   std::uint64_t forward_valid_ticks = 50;
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
@@ -212,6 +215,8 @@ class DroneBrain {
                           std::uint64_t tick) const;
   Vec3 orbit_command(const PoseEstimate& pose, double own_sigma, const FallbackBehavior& behavior,
                      std::uint64_t tick);
+  // The orbit guidance's acceleration with its horizontal part replaced while avoiding.
+  Vec3 apply_avoidance(const Vec3& track, const PoseEstimate& pose, std::uint64_t tick);
   // The lowest altitude that clears the terrain on the way around the circle at (cx, cy), or
   // -infinity when terrain guidance is off.
   double terrain_floor_for(const PoseEstimate& pose, double cx, double cy, double radius) const;
@@ -238,11 +243,13 @@ class DroneBrain {
   std::vector<NeighborEstimate> estimates_;
   std::uint32_t fresh_ = 0;
   std::uint64_t last_fix_tick_ = 0;
-  AltimeterSample altimeter_;         // the latest reading that was available
-  std::uint64_t altimeter_tick_ = 0;  // the tick it was taken
-  ForwardSample forward_;             // the latest forward reading that was available
-  Vec3 forward_position_;             // the pose estimate's position when it was taken
-  std::uint64_t forward_tick_ = 0;    // the tick it was taken
+  AltimeterSample altimeter_;           // the latest reading that was available
+  std::uint64_t altimeter_tick_ = 0;    // the tick it was taken
+  ForwardSample forward_;               // the latest forward reading that was available
+  Vec3 forward_position_;               // the pose estimate's position when it was taken
+  std::uint64_t forward_tick_ = 0;      // the tick it was taken
+  bool avoid_armed_ = false;            // a threat has been seen
+  std::uint64_t avoid_until_tick_ = 0;  // the heading is held to this tick after the last threat
   std::uint64_t last_tick_ = 0;
   bool started_ = false;
   bool has_hold_ = false;

@@ -1,0 +1,54 @@
+# The avoidance experiment (ADR 0014): when climbing cannot clear the ground, does turning and
+# slowing keep the aircraft off it, and what does that cost the formation? 4 steepness levels x 4
+# map levels x 3 sensor arms x 2 weather levels = 96 cells. Run with 30 seeds, 2,880 runs, on
+# base_fixed_wing_avoid.yaml. Compare arms with `paired_difference` on the sensors axis, within each
+# steepness, map, and weather level.
+#
+# The levels were fixed before the first run, from experiments/probe_fixed_wing_avoid.yaml (five
+# seeds): hills of amplitude 40 m are a gentle control (no contact with any arm); at 240 m a few
+# aircraft without a sensor reach the ground (0.4 of 6), at 400 m about half (3.0 of 6), at 480 m
+# most (4.6 of 6). The generator's hills peak at about a third of their amplitude under the orbit.
+#
+# amplitude: hills of 40, 240, 400, and 480 m.
+# map:       none (no terrain guidance, the aircraft fly at 100 m and only a sensor can react); exact
+#            (terrain guidance from an exact map, which raises the altitude over the ground it
+#            knows); offset60 (the same map 60 m too low); omit (the map shows nothing that rises
+#            above the lowest height at the edge of a square of 700 m around the orbit).
+# sensors:   none; the forward sensor with its altitude floor only (ADR 0013); the forward sensor
+#            with avoidance (ADR 0014). Sensor at its default parameters except a reading every 5
+#            ticks; avoidance at its defaults.
+# weather:   clear air; fog of 375 m visibility, which shortens the forward sensor's detection
+#            distance (transmission 0.2) from its 800 m range to about 200 m, so that a turn at 31.3
+#            m/s (radius 143 m) has little room.
+version: 1
+name: fixed_wing_avoid
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a240, set: {scene: {amplitude_m: 240}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+      - {label: offset60, set: {control: {terrain: {clearance_m: 60, offset_m: -60}}}}
+      - label: omit
+        set:
+          control:
+            terrain:
+              clearance_m: 60
+              omit:
+                - {x_m: [-350, 350], y_m: [-350, 350]}
+  - name: sensors
+    levels:
+      - {label: none, set: {}}
+      - {label: forward, set: {sensors: {forward: {period_ticks: 5}}}}
+      - {label: avoid, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12}}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}

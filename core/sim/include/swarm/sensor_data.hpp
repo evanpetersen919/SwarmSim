@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "swarm/vec3.hpp"
@@ -47,6 +48,9 @@ struct ForwardRay {
 // in a fixed order for a given configuration. When `available` is false there is no reading.
 struct ForwardSample {
   bool available = false;
+  // The rays are in row-major order with this many rays to a row, so ray i is in column
+  // i % columns, and a column is a direction of the fan (ADR 0014).
+  std::uint32_t columns = 1;
   std::vector<ForwardRay> rays;
 };
 

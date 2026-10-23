@@ -68,6 +68,7 @@ ForwardSample ForwardSensor::measure(const Vec3& position, double heading_x, dou
   const std::uint32_t columns = config_.azimuth_rays;
   ForwardSample sample;
   sample.available = true;
+  sample.columns = columns;
   sample.rays.reserve(static_cast<std::size_t>(rows) * columns);
   for (std::uint32_t row = 0; row < rows; ++row) {
     const double elevation_deg =
