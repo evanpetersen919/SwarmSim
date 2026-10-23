@@ -162,6 +162,17 @@ void DroneAgent::step(AgentContext& ctx) {
       }
     }
   }
+  if (out.has_hazard_report) {
+    Message m;
+    m.type = MessageType::kHazard;
+    m.payload = out.hazard_report;
+    for (std::uint32_t other = 0; other < config_.brain.num_drones; ++other) {
+      if (other != config_.brain.id) {
+        m.receiver = other;
+        ctx.outbox.push_back(m);
+      }
+    }
+  }
 }
 
 void DroneAgent::hash_state(Fnv1a64& hash) const {

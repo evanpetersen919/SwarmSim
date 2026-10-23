@@ -6,10 +6,13 @@
 namespace swarm {
 
 // What a message is for, and so how it travels. Beacons are small periodic state reports that may
-// be lost; commands must arrive, once, in order. The numbers are the wire values.
+// be lost; commands must arrive, once, in order; hazard reports are lost like beacons. The numbers
+// are the wire values.
 enum class MessageType : std::uint8_t {
   kBeacon = 1,
   kCommand = 2,
+  // What an aircraft has seen of the ground ahead (ADR 0016): lossy like a beacon.
+  kHazard = 3,
 };
 
 // A unit of communication between two endpoints. `send_tick`, `deliver_tick`, and `seq` are set by

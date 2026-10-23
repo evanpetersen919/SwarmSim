@@ -1,0 +1,54 @@
+# The sharing experiment (ADR 0016): what is it worth for the aircraft to tell each other what their
+# forward sensors have seen, and how much of that survives a bad link? 3 steepness levels x 2
+# weather levels x 3 loss levels x 2 jam levels x 3 arms = 108 cells. Run with 30 seeds, 3,240 runs,
+# on base_fixed_wing_avoid.yaml. Compare arms with `paired_difference` on the arm axis, within each
+# steepness, weather, loss, and jam level.
+#
+# The criteria were written in ADR 0016 before this file was run, and are applied by
+# analysis/results_share.py. C1: in fog on 400 and 480 m hills at loss 0.05 with no jam, `share`
+# against `memory` has late contacts lower with an interval entirely below zero, or a higher corridor
+# share with an interval entirely above zero and late contacts not higher beyond the interval. C2: on
+# the 40 m control `share` against `memory` and `avoid` has no late contacts and a corridor share not
+# lower by more than 0.02. C3: at every communication condition `share` against `memory` has late
+# contacts not higher beyond the paired interval. C4: memory and share are both reported against
+# `avoid`, so that what memory alone gives is credited to memory.
+#
+# amplitude: hills of 40 m (a control with nothing to share), 400 m, and 480 m. No map.
+# weather:   clear air, and fog of 375 m visibility.
+# loss:      independent message loss of 0.05 (the base), 0.30, and 0.60.
+# jam:       none, and one constant jammer over the whole area from 20 s to 60 s of the run at 0.97
+#            loss on the receiver, which cuts the aircraft off for most of a lap.
+# arm:       avoid (avoidance with the three changes of ADR 0015, no memory); memory (the same, with
+#            each aircraft keeping its own returns); share (memory, and reports sent and received).
+version: 1
+name: fixed_wing_share
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: loss
+    levels:
+      - {label: l05, set: {comms: {loss: 0.05}}}
+      - {label: l30, set: {comms: {loss: 0.3}}}
+      - {label: l60, set: {comms: {loss: 0.6}}}
+  - name: jam
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: window
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 100], radius_m: 2000, mode: constant, from_s: 20, to_s: 60, loss: 0.97, affects: receiver}
+  - name: arm
+    levels:
+      - {label: avoid, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: memory, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: memory}}}}
+      - {label: share, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share}}}}

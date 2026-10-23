@@ -1122,6 +1122,41 @@ void read_avoid(Section& control, Scenario& s, std::uint64_t version) {
   a.finish();
 }
 
+// `control.share` (version 3): sharing what the forward sensor sees (ADR 0016).
+void read_share(Section& control, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = control.find("share");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    control.ctx().add("control.share", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (!s.avoid.enabled) {
+    control.ctx().add("control.share", line_of(node), "needs control.avoid");
+    return;
+  }
+  Section sh(control.ctx(), node, "control.share");
+  if (!sh.valid()) {
+    return;
+  }
+  s.share.mode = ShareMode::kShare;
+  read_choice<ShareMode>(
+      sh, "mode", s.share.mode,
+      {{"off", ShareMode::kOff}, {"memory", ShareMode::kMemory}, {"share", ShareMode::kShare}});
+  read_double(sh, "ttl_s", s.share.ttl_s, greater_than(0.0));
+  read_u32(sh, "points_per_message", s.share.points_per_message, 1,
+           static_cast<std::uint32_t>(kMaxHazardPoints));
+  std::uint32_t period = 0;
+  if (read_u32(sh, "period_ticks", period, 1, 1000000)) {
+    s.share.period_ticks = period;
+  }
+  read_double(sh, "repeat_s", s.share.repeat_s, greater_than(0.0));
+  read_u32(sh, "min_sources", s.share.min_sources, 1, 64);
+  sh.finish();
+}
+
 void read_control(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("control");
   if (!node.IsDefined()) {
@@ -1142,6 +1177,7 @@ void read_control(Section& root, Scenario& s, std::uint64_t version) {
   read_orbit(sec, s);
   read_terrain_guidance(sec, s, version);
   read_avoid(sec, s, version);
+  read_share(sec, s, version);
   read_pattern(sec, s, version);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);
@@ -1168,6 +1204,9 @@ void read_faults(Section& root, Scenario& s, const Clock& clock) {
     Fault f;
     const bool has_drone = read_u32(sec, "drone", f.drone, 0, kMaxDrones - 1, true);
     const bool has_time = clock.read(sec, "at_s", f.tick, true);
+    read_choice<FaultKind>(
+        sec, "kind", f.kind,
+        {{"fail", FaultKind::kFail}, {"false_hazards", FaultKind::kFalseHazards}});
     sec.finish();
     if (!has_drone || !has_time) {
       continue;

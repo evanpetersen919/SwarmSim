@@ -9,6 +9,7 @@
 #include "swarm/control/avoid.hpp"
 #include "swarm/control/command.hpp"
 #include "swarm/control/formation.hpp"
+#include "swarm/control/hazard.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/control/orbit.hpp"
 #include "swarm/control/path.hpp"
@@ -47,10 +48,15 @@ enum class PredictorChoice {
   kOracle,
 };
 
-// The drone with index `drone` fails at `tick`.
+// What goes wrong with a drone at `tick`: it fails, or (ADR 0016) it carries on flying and starts
+// sending false hazard reports.
+enum class FaultKind { kFail, kFalseHazards };
+
+// The drone with index `drone` fails, or turns faulty, at `tick`.
 struct Fault {
   std::uint32_t drone = 0;
   std::uint64_t tick = 0;
+  FaultKind kind = FaultKind::kFail;
 };
 
 // A command a ground station sends to every drone at `tick`.
@@ -164,6 +170,9 @@ struct Scenario {
   // `control.avoid`; `avoid.enabled` is set by that section. The canonical text writes it only
   // when set. It needs `forward_used`.
   AvoidParams avoid;
+  // Sharing what the forward sensor sees (ADR 0016), with the keys of `control.share`; `mode` is
+  // off unless that section is present. Needs `avoid.enabled`.
+  ShareParams share;
   // Orbit guidance of a fixed-wing vehicle. Only the shape is set here (radius, steps, gains,
   // separation distance); the center, altitude, speed, and speed limits come from the mission
   // and the vehicle through orbit_params(). Written to the canonical text only for a

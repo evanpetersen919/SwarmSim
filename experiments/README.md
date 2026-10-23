@@ -23,6 +23,9 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `fixed_wing_avoid_sensitivity.yaml` | The avoidance rule's horizon and bank fraction on 400 m hills; 12 cells (ADR 0014) |
 | `fixed_wing_avoid_rejoin.yaml` | The rejoin experiment: 4 steepness levels, 2 maps, 2 weather levels, 7 arms; 112 cells (ADR 0015) |
 | `fixed_wing_avoid_clearance.yaml` | The avoidance clearance (15, 30, 60 m) with the three changes of ADR 0015; 6 cells |
+| `fixed_wing_share.yaml` | The sharing experiment: 3 steepness levels, 2 weather levels, 3 loss levels, 2 jam levels, 3 arms (avoid, memory, share); 108 cells (ADR 0016) |
+| `fixed_wing_share_sensitivity.yaml` | How long a point is kept and how many a report carries; 6 cells (ADR 0016) |
+| `fixed_wing_share_trust.yaml` | One aircraft sending false hazards, with and without a confirmation rule of two; 32 cells (ADR 0016) |
 | `base_fixed_wing.yaml` | The fixed-wing scenario (scenario version 2) that the fixed-wing experiments vary |
 | `matrix_fixed_wing.yaml` | Weather, jamming, loss, drone count, and faults for the default fixed-wing controller; 216 cells |
 | `baselines_fixed_wing.yaml` | Four neighbor predictors against three consensus weights, under jamming and loss; 72 cells |

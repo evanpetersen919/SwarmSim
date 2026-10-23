@@ -143,7 +143,7 @@ TEST(Wire, EachMalformedHeaderFieldHasItsOwnStatus) {
     b[2] = static_cast<std::uint8_t>(version);
     EXPECT_EQ(decode(b), WireStatus::kBadVersion) << version;
   }
-  for (int type : {0, 3, 255}) {
+  for (int type : {0, 4, 255}) {
     b = sample_bytes();
     b[3] = static_cast<std::uint8_t>(type);
     EXPECT_EQ(decode(b), WireStatus::kUnknownType) << type;

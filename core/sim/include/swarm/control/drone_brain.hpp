@@ -14,6 +14,7 @@
 #include "swarm/control/command.hpp"
 #include "swarm/control/fallback.hpp"
 #include "swarm/control/formation_control.hpp"
+#include "swarm/control/hazard.hpp"
 #include "swarm/control/mission.hpp"
 #include "swarm/control/orbit.hpp"
 #include "swarm/control/path.hpp"
@@ -112,6 +113,8 @@ struct BrainConfig {
   bool use_forward_sensor = false;
   // Turning and slowing for what climbing cannot clear (ADR 0014). Needs the forward sensor.
   AvoidParams avoid;
+  // Sharing what the forward sensor sees (ADR 0016). Needs `avoid`.
+  ShareParams share;
   double forward_margin_sigmas = 2.0;
   std::uint64_t forward_valid_ticks = 50;
   std::uint64_t report_period_ticks = 10;  // a report is broadcast on ticks divisible by this
@@ -151,6 +154,9 @@ struct BrainOutput {
   DroneCommand command;
   bool has_report = false;
   std::vector<std::uint8_t> report;  // an encoded NeighborReport, when has_report is set
+  // An encoded HazardReport to send to every other aircraft, when has_hazard_report is set.
+  bool has_hazard_report = false;
+  std::vector<std::uint8_t> hazard_report;
 };
 
 // The decision-making half of a drone. Its inputs are the IMU sample, the position fix, and the
@@ -199,6 +205,9 @@ class DroneBrain {
   // the fallback machine's safe hold but is not a fallback state, and the machine is unaffected.
   bool holding_commanded() const { return commanded_hold_; }
   const CommandCounters& command_counters() const { return command_counters_; }
+  // Hazard reports that did not decode, and the points in the store that may be used.
+  std::uint64_t hazard_malformed() const { return hazard_malformed_; }
+  const std::vector<HazardPoint>& usable_hazards() const { return usable_hazards_; }
 
   // Folds everything that decides the brain's behavior into `hash`: the fallback machine, the
   // pose estimate and counters, the neighbor table counters and report ages, each neighbor's
@@ -212,7 +221,10 @@ class DroneBrain {
   std::vector<OrbitNeighbor> neighbors_of(double own_sigma) const;
   // Adds the broadcast of the drone's own estimate to the output.
   BrainOutput finish_step(BrainOutput out, const PoseEstimate& pose, double own_sigma,
-                          std::uint64_t tick) const;
+                          std::uint64_t tick);
+  // Stores the returns of a new forward reading that matter at flight level, and keeps the ones to
+  // send.
+  void note_hazards(const PoseEstimate& pose, std::uint64_t tick);
   Vec3 orbit_command(const PoseEstimate& pose, double own_sigma, const FallbackBehavior& behavior,
                      std::uint64_t tick);
   // The orbit guidance's acceleration with its horizontal part replaced while avoiding.
@@ -241,6 +253,13 @@ class DroneBrain {
   FallbackFsm fsm_;
 
   std::vector<NeighborEstimate> estimates_;
+  HazardStore hazards_;
+  std::vector<HazardPoint> usable_hazards_;  // the store's points that may be used this tick
+  std::vector<Vec3> shared_points_;          // what the latest reading gave to send
+  std::uint64_t shared_tick_ = 0;
+  bool shared_valid_ = false;
+  std::uint64_t hazard_reports_sent_ = 0;
+  std::uint64_t hazard_malformed_ = 0;
   std::uint32_t fresh_ = 0;
   std::uint64_t last_fix_tick_ = 0;
   AltimeterSample altimeter_;           // the latest reading that was available

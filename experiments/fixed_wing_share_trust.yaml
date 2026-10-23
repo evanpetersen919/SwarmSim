@@ -1,0 +1,39 @@
+# The trust experiment (ADR 0016): what does one aircraft that sends false hazards do to undefended
+# sharing, and does a confirmation rule of two defend? 2 steepness levels x 2 weather levels x 2
+# fault levels x 4 arms = 32 cells. Run with 30 seeds, 960 runs, on base_fixed_wing_avoid.yaml, at the
+# base loss of 0.05. Criteria, written in ADR 0016 before the run and applied by
+# analysis/results_share.py: T1, `share` with the liar against `share` without it on the 40 m hills:
+# a corridor share lower with an interval entirely below zero, or late contacts higher with an
+# interval entirely above zero; if neither, the liar does no measurable harm. T2, `confirmed` with
+# the liar against `confirmed` without it, on 40 m and 400 m hills: late contacts not higher beyond
+# the interval and a corridor share not lower by more than 0.02. T3, `confirmed` against `share`,
+# both with no liar, in fog on 400 m hills: what the rule costs. `memory` never receives, so a liar
+# cannot move it (a check on the experiment).
+#
+# amplitude: hills of 40 m (where the harm shows, with no real hazard to hide it) and 400 m.
+# weather:   clear air, and fog of 375 m visibility.
+# fault:     none, and drone 2 sending false hazards from 20 s (ADR 0016, decision 7).
+# arm:       avoid; memory; share; confirmed (share with min_sources 2).
+version: 1
+name: fixed_wing_share_trust
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: fault
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: liar, set: {faults: [{drone: 2, at_s: 20, kind: false_hazards}]}}
+  - name: arm
+    levels:
+      - {label: avoid, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: memory, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: memory}}}}
+      - {label: share, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share}}}}
+      - {label: confirmed, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share, min_sources: 2}}}}

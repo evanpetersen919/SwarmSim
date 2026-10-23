@@ -381,6 +381,9 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     }
   }
   for (const Fault& f : scenario.faults) {
+    if (f.kind != FaultKind::kFail) {
+      continue;  // a faulty sender is not a drone that stops
+    }
     disturbances.push_back({DisturbanceKind::kFault, f.tick, 0.0, false});
   }
   std::stable_sort(disturbances.begin(), disturbances.end(),

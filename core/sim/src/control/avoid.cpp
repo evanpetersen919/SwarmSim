@@ -99,6 +99,53 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
     }
   }
 
+  // Points from memory and from other aircraft are judged like returns, in the column of their
+  // bearing.
+  if (in.hazards != nullptr && !in.hazards->empty()) {
+    std::vector<double> sorted;
+    for (std::size_t c = 0; c < columns; ++c) {
+      if (seen[c]) {
+        sorted.push_back(azimuth[c]);
+      }
+    }
+    std::sort(sorted.begin(), sorted.end());
+    double half_gap = in.fan_half_rad;
+    for (std::size_t i = 1; i < sorted.size(); ++i) {
+      half_gap = std::min(half_gap, 0.5 * (sorted[i] - sorted[i - 1]));
+    }
+    for (const HazardPoint& h : *in.hazards) {
+      const double dx = h.position.x - in.position.x;
+      const double dy = h.position.y - in.position.y;
+      const double distance = std::hypot(dx, dy);
+      if (!(distance > 1e-9)) {
+        continue;
+      }
+      const double t = distance / speed;
+      if (t >= params.horizon_s) {
+        continue;
+      }
+      const double bearing = std::atan2(hx * dy - hy * dx, hx * dx + hy * dy);
+      std::size_t nearest = columns;
+      for (std::size_t c = 0; c < columns; ++c) {
+        if (seen[c] && (nearest == columns ||
+                        std::abs(azimuth[c] - bearing) < std::abs(azimuth[nearest] - bearing))) {
+          nearest = c;
+        }
+      }
+      if (nearest == columns || std::abs(azimuth[nearest] - bearing) > half_gap) {
+        continue;
+      }
+      const double needed = h.position.z + in.margin_sigmas * h.sigma + clearance - in.position.z;
+      const double reachable =
+          kinematic ? reachable_climb(in.velocity.z, in.climb_limit, params.max_vertical_accel, t)
+                    : in.climb_budget * t;
+      if (needed > reachable) {
+        blocked[nearest] = true;
+        time_to[nearest] = std::min(time_to[nearest], t);
+      }
+    }
+  }
+
   // The column nearest the heading decides whether there is a threat.
   std::size_t center = columns;
   for (std::size_t c = 0; c < columns; ++c) {

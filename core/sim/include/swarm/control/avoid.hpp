@@ -6,7 +6,9 @@
 
 #include <limits>
 #include <optional>
+#include <vector>
 
+#include "swarm/control/hazard.hpp"
 #include "swarm/sensor_data.hpp"
 #include "swarm/vec3.hpp"
 
@@ -83,6 +85,12 @@ struct AvoidInput {
   // point higher, as the altitude floor does.
   double margin_sigmas = 2.0;
   double min_speed = 12.0;
+  // Points known from memory or from other aircraft (ADR 0016), judged as returns are: a point is
+  // given the column of its bearing when that is within half a column spacing of a column and is
+  // ignored otherwise, and its height is raised by `margin_sigmas` of its sigma. Points farther off
+  // the heading than `fan_half_rad` plus half a column spacing are ignored.
+  const std::vector<HazardPoint>* hazards = nullptr;
+  double fan_half_rad = 0.35;
 };
 
 struct AvoidResult {

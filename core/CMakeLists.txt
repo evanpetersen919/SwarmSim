@@ -43,6 +43,7 @@ add_library(swarm_core STATIC
   sim/src/control/mission.cpp
   sim/src/control/orbit.cpp
   sim/src/control/avoid.cpp
+  sim/src/control/hazard.cpp
   sim/src/control/formation_control.cpp
   sim/src/control/separation.cpp
   sim/src/control/fallback.cpp

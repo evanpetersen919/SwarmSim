@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -45,6 +46,12 @@ void validate(const BrainConfig& c) {
   if (!(std::isfinite(c.speed_limit_factor) && c.speed_limit_factor >= 1.0)) {
     throw std::invalid_argument("BrainConfig: speed_limit_factor must be at least 1");
   }
+  if (c.share.mode != ShareMode::kOff) {
+    validate(c.share);
+    if (!c.avoid.enabled) {
+      throw std::invalid_argument("BrainConfig: sharing needs avoidance");
+    }
+  }
   if (c.avoid.enabled) {
     validate(c.avoid);
     if (!c.use_forward_sensor) {
@@ -67,7 +74,10 @@ DroneBrain::DroneBrain(const BrainConfig& config)
       pose_(config.pose, config.launch),
       table_(config.num_drones),
       fsm_(config.fallback),
-      estimates_(config.num_drones) {
+      estimates_(config.num_drones),
+      hazards_(config.share,
+               std::max<std::uint64_t>(
+                   1, static_cast<std::uint64_t>(std::ceil(config.share.ttl_s / config.dt)))) {
   predictors_.resize(config_.num_drones);
   for (std::uint32_t j = 0; j < config_.num_drones; ++j) {
     if (j != config_.id) {
@@ -104,6 +114,7 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
     forward_ = input.forward;
     forward_position_ = pose.position;
     forward_tick_ = tick;
+    note_hazards(pose, tick);
   }
 
   // Neighbor reports. The table filters out stale, duplicate, and malformed payloads.
@@ -112,11 +123,31 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
       apply_command(in, pose.position);
       continue;
     }
+    if (in.type == MessageType::kHazard) {
+      if (config_.share.mode == ShareMode::kShare) {
+        HazardReport report;
+        if (in.sender != config_.id && in.sender < config_.num_drones &&
+            decode_hazard_report(in.payload.data(), in.payload.size(), report) ==
+                HazardStatus::kOk) {
+          const double sigma = std::hypot(report.sender_sigma, config_.share.point_sigma_m);
+          for (const Vec3& point : report.points) {
+            hazards_.add_remote(in.sender, point, sigma, tick);
+          }
+        } else {
+          ++hazard_malformed_;
+        }
+      }
+      continue;
+    }
     const ReceiveResult result =
         table_.on_message(in.sender, in.payload.data(), in.payload.size(), tick);
     if (result == ReceiveResult::kAccepted && in.sender != config_.id) {
       predictors_[in.sender]->on_report(table_.get(in.sender)->report, tick);
     }
+  }
+  if (config_.share.mode != ShareMode::kOff) {
+    hazards_.expire(tick);
+    usable_hazards_ = hazards_.usable();
   }
   const bool supplied = input.neighbor_override.has_value();
   if (supplied && input.neighbor_override->size() != config_.num_drones) {
@@ -251,7 +282,7 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
 }
 
 BrainOutput DroneBrain::finish_step(BrainOutput out, const PoseEstimate& pose, double own_sigma,
-                                    std::uint64_t tick) const {
+                                    std::uint64_t tick) {
   // Broadcast the drone's own estimate, never truth.
   if (tick % config_.report_period_ticks == 0) {
     NeighborReport report;
@@ -262,7 +293,83 @@ BrainOutput DroneBrain::finish_step(BrainOutput out, const PoseEstimate& pose, d
     out.report = encode_neighbor_report(report);
     out.has_report = true;
   }
+  if (config_.share.mode == ShareMode::kShare) {
+    const std::uint64_t period =
+        config_.share.period_ticks > 0 ? config_.share.period_ticks : config_.report_period_ticks;
+    if (tick % period == 0) {
+      HazardReport hazard;
+      hazard.send_tick = tick;
+      hazard.sender_sigma = own_sigma;
+      bool send = false;
+      if (config_.share.false_from_tick && tick >= *config_.share.false_from_tick) {
+        // A faulty sender: false points on the swarm's own circle at its own height.
+        hazard.points =
+            make_false_points(config_.orbit.center, config_.orbit.radius, pose.position.z,
+                              config_.share.points_per_message, config_.share.false_seed,
+                              config_.id, hazard_reports_sent_);
+        send = true;
+      } else {
+        const std::uint64_t repeat =
+            static_cast<std::uint64_t>(std::ceil(config_.share.repeat_s / config_.dt));
+        if (shared_valid_ && tick - shared_tick_ <= repeat) {
+          hazard.points = shared_points_;
+          send = true;
+        }
+      }
+      if (send) {
+        out.hazard_report = encode_hazard_report(hazard);
+        out.has_hazard_report = true;
+        ++hazard_reports_sent_;
+      }
+    }
+  }
   return out;
+}
+
+void DroneBrain::note_hazards(const PoseEstimate& pose, std::uint64_t tick) {
+  if (config_.share.mode == ShareMode::kOff) {
+    return;
+  }
+  // The returns that matter at flight level, the highest of each cell, the highest first.
+  std::map<std::pair<std::int64_t, std::int64_t>, HazardPoint> by_cell;
+  for (const ForwardRay& ray : forward_.rays) {
+    if (!ray.hit) {
+      continue;
+    }
+    const Vec3 point = forward_position_ + ray.direction * ray.range;
+    if (!(point.z > pose.position.z - config_.terrain_guidance.clearance)) {
+      continue;
+    }
+    const std::pair<std::int64_t, std::int64_t> key{
+        static_cast<std::int64_t>(std::floor(point.x / config_.share.cell_m)),
+        static_cast<std::int64_t>(std::floor(point.y / config_.share.cell_m))};
+    const auto found = by_cell.find(key);
+    if (found == by_cell.end() || point.z > found->second.position.z) {
+      by_cell[key] = HazardPoint{point, ray.sigma};
+    }
+  }
+  std::vector<HazardPoint> chosen;
+  chosen.reserve(by_cell.size());
+  for (const auto& [key, point] : by_cell) {
+    chosen.push_back(point);
+  }
+  std::stable_sort(chosen.begin(), chosen.end(), [](const HazardPoint& a, const HazardPoint& b) {
+    return a.position.z > b.position.z;
+  });
+  if (chosen.size() > config_.share.points_per_message) {
+    chosen.resize(config_.share.points_per_message);
+  }
+  for (const HazardPoint& point : chosen) {
+    hazards_.add_own(point.position, point.sigma, tick);
+  }
+  if (!chosen.empty()) {
+    shared_points_.clear();
+    for (const HazardPoint& point : chosen) {
+      shared_points_.push_back(point.position);
+    }
+    shared_tick_ = tick;
+    shared_valid_ = true;
+  }
 }
 
 // Every neighbor with an estimate counts, silent or not: an aircraft keeps moving, so a
@@ -303,8 +410,7 @@ double DroneBrain::altimeter_floor(const PoseEstimate& pose, std::uint64_t tick)
 
 double DroneBrain::forward_floor(const PoseEstimate& pose, std::uint64_t tick) const {
   constexpr double kNone = -std::numeric_limits<double>::infinity();
-  if (!config_.use_forward_sensor || !forward_.available ||
-      tick - forward_tick_ > config_.forward_valid_ticks) {
+  if (!config_.use_forward_sensor) {
     return kNone;
   }
   const TerrainGuidanceParams& params = config_.terrain_guidance;
@@ -312,6 +418,31 @@ double DroneBrain::forward_floor(const PoseEstimate& pose, std::uint64_t tick) c
       std::max(std::hypot(pose.velocity.x, pose.velocity.y), config_.orbit.min_speed);
   const double budget = params.climb_fraction * params.climb_rate;
   double floor = kNone;
+  // Points from memory and from other aircraft, within the sensor's field and range.
+  const double heading_x = pose.velocity.x;
+  const double heading_y = pose.velocity.y;
+  const double heading = std::hypot(heading_x, heading_y);
+  const double half_fov = 0.5 * config_.share.fov_deg * 3.14159265358979323846 / 180.0;
+  if (heading > 1e-9) {
+    for (const HazardPoint& h : usable_hazards_) {
+      const double dx = h.position.x - pose.position.x;
+      const double dy = h.position.y - pose.position.y;
+      const double distance = std::hypot(dx, dy);
+      if (!(distance > 1e-9) || distance > config_.share.max_range_m) {
+        continue;
+      }
+      const double bearing =
+          std::atan2(heading_x * dy - heading_y * dx, heading_x * dx + heading_y * dy);
+      if (std::abs(bearing) > half_fov) {
+        continue;
+      }
+      floor = std::max(floor, h.position.z + config_.forward_margin_sigmas * h.sigma +
+                                  params.clearance - budget * distance / speed);
+    }
+  }
+  if (!forward_.available || tick - forward_tick_ > config_.forward_valid_ticks) {
+    return floor;
+  }
   for (const ForwardRay& ray : forward_.rays) {
     if (!ray.hit) {
       continue;
@@ -462,6 +593,10 @@ Vec3 DroneBrain::apply_avoidance(const Vec3& track, const PoseEstimate& pose, st
     input.climb_budget =
         config_.terrain_guidance.climb_fraction * config_.terrain_guidance.climb_rate;
     input.climb_limit = config_.terrain_guidance.climb_rate;
+    if (config_.share.mode != ShareMode::kOff) {
+      input.hazards = &usable_hazards_;
+      input.fan_half_rad = 0.5 * config_.share.fov_deg * 3.14159265358979323846 / 180.0;
+    }
     input.guidance_accel = track;
     input.margin_sigmas = config_.forward_margin_sigmas;
     input.min_speed = config_.orbit.min_speed;
@@ -537,6 +672,12 @@ void DroneBrain::hash_state(Fnv1a64& hash) const {
   if (config_.avoid.enabled) {
     hash.update_u64(avoid_armed_ ? 1 : 0);
     hash.update_u64(avoid_until_tick_);
+  }
+  if (config_.share.mode != ShareMode::kOff) {
+    hazards_.hash_state(hash);
+    hash.update_u64(shared_valid_ ? shared_tick_ + 1 : 0);
+    hash.update_u64(hazard_reports_sent_);
+    hash.update_u64(hazard_malformed_);
   }
   hash.update_u64(has_command_ ? 1 : 0);
   hash.update_u64(last_command_tick_);

@@ -391,6 +391,18 @@ std::string canonical_text(const Scenario& s) {
         line("    clearance_m: " + num(*av.clearance_m));
       }
     }
+    if (s.share.mode != ShareMode::kOff) {
+      const ShareParams& sh = s.share;
+      line("  share:");
+      line(std::string("    mode: ") + (sh.mode == ShareMode::kMemory ? "memory" : "share"));
+      line("    ttl_s: " + num(sh.ttl_s));
+      line("    points_per_message: " + uint(sh.points_per_message));
+      if (sh.period_ticks > 0) {
+        line("    period_ticks: " + uint(sh.period_ticks));
+      }
+      line("    repeat_s: " + num(sh.repeat_s));
+      line("    min_sources: " + uint(sh.min_sources));
+    }
   }
   line("  report_period_ticks: " + uint(s.report_period_ticks));
   line("  staleness_ticks: " + uint(s.staleness_ticks));
@@ -405,6 +417,9 @@ std::string canonical_text(const Scenario& s) {
     for (const Fault& f : s.faults) {
       line("  - drone: " + uint(f.drone));
       line("    at_s: " + seconds(f.tick));
+      if (f.kind == FaultKind::kFalseHazards) {
+        line("    kind: false_hazards");
+      }
     }
   }
 

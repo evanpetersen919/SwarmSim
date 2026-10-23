@@ -1,0 +1,17 @@
+# How much the sharing result depends on two assumed numbers, how long a point is kept and how many
+# points a report carries (ADR 0016): 3 ttls x 2 report sizes = 6 cells, the share arm, hills of
+# 400 m in fog at loss 0.30 with no jam, on base_fixed_wing_avoid.yaml. Run with 30 seeds, 180 runs.
+version: 1
+name: fixed_wing_share_sensitivity
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: ttl
+    levels:
+      - {label: t30, set: {scene: {amplitude_m: 400}, weather: {visibility_m: 375, rain_mm_h: 0}, comms: {loss: 0.3}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share, ttl_s: 30}}}}
+      - {label: t120, set: {scene: {amplitude_m: 400}, weather: {visibility_m: 375, rain_mm_h: 0}, comms: {loss: 0.3}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share, ttl_s: 120}}}}
+      - {label: t240, set: {scene: {amplitude_m: 400}, weather: {visibility_m: 375, rain_mm_h: 0}, comms: {loss: 0.3}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}, share: {mode: share, ttl_s: 240}}}}
+  - name: points
+    levels:
+      - {label: p2, set: {control: {share: {points_per_message: 2}}}}
+      - {label: p8, set: {control: {share: {points_per_message: 8}}}}

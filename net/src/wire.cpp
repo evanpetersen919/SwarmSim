@@ -12,7 +12,8 @@ namespace {
 
 bool valid_type(std::uint8_t type) {
   return type == static_cast<std::uint8_t>(MessageType::kBeacon) ||
-         type == static_cast<std::uint8_t>(MessageType::kCommand);
+         type == static_cast<std::uint8_t>(MessageType::kCommand) ||
+         type == static_cast<std::uint8_t>(MessageType::kHazard);
 }
 
 // Checks the header fields that are present in the first `available` bytes, in order, so the first

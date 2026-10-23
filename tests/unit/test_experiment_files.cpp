@@ -49,6 +49,9 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"fixed_wing_avoid_sensitivity.yaml", 12},
       {"fixed_wing_avoid_rejoin.yaml", 112},
       {"fixed_wing_avoid_clearance.yaml", 6},
+      {"fixed_wing_share.yaml", 108},
+      {"fixed_wing_share_sensitivity.yaml", 6},
+      {"fixed_wing_share_trust.yaml", 32},
   };
   const swarm::ReadFile read = swarm::testing::read_from(SWARM_EXPERIMENT_DIR);
   for (const auto& [file, cells] : documented) {

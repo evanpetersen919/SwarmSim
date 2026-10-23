@@ -326,6 +326,12 @@ ScenarioWorld build_world(const Scenario& s) {
     if (s.forward_used && s.vehicle.kind == VehicleKind::kFixedWing) {
       c.forward = s.forward;
       c.brain.use_forward_sensor = true;
+      if (s.share.mode != ShareMode::kOff) {
+        c.brain.share = s.share;
+        c.brain.share.fov_deg = s.forward.horizontal_fov_deg;
+        c.brain.share.max_range_m = s.forward.max_range_m;
+        c.brain.share.false_seed = s.seed;
+      }
       if (s.avoid.enabled) {
         c.brain.avoid = s.avoid;
         c.brain.avoid.max_lateral_accel = s.vehicle.fixed_wing.max_lateral_accel();
@@ -365,7 +371,11 @@ ScenarioWorld build_world(const Scenario& s) {
     c.oracle = s.predictor == PredictorChoice::kOracle;
     for (const Fault& fault : s.faults) {
       if (fault.drone == i) {
-        c.fail_tick = fault.tick;
+        if (fault.kind == FaultKind::kFail) {
+          c.fail_tick = fault.tick;
+        } else {
+          c.brain.share.false_from_tick = fault.tick;
+        }
       }
     }
     world.agents.push_back(std::move(c));
