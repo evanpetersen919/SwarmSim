@@ -12,8 +12,11 @@
 #include "swarm/control/drone_brain.hpp"
 #include "swarm/control/formation.hpp"
 #include "swarm/control/terrain_map.hpp"
+#include "swarm/drone_agent.hpp"
 #include "swarm/scenario/scenario.hpp"
+#include "swarm/scenario/world.hpp"
 #include "swarm/sensor_data.hpp"
+#include "swarm/simulation.hpp"
 
 using swarm::AvoidInput;
 using swarm::AvoidParams;
@@ -414,4 +417,50 @@ TEST(AvoidScenario, ItNeedsTheForwardSensorVersionThreeAFixedWingVehicleAndValid
   }
   EXPECT_TRUE(
       swarm::load_scenario(avoid_scenario(3, fw, forward, "  avoid: {bank_fraction: 1.0}\n")).ok());
+}
+
+namespace {
+
+// Six aircraft at 70 mph on a 300 m orbit at 100 m, with no map, over hills of 400 m, with the
+// forward sensor, with or without avoidance. Returns how many reached the ground over `seeds`.
+int aircraft_lost(bool avoid, std::uint64_t seeds) {
+  int lost = 0;
+  for (std::uint64_t seed = 1; seed <= seeds; ++seed) {
+    const std::string text =
+        "version: 3\nseed: " + std::to_string(seed) +
+        "\nduration_s: 60\n"
+        "scene: {type: hills, size_m: [2000, 2000], cell_m: 10, amplitude_m: 400,\n"
+        "        obstacles: {density_per_m2: 0.0}}\n"
+        "swarm: {drones: 6}\n"
+        "mission:\n  waypoints:\n    - [0, 0, 100]\n  speed_mps: 31.3\n"
+        "vehicle:\n  type: fixed_wing\n  max_speed_mps: 51\n  dynamics: energy\n"
+        "  energy: {mass_kg: 28.5, wing_area_m2: 1.0, wingspan_m: 3.0, max_thrust_n: 90, "
+        "max_power_w: 3500}\n"
+        "environment: {ground_contact_crashes: true}\n"
+        "weather: {visibility_m: 20000}\n"
+        "sensors:\n  forward: {period_ticks: 5}\n"
+        "control:\n  orbit: {radius_m: 300, radius_step_m: 0, altitude_step_m: 8, "
+        "safe_distance_m: 20}\n" +
+        std::string(avoid ? "  avoid: {}\n" : "");
+    const swarm::LoadResult r = swarm::load_scenario(text);
+    EXPECT_TRUE(r.ok()) << first_error(r);
+    const swarm::ScenarioWorld world = swarm::build_world(r.scenario);
+    const std::unique_ptr<swarm::Simulation> sim = world.make_simulation(1);
+    for (std::uint64_t tick = 0; tick < r.scenario.duration_ticks; ++tick) {
+      sim->step();
+    }
+    for (std::size_t i = 0; i < r.scenario.drones; ++i) {
+      lost += dynamic_cast<const swarm::DroneAgent&>(sim->agent(i)).crashed() ? 1 : 0;
+    }
+  }
+  return lost;
+}
+
+}  // namespace
+
+TEST(AvoidFlight, OnHillsThatClimbingCannotClearTurningKeepsMoreAircraftOffTheGround) {
+  const int climbing_only = aircraft_lost(false, 3);
+  const int turning = aircraft_lost(true, 3);
+  EXPECT_GT(climbing_only, 0);
+  EXPECT_LT(turning, climbing_only);
 }
