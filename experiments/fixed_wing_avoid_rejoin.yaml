@@ -1,0 +1,51 @@
+# The rejoin experiment (ADR 0015): do a rejoin heading taken from the guidance, a kinematic
+# judgment of what climbing can clear, and a smaller avoidance clearance make avoidance cost the
+# formation less, and what do they cost in safety? 4 steepness levels x 2 maps x 2 weather levels x
+# 7 arms = 112 cells. Run with 30 seeds, 3,360 runs, on base_fixed_wing_avoid.yaml. Compare arms with
+# `paired_difference` on the arm axis, within each steepness, map, and weather level.
+#
+# The steepness levels and the scenario are those of fixed_wing_avoid.yaml (ADR 0014), so the arms
+# can be compared with its results directly. The criteria for an arm being better than `avoid` were
+# written in ADR 0015 before this file was run: on the steep hills with no map (400 and 480 m, clear
+# air) its late contacts are not higher than those of `avoid` beyond the paired interval, and its
+# orbit_corridor_share is higher and its radial error lower with intervals that do not include zero;
+# with an exact map its time on station is at least 0.90 at every steepness level and its corridor
+# share is not below the forward sensor's by more than 0.05.
+#
+# amplitude: hills of 40, 240, 400, and 480 m.
+# map:       none (no terrain guidance; the aircraft fly at 100 m and only a sensor can react), and
+#            exact (terrain guidance from an exact map).
+# weather:   clear air, and fog of 375 m visibility.
+# arm:       forward (the forward sensor with its altitude floor only); avoid (avoidance as built in
+#            ADR 0014); rejoin (the rejoin heading from the guidance); kinematic (the climb the
+#            vehicle can gain under its limits); clear30 (an avoidance clearance of 30 m instead of
+#            the planning clearance of 60 m); all3 (the three together); h6 (avoidance as built with
+#            a horizon of 6 s, which ADR 0014 found to cost a third of the formation error).
+version: 1
+name: fixed_wing_avoid_rejoin
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a240, set: {scene: {amplitude_m: 240}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: arm
+    levels:
+      - {label: forward, set: {sensors: {forward: {period_ticks: 5}}}}
+      - {label: avoid, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12}}}}
+      - {label: rejoin, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true}}}}
+      - {label: kinematic, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, feasibility: kinematic}}}}
+      - {label: clear30, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, clearance_m: 30}}}}
+      - {label: all3, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: h6, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 6}}}}

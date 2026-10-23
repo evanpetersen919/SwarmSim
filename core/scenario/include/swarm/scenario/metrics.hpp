@@ -21,6 +21,8 @@ const char* to_string(MetricsStatus status);
 
 // An aircraft is on station when it is within this distance of its orbit reference point.
 inline constexpr double kStationRadiusM = 30.0;
+// How far from its own circle or path an aircraft is still in its corridor (ADR 0015), meters.
+inline constexpr double kCorridorM = 100.0;
 
 enum class DisturbanceKind {
   kJamEnd,  // the end of a finite jammer window
@@ -72,6 +74,10 @@ struct MetricsResult {
   std::optional<double> orbit_altitude_rmse;
   std::optional<double> orbit_phase_rmse;
   std::optional<double> time_on_station;
+  // The fraction of the samples whose cross-track distance to the aircraft's own circle or path is
+  // within kCorridorM. Unlike time_on_station it does not depend on the aircraft's phase, so it
+  // tells a small detour from a large one (ADR 0015).
+  std::optional<double> orbit_corridor_share;
   // With a pattern other than the orbit (ADR 0011) the reference of a drone is its point on its
   // stadium path, `orbit_radial_rmse` is the RMS cross-track error, and `orbit_phase_rmse` the RMS
   // distance along the path to its reference point. The altitude reference is the nominal layer,

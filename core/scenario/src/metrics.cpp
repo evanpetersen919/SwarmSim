@@ -129,6 +129,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   double sum_phase = 0.0;
   std::uint64_t count_on_station = 0;
   std::uint64_t count_orbit = 0;
+  std::uint64_t count_corridor = 0;
   std::vector<std::uint64_t> latencies_ticks;  // delivery tick - send tick, per delivered message
   std::vector<std::uint64_t> delivery_ticks_pending;    // scheduled messages, checked at the end
   std::vector<std::pair<std::uint64_t, double>> trace;  // (tick, formation RMSE), where defined
@@ -254,6 +255,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         sum_phase += phase * phase;
         count_on_station +=
             station_error2(e2, p, targets[i]) <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        count_corridor += std::abs(cross) <= kCorridorM ? 1U : 0U;
         ++count_orbit;
       } else if (fixed_wing) {
         const OrbitReference& ref = orbit_refs[i];
@@ -268,6 +270,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
         sum_phase += phase * phase;
         count_on_station +=
             station_error2(e2, p, targets[i]) <= kStationRadiusM * kStationRadiusM ? 1U : 0U;
+        count_corridor += std::abs(radial) <= kCorridorM ? 1U : 0U;
         ++count_orbit;
       }
       sum_all += e2;
@@ -323,6 +326,7 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
     out.orbit_altitude_rmse = std::sqrt(sum_altitude / samples);
     out.orbit_phase_rmse = std::sqrt(sum_phase / samples);
     out.time_on_station = static_cast<double>(count_on_station) / samples;
+    out.orbit_corridor_share = static_cast<double>(count_corridor) / samples;
   }
   const std::uint64_t alive_records =
       fallback_records[0] + fallback_records[1] + fallback_records[2] + fallback_records[3];

@@ -464,3 +464,172 @@ TEST(AvoidFlight, OnHillsThatClimbingCannotClearTurningKeepsMoreAircraftOffTheGr
   EXPECT_GT(climbing_only, 0);
   EXPECT_LT(turning, climbing_only);
 }
+
+TEST(AvoidKinematics, TheReachableClimbFollowsTheRampAndThenTheLimit) {
+  // Limit 3 m/s, acceleration 2 m/s^2: from rest the ramp takes 1.5 s and gains 2.25 m.
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(0.0, 3.0, 2.0, 1.0), 1.0);   // a t^2 / 2
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(0.0, 3.0, 2.0, 1.5), 2.25);  // the end of the ramp
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(0.0, 3.0, 2.0, 3.0), 6.75);  // 3 * 3 - 9 / 4
+  // Already at the limit: no ramp.
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(3.0, 3.0, 2.0, 2.0), 6.0);
+  // Above the limit counts as the limit.
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(5.0, 3.0, 2.0, 2.0), 6.0);
+  // Descending at 1 m/s: 2 s of ramp that gains 2 m, then the limit.
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(-1.0, 3.0, 2.0, 2.0), 2.0);
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(-1.0, 3.0, 2.0, 4.0), 8.0);  // 12 - 16 / 4
+  EXPECT_DOUBLE_EQ(swarm::reachable_climb(0.0, 3.0, 2.0, 0.0), 0.0);
+  EXPECT_THROW(swarm::reachable_climb(0.0, 3.0, 2.0, -1.0), std::invalid_argument);
+  EXPECT_THROW(swarm::reachable_climb(0.0, 0.0, 2.0, 1.0), std::invalid_argument);
+  EXPECT_THROW(swarm::reachable_climb(0.0, 3.0, 0.0, 1.0), std::invalid_argument);
+  EXPECT_THROW(swarm::reachable_climb(std::nan(""), 3.0, 2.0, 1.0), std::invalid_argument);
+}
+
+TEST(AvoidKinematics, AReturnJustWithinTheRampIsClearableOnlyUnderTheKinematicJudgment) {
+  // 3.68 m to gain in about 2 s: the budget (1.8 m/s) allows 3.59 m, the vehicle (3 m/s limit,
+  // 2 m/s^2) can gain 3.74 m.
+  const ForwardSample s = fan({0, 0, 60, 0, 0}, {0, 0, 3.68, 0, 0});
+  AvoidInput in = input_for(s);
+  in.clearance = 0.0;
+  in.climb_limit = 3.0;
+  AvoidParams budget;
+  AvoidParams kinematic;
+  kinematic.feasibility = swarm::AvoidFeasibility::kKinematic;
+  EXPECT_TRUE(swarm::assess_avoidance(budget, in).threatened);
+  EXPECT_FALSE(swarm::assess_avoidance(kinematic, in).threatened);
+  // A climb already under way helps: 5.5 m in the same time is clear at 3 m/s and not from level.
+  const ForwardSample more = fan({0, 0, 60, 0, 0}, {0, 0, 5.5, 0, 0});
+  AvoidInput climbing = input_for(more);
+  climbing.clearance = 0.0;
+  climbing.velocity = {30.0, 0.0, 3.0};
+  EXPECT_FALSE(swarm::assess_avoidance(kinematic, climbing).threatened);
+  AvoidInput resting = climbing;
+  resting.velocity = {30.0, 0.0, 0.0};
+  EXPECT_TRUE(swarm::assess_avoidance(kinematic, resting).threatened);
+}
+
+TEST(AvoidClearance, ASmallerClearanceMakesAReturnClearable) {
+  // Ground at the aircraft's own height 200 m ahead: 60 m to climb for the planning clearance,
+  // 10 m for a clearance of 10, in 6.7 s, which the climb budget (12 m) allows.
+  const ForwardSample s = fan({0, 0, 200, 0, 0}, kNoUp);
+  AvoidParams planning;
+  AvoidParams small;
+  small.clearance_m = 10.0;
+  EXPECT_TRUE(swarm::assess_avoidance(planning, input_for(s)).threatened);
+  EXPECT_FALSE(swarm::assess_avoidance(small, input_for(s)).threatened);
+  AvoidParams negative;
+  negative.clearance_m = -1.0;
+  EXPECT_THROW(swarm::validate(negative), std::invalid_argument);
+}
+
+TEST(AvoidRejoin, TheFreeColumnNearestTheWayTheGuidanceIsTurningIsChosen) {
+  AvoidParams plain;
+  AvoidParams rejoin;
+  rejoin.rejoin = true;
+  // Heading +x. Only the center column is blocked.
+  const ForwardSample s = fan({0, 0, 200, 0, 0}, kNoUp);
+
+  // Guidance turning left (+y): with rejoin the tie goes left, as against the right of ADR 0014.
+  AvoidInput left = input_for(s);
+  left.guidance_accel = {0.0, 5.0, 0.0};
+  EXPECT_NEAR(swarm::assess_avoidance(plain, left).turn_angle, -10.0 * kDeg, 1e-9);
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, left).turn_angle, 10.0 * kDeg, 1e-9);
+  EXPECT_GT(swarm::assess_avoidance(rejoin, left).turn_accel, 0.0);
+
+  // Guidance turning right: the right, with or without rejoin.
+  AvoidInput right = input_for(s);
+  right.guidance_accel = {0.0, -5.0, 0.0};
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, right).turn_angle, -10.0 * kDeg, 1e-9);
+
+  // Guidance asking for a strong turn left: after 1.5 s the velocity is at about 31 degrees, so
+  // the nearest free column is +20, not the +10 of the tie.
+  AvoidInput strong = input_for(s);
+  strong.guidance_accel = {0.0, 12.0, 0.0};
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, strong).turn_angle, 20.0 * kDeg, 1e-9);
+
+  // A blocked preferred column is not chosen: with +20 and +10 blocked as well, the nearest free
+  // one is -10.
+  const ForwardSample two_left = fan({200, 200, 200, 0, 0}, kNoUp);
+  AvoidInput blocked_left = input_for(two_left);
+  blocked_left.guidance_accel = {0.0, 12.0, 0.0};
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, blocked_left).turn_angle, -10.0 * kDeg, 1e-9);
+
+  // With no guidance acceleration, or none sideways, the rule of ADR 0014 applies.
+  AvoidInput none = input_for(s);
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, none).turn_angle, -10.0 * kDeg, 1e-9);
+  AvoidInput along = input_for(s);
+  along.guidance_accel = {3.0, 0.0, 0.0};
+  EXPECT_NEAR(swarm::assess_avoidance(rejoin, along).turn_angle, -10.0 * kDeg, 1e-9);
+
+  // The trigger is unchanged: a blocked column to the side is still not on the way.
+  const ForwardSample side = fan({200, 0, 0, 0, 0}, kNoUp);
+  AvoidInput sideways = input_for(side);
+  sideways.guidance_accel = {0.0, 5.0, 0.0};
+  EXPECT_FALSE(swarm::assess_avoidance(rejoin, sideways).threatened);
+}
+
+namespace {
+
+BrainConfig rejoining_brain(bool rejoin) {
+  BrainConfig c = avoiding_brain(true);
+  c.avoid.rejoin = rejoin;
+  return c;
+}
+
+}  // namespace
+
+TEST(AvoidBrain, OnItsCircleTheRejoinTurnIsTowardTheCenterAndTheOldTieIsAwayFromIt) {
+  DroneBrain plain(rejoining_brain(false));
+  DroneBrain rejoin(rejoining_brain(true));
+  const ForwardSample none;
+  for (std::uint64_t t = 0; t < 5; ++t) {
+    command(plain, t, none);
+    command(rejoin, t, none);
+  }
+  // At (300, 0) heading +y on a counterclockwise circle about the origin, the center is to the left
+  // (-x) and the guidance's own acceleration points there. Without rejoin the tie turns right
+  // (+x), away from the center; with it the aircraft turns left, toward it.
+  const Vec3 away = command(plain, 5, blocked_center());
+  const Vec3 toward = command(rejoin, 5, blocked_center());
+  EXPECT_GT(away.x, 0.5);
+  EXPECT_LT(toward.x, -0.5);
+}
+
+TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhenSet) {
+  const std::string fw = "vehicle: {type: fixed_wing}\n";
+  const std::string forward = "  forward: {period_ticks: 5}\n";
+  const swarm::LoadResult r = swarm::load_scenario(avoid_scenario(
+      3, fw, forward, "  avoid: {rejoin: true, feasibility: kinematic, clearance_m: 30}\n"));
+  ASSERT_TRUE(r.ok()) << first_error(r);
+  EXPECT_TRUE(r.scenario.avoid.rejoin);
+  EXPECT_EQ(r.scenario.avoid.feasibility, swarm::AvoidFeasibility::kKinematic);
+  ASSERT_TRUE(r.scenario.avoid.clearance_m.has_value());
+  EXPECT_DOUBLE_EQ(*r.scenario.avoid.clearance_m, 30.0);
+  const std::string text = swarm::canonical_text(r.scenario);
+  EXPECT_NE(text.find("rejoin: true"), std::string::npos);
+  EXPECT_NE(text.find("feasibility: kinematic"), std::string::npos);
+  EXPECT_NE(text.find("clearance_m: 30"), std::string::npos);
+  const swarm::LoadResult again = swarm::load_scenario(text);
+  ASSERT_TRUE(again.ok()) << first_error(again);
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+
+  // Set to their defaults they leave no trace, so the text is that of a scenario that sets none.
+  const swarm::LoadResult defaults = swarm::load_scenario(
+      avoid_scenario(3, fw, forward, "  avoid: {rejoin: false, feasibility: budget}\n"));
+  ASSERT_TRUE(defaults.ok()) << first_error(defaults);
+  const swarm::LoadResult bare =
+      swarm::load_scenario(avoid_scenario(3, fw, forward, "  avoid: {}\n"));
+  ASSERT_TRUE(bare.ok());
+  EXPECT_EQ(swarm::canonical_text(defaults.scenario), swarm::canonical_text(bare.scenario));
+  EXPECT_FALSE(bare.scenario.avoid.rejoin);
+  EXPECT_EQ(bare.scenario.avoid.feasibility, swarm::AvoidFeasibility::kBudget);
+  EXPECT_FALSE(bare.scenario.avoid.clearance_m.has_value());
+
+  for (const char* bad : {"feasibility: fast", "clearance_m: -1", "rejoin: maybe"}) {
+    EXPECT_FALSE(swarm::load_scenario(
+                     avoid_scenario(3, fw, forward, std::string("  avoid: {") + bad + "}\n"))
+                     .ok())
+        << bad;
+  }
+  EXPECT_TRUE(
+      swarm::load_scenario(avoid_scenario(3, fw, forward, "  avoid: {clearance_m: 0}\n")).ok());
+}

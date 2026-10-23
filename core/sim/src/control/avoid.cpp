@@ -24,12 +24,29 @@ void validate(const AvoidParams& p) {
   if (!(std::isfinite(p.bank_fraction) && p.bank_fraction > 0.0 && p.bank_fraction <= 1.0)) {
     throw std::invalid_argument("AvoidParams: bank_fraction must be in (0, 1]");
   }
+  if (p.clearance_m && !(std::isfinite(*p.clearance_m) && *p.clearance_m >= 0.0)) {
+    throw std::invalid_argument("AvoidParams: clearance_m must be finite and not negative");
+  }
+}
+
+double reachable_climb(double v0, double climb_limit, double accel, double t) {
+  if (!std::isfinite(v0) || !std::isfinite(climb_limit) || !std::isfinite(accel) ||
+      !std::isfinite(t) || !(climb_limit > 0.0) || !(accel > 0.0) || t < 0.0) {
+    throw std::invalid_argument("reachable_climb: invalid input");
+  }
+  const double v = std::min(v0, climb_limit);
+  const double ramp = (climb_limit - v) / accel;
+  if (t <= ramp) {
+    return v * t + 0.5 * accel * t * t;
+  }
+  return climb_limit * t - (climb_limit - v) * (climb_limit - v) / (2.0 * accel);
 }
 
 AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
   validate(params);
   if (!finite(in.position) || !finite(in.velocity) || !finite(in.sample_position) ||
-      !std::isfinite(in.clearance) || !std::isfinite(in.climb_budget) ||
+      !finite(in.guidance_accel) || !std::isfinite(in.clearance) ||
+      !std::isfinite(in.climb_budget) || !std::isfinite(in.climb_limit) ||
       !std::isfinite(in.margin_sigmas) || !(std::isfinite(in.min_speed) && in.min_speed > 0.0)) {
     throw std::invalid_argument("assess_avoidance: the input must be finite");
   }
@@ -44,6 +61,8 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
   const double hx = in.velocity.x / horizontal;
   const double hy = in.velocity.y / horizontal;
   const double speed = std::max(horizontal, in.min_speed);
+  const double clearance = params.clearance_m ? *params.clearance_m : in.clearance;
+  const bool kinematic = params.feasibility == AvoidFeasibility::kKinematic && in.climb_limit > 0.0;
 
   // Per column: the signed angle from the heading to the column, positive to the left, whether it
   // is blocked, and the time to its nearest unclearable return.
@@ -70,8 +89,11 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
     if (t >= params.horizon_s) {
       continue;
     }
-    const double needed = point.z + in.clearance - in.position.z;
-    if (needed > in.climb_budget * t) {
+    const double needed = point.z + clearance - in.position.z;
+    const double reachable =
+        kinematic ? reachable_climb(in.velocity.z, in.climb_limit, params.max_vertical_accel, t)
+                  : in.climb_budget * t;
+    if (needed > reachable) {
       blocked[c] = true;
       time_to[c] = std::min(time_to[c], t);
     }
@@ -90,15 +112,40 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
   result.threatened = true;
   result.time_to_threat = time_to[center];
 
-  // The free column nearest the heading, the right one on a tie.
+  // The heading the free column is chosen nearest to: the aircraft's own (angle 0), or with rejoin
+  // the way the guidance is already turning it, with the side a tie goes to.
+  double preferred = 0.0;
+  double tie_side = -1.0;  // the right
+  if (params.rejoin) {
+    const double gx = in.guidance_accel.x;
+    const double gy = in.guidance_accel.y;
+    if (std::hypot(gx, gy) > 1e-9) {
+      const double px = in.velocity.x + gx * params.turn_time_s;
+      const double py = in.velocity.y + gy * params.turn_time_s;
+      if (std::hypot(px, py) > 1e-9) {
+        preferred = std::atan2(hx * py - hy * px, hx * px + hy * py);
+        const double sideways = hx * gy - hy * gx;  // positive to the left
+        if (std::abs(sideways) > 1e-12) {
+          tie_side = sideways > 0.0 ? 1.0 : -1.0;
+        }
+      }
+    }
+  }
+
+  // The free column nearest that heading; on a tie, the one on the preferred side.
   std::size_t target = columns;
   for (std::size_t c = 0; c < columns; ++c) {
     if (!seen[c] || blocked[c]) {
       continue;
     }
-    if (target == columns || std::abs(azimuth[c]) < std::abs(azimuth[target]) - 1e-12 ||
-        (std::abs(std::abs(azimuth[c]) - std::abs(azimuth[target])) <= 1e-12 &&
-         azimuth[c] < azimuth[target])) {
+    if (target == columns) {
+      target = c;
+      continue;
+    }
+    const double dc = std::abs(azimuth[c] - preferred);
+    const double dt = std::abs(azimuth[target] - preferred);
+    if (dc < dt - 1e-12 ||
+        (std::abs(dc - dt) <= 1e-12 && azimuth[c] * tie_side > azimuth[target] * tie_side)) {
       target = c;
     }
   }

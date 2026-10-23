@@ -461,6 +461,8 @@ Vec3 DroneBrain::apply_avoidance(const Vec3& track, const PoseEstimate& pose, st
     input.clearance = config_.terrain_guidance.clearance;
     input.climb_budget =
         config_.terrain_guidance.climb_fraction * config_.terrain_guidance.climb_rate;
+    input.climb_limit = config_.terrain_guidance.climb_rate;
+    input.guidance_accel = track;
     input.margin_sigmas = config_.forward_margin_sigmas;
     input.min_speed = config_.orbit.min_speed;
     result = assess_avoidance(params, input);

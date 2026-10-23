@@ -381,6 +381,15 @@ std::string canonical_text(const Scenario& s) {
       line("    horizon_s: " + num(av.horizon_s));
       line("    hold_s: " + num(av.hold_s));
       line("    bank_fraction: " + num(av.bank_fraction));
+      if (av.rejoin) {
+        line("    rejoin: true");
+      }
+      if (av.feasibility == AvoidFeasibility::kKinematic) {
+        line("    feasibility: kinematic");
+      }
+      if (av.clearance_m) {
+        line("    clearance_m: " + num(*av.clearance_m));
+      }
     }
   }
   line("  report_period_ticks: " + uint(s.report_period_ticks));

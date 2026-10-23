@@ -1,0 +1,21 @@
+# How much the rejoin result depends on the one assumed margin, the avoidance clearance (ADR 0015):
+# the arm with all three changes (a rejoin heading from the guidance, the kinematic judgment, and a
+# clearance of its own) at clearances of 15, 30, and 60 m, with the map none and 60 m too low, 3 x 2
+# = 6 cells, hills of 400 m, clear air, on base_fixed_wing_avoid.yaml. Run with 30 seeds, 180 runs.
+# A smaller clearance lets the aircraft pass lower when it cannot climb, so min_agl_m and the late
+# contacts are what to read; 60 m is the planning clearance, so that cell has the other two changes
+# alone.
+version: 1
+name: fixed_wing_avoid_clearance
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: clearance
+    levels:
+      - {label: c15, set: {scene: {amplitude_m: 400}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 15}}}}
+      - {label: c30, set: {scene: {amplitude_m: 400}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: c60, set: {scene: {amplitude_m: 400}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 60}}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: offset60, set: {control: {terrain: {clearance_m: 60, offset_m: -60}}}}

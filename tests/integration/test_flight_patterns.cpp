@@ -98,6 +98,10 @@ TEST(FlightPatterns, TheMetricsReportHeightAboveGroundAndContacts) {
   ASSERT_TRUE(m.result.min_agl.has_value());
   // Over flat ground at 0 m, the lowest aircraft is at about its layer altitude of 120 m.
   EXPECT_GT(*m.result.min_agl, 80.0);
+  // Every sample is within the corridor of the circle or path on this flat scene.
+  ASSERT_TRUE(m.result.orbit_corridor_share.has_value());
+  EXPECT_GT(*m.result.orbit_corridor_share, 0.9);
+  EXPECT_LE(*m.result.orbit_corridor_share, 1.0);
   // The mean is over every aircraft and record, so it is not below the minimum, and over flat
   // ground with the layers of the swarm it is above the lowest layer.
   ASSERT_TRUE(m.result.mean_agl.has_value());
