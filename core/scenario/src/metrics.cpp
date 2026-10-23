@@ -93,6 +93,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   std::vector<char> touched(n, 0);
   double lowest_agl = std::numeric_limits<double>::infinity();
+  double sum_agl = 0.0;
+  std::uint64_t count_agl = 0;
   // Alive drones in every record with drone state, by fallback state (0 nominal to 3 safe hold).
   std::uint64_t fallback_records[4] = {0, 0, 0, 0};
   const bool pattern = fixed_wing && scenario.pattern.kind != PatternKind::kOrbit;
@@ -206,6 +208,8 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
       if (scene) {
         const double agl = a.position[2] - scene->surface_height(a.position[0], a.position[1]);
         lowest_agl = std::min(lowest_agl, agl);
+        sum_agl += agl;
+        ++count_agl;
         if (agl <= 0.0) {
           touched[i] = 1;
         }
@@ -319,6 +323,9 @@ MetricsOutcome analyze_log(const std::uint8_t* data, std::size_t size) {
   }
   if (scene) {
     out.min_agl = lowest_agl;
+    if (count_agl > 0) {
+      out.mean_agl = sum_agl / static_cast<double>(count_agl);
+    }
     out.ground_contacts = static_cast<std::uint32_t>(std::count(touched.begin(), touched.end(), 1));
   }
 

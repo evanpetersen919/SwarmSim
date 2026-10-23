@@ -11,6 +11,7 @@
 #include "swarm/dynamics.hpp"
 #include "swarm/fixed_wing.hpp"
 #include "swarm/fixed_wing_energy.hpp"
+#include "swarm/forward_sensor.hpp"
 #include "swarm/imu.hpp"
 #include "swarm/lidar.hpp"
 #include "swarm/position_fix.hpp"
@@ -53,6 +54,10 @@ struct DroneAgentConfig {
   // The radar altimeter of a fixed-wing aircraft (ADR 0012). Absent by default, so runs without it
   // are unchanged. The brain uses its readings only when `brain.use_altimeter` is set.
   std::optional<RadarAltimeterConfig> altimeter;
+  // The forward obstacle sensor of a fixed-wing aircraft (ADR 0013). Absent by default, so runs
+  // without it are unchanged. The brain uses its readings only when `brain.use_forward_sensor`
+  // is set.
+  std::optional<ForwardSensorConfig> forward;
   Weather weather;
   std::uint64_t seed = 0;
   std::uint64_t fix_period_ticks = 5;  // a scan, and so a fix attempt, every this many ticks
@@ -117,6 +122,7 @@ class DroneAgent : public IAgent {
   std::optional<PositionFixSensor> fixer_;
   std::optional<CameraFixSensor> camera_;
   std::optional<RadarAltimeter> altimeter_;
+  std::optional<ForwardSensor> forward_;
   DroneBrain brain_;
   DroneState truth_;
   bool failed_ = false;

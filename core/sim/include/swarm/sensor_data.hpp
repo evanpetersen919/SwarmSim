@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "swarm/vec3.hpp"
 
 // What sensors report. Estimators consume these types and nothing else from the simulation: this
@@ -29,6 +31,23 @@ struct AltimeterSample {
   bool available = false;
   double height = 0.0;  // meters above the surface
   double sigma = 0.0;   // standard deviation, meters
+};
+
+// One ray of the forward obstacle sensor (ADR 0013): its unit direction in the world frame and,
+// when something solid was detected along it, the measured range to it and the standard deviation
+// of that range. A ray with no return has `hit` false and the other fields are not to be used.
+struct ForwardRay {
+  Vec3 direction;
+  bool hit = false;
+  double range = 0.0;  // meters, measured
+  double sigma = 0.0;  // standard deviation of the range, meters
+};
+
+// A reading of the forward obstacle sensor, present on the ticks the sensor made one. The rays are
+// in a fixed order for a given configuration. When `available` is false there is no reading.
+struct ForwardSample {
+  bool available = false;
+  std::vector<ForwardRay> rays;
 };
 
 }  // namespace swarm

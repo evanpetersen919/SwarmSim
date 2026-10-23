@@ -94,6 +94,11 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
   }
   const PoseEstimate pose = pose_.estimate();
   const double own_sigma = max_axis(pose.position_sigma);
+  if (input.forward.available) {
+    forward_ = input.forward;
+    forward_position_ = pose.position;
+    forward_tick_ = tick;
+  }
 
   // Neighbor reports. The table filters out stale, duplicate, and malformed payloads.
   for (const InboundReport& in : input.inbox) {
@@ -290,6 +295,35 @@ double DroneBrain::altimeter_floor(const PoseEstimate& pose, std::uint64_t tick)
   return pose.position.z + shortfall;
 }
 
+double DroneBrain::forward_floor(const PoseEstimate& pose, std::uint64_t tick) const {
+  constexpr double kNone = -std::numeric_limits<double>::infinity();
+  if (!config_.use_forward_sensor || !forward_.available ||
+      tick - forward_tick_ > config_.forward_valid_ticks) {
+    return kNone;
+  }
+  const TerrainGuidanceParams& params = config_.terrain_guidance;
+  const double speed =
+      std::max(std::hypot(pose.velocity.x, pose.velocity.y), config_.orbit.min_speed);
+  const double budget = params.climb_fraction * params.climb_rate;
+  double floor = kNone;
+  for (const ForwardRay& ray : forward_.rays) {
+    if (!ray.hit) {
+      continue;
+    }
+    // The higher end of the range's error: farther along a rising ray, nearer along a falling one.
+    const double margin = config_.forward_margin_sigmas * ray.sigma;
+    const double range = std::max(0.0, ray.range + (ray.direction.z > 0.0 ? margin : -margin));
+    const Vec3 point = forward_position_ + ray.direction * range;
+    const double distance = std::hypot(point.x - pose.position.x, point.y - pose.position.y);
+    floor = std::max(floor, point.z + params.clearance - budget * distance / speed);
+  }
+  return floor;
+}
+
+double DroneBrain::sensor_floor(const PoseEstimate& pose, std::uint64_t tick) const {
+  return std::max(altimeter_floor(pose, tick), forward_floor(pose, tick));
+}
+
 double DroneBrain::terrain_floor_over(const PoseEstimate& pose, std::vector<PathSample> path,
                                       double off, double scale) const {
   const TerrainGuidanceParams& params = config_.terrain_guidance;
@@ -323,7 +357,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     }
     const double z_hold =
         std::max({hold_z_, terrain_floor_for(pose, hold_center_.x, hold_center_.y, orbit.radius),
-                  altimeter_floor(pose, tick)});
+                  sensor_floor(pose, tick)});
     track = orbit_guidance(pose.position, pose.velocity, hold_center_, orbit.radius, orbit.speed,
                            z_hold, 0.0, orbit, 1.0);
     target_ = FormationTarget{};
@@ -342,7 +376,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                  0.0, 1.0) +
               slot_offset;
     }
-    const double z_ref = std::max({ref.position.z, floor, altimeter_floor(pose, tick)});
+    const double z_ref = std::max({ref.position.z, floor, sensor_floor(pose, tick)});
     track = formation_guidance(pose.position, pose.velocity, ref, z_ref, config_.pattern, orbit,
                                behavior.gain_scale);
     target_ = FormationTarget{};
@@ -363,7 +397,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
                                  path.radius()) +
               slot_offset;
     }
-    const double z_ref = std::max({ref.position.z, floor, altimeter_floor(pose, tick)});
+    const double z_ref = std::max({ref.position.z, floor, sensor_floor(pose, tick)});
     track = path_guidance(pose.position, pose.velocity, path, ref.speed, z_ref, phase_error,
                           config_.pattern, orbit, behavior.gain_scale);
     target_ = FormationTarget{};
@@ -388,7 +422,7 @@ Vec3 DroneBrain::orbit_command(const PoseEstimate& pose, double own_sigma,
     const double z_ref =
         std::max({ref.position.z,
                   terrain_floor_for(pose, orbit.center.x, orbit.center.y, ref.radius) + slot_offset,
-                  altimeter_floor(pose, tick)});
+                  sensor_floor(pose, tick)});
     track = orbit_guidance(pose.position, pose.velocity, orbit.center, ref.radius, ref.speed, z_ref,
                            phase_error, orbit, behavior.gain_scale);
     target_ = FormationTarget{};

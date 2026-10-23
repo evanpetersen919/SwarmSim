@@ -746,6 +746,41 @@ void read_altimeter(Section& sensors, Scenario& s, std::uint64_t version) {
   a.finish();
 }
 
+// `sensors.forward` (version 3): a forward obstacle sensor on a fixed-wing vehicle (ADR 0013).
+void read_forward(Section& sensors, Scenario& s, std::uint64_t version) {
+  const YAML::Node node = sensors.find("forward");
+  if (!node.IsDefined()) {
+    return;
+  }
+  if (version < kScenarioFlightVersion) {
+    sensors.ctx().add("sensors.forward", line_of(node),
+                      "needs version " + std::to_string(kScenarioFlightVersion));
+    return;
+  }
+  if (s.vehicle.kind != VehicleKind::kFixedWing) {
+    sensors.ctx().add("sensors.forward", line_of(node), "needs vehicle type fixed_wing");
+    return;
+  }
+  Section f(sensors.ctx(), node, "sensors.forward");
+  if (!f.valid()) {
+    return;
+  }
+  s.forward_used = true;
+  ForwardSensorConfig& c = s.forward;
+  read_double(f, "horizontal_fov_deg", c.horizontal_fov_deg, Bounds{0.0, 180.0, true, false});
+  read_double(f, "vertical_fov_deg", c.vertical_fov_deg, Bounds{0.0, 90.0, false, true});
+  read_double(f, "pitch_deg", c.pitch_deg, Bounds{-90.0, 90.0, true, true});
+  read_u32(f, "azimuth_rays", c.azimuth_rays, 1, 64);
+  read_u32(f, "elevation_rays", c.elevation_rays, 1, 32);
+  read_double(f, "max_range_m", c.max_range_m, greater_than(0.0));
+  read_double(f, "sigma_floor_m", c.sigma_floor_m, greater_than(0.0));
+  read_double(f, "sigma_per_m", c.sigma_per_m, greater_than(0.0));
+  read_double(f, "dropout_probability", c.dropout_probability, Bounds{0.0, 1.0, false, true});
+  read_double(f, "min_transmission", c.min_transmission, Bounds{0.0, 1.0, true, false});
+  read_u32(f, "period_ticks", c.period_ticks, 1, 1000000);
+  f.finish();
+}
+
 void read_sensors(Section& root, Scenario& s, std::uint64_t version) {
   const YAML::Node node = root.find("sensors");
   if (!node.IsDefined()) {
@@ -768,6 +803,7 @@ void read_sensors(Section& root, Scenario& s, std::uint64_t version) {
   }
   read_camera(sec, s);
   read_altimeter(sec, s, version);
+  read_forward(sec, s, version);
   read_uint(sec, "fix_period_ticks", s.fix_period_ticks, 1, 1000000);
   sec.finish();
 }
@@ -983,6 +1019,28 @@ void read_pattern(Section& control, Scenario& s, std::uint64_t version) {
 }
 
 // `control.terrain` (version 3): terrain-aware altitude for orbit guidance.
+// One rectangle of `control.terrain.omit`.
+void read_omit(Section& list_owner, const YAML::Node& node, std::size_t index, Scenario& s) {
+  const std::string path = "control.terrain.omit[" + std::to_string(index) + "]";
+  Section r(list_owner.ctx(), node, path);
+  if (!r.valid()) {
+    return;
+  }
+  std::vector<double> x;
+  std::vector<double> y;
+  const bool have_x = read_numbers(r, "x_m", 2, x, true);
+  const bool have_y = read_numbers(r, "y_m", 2, y, true);
+  r.finish();
+  if (!have_x || !have_y) {
+    return;
+  }
+  if (!(x[0] < x[1]) || !(y[0] < y[1])) {
+    list_owner.ctx().add(path, r.line(), "x_m and y_m must each be [min, max] with min below max");
+    return;
+  }
+  s.map_faults.omit.push_back({x[0], x[1], y[0], y[1]});
+}
+
 void read_terrain_guidance(Section& control, Scenario& s, std::uint64_t version) {
   const YAML::Node node = control.find("terrain");
   if (!node.IsDefined()) {
@@ -1008,6 +1066,21 @@ void read_terrain_guidance(Section& control, Scenario& s, std::uint64_t version)
   read_double(t, "climb_fraction", p.climb_fraction, Bounds{0.0, 1.0, true, false});
   read_double(t, "sample_spacing_m", p.sample_spacing, greater_than(0.0));
   read_double(t, "lookahead_m", p.lookahead, greater_than(0.0));
+  // Errors of the prior map (ADR 0013).
+  TerrainMapFaults& faults = s.map_faults;
+  read_double(t, "offset_m", faults.offset_m, at_least(-1.0e6));
+  read_double(t, "error_sigma_m", faults.error_sigma_m, at_least(0.0));
+  read_double(t, "error_correlation_m", faults.error_correlation_m, greater_than(0.0));
+  const YAML::Node omit = t.find("omit");
+  if (omit.IsDefined()) {
+    if (!omit.IsSequence()) {
+      control.ctx().add("control.terrain.omit", line_of(omit), "must be a list");
+    } else {
+      for (std::size_t i = 0; i < omit.size(); ++i) {
+        read_omit(t, omit[i], i, s);
+      }
+    }
+  }
   t.finish();
 }
 

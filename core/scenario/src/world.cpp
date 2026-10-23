@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -102,7 +103,81 @@ bool build_scene_data(const Scenario& s, SceneData& data, std::string& error) {
   return true;
 }
 
-TerrainMap make_terrain_map(const SceneData& scene) {
+namespace {
+
+// A smooth random field over the grid: independent normals of standard deviation `sigma` at the
+// nodes of a lattice `spacing` apart, smoothstep-interpolated to the samples. The draws are made in
+// row-major order for every lattice node, so the count depends only on the grid and the spacing.
+void add_smooth_error(const Heightfield& field, std::vector<double>& heights, double sigma,
+                      double spacing, std::uint64_t seed) {
+  const double extent_x = static_cast<double>(field.cells_x) * field.cell_size;
+  const double extent_y = static_cast<double>(field.cells_y) * field.cell_size;
+  const std::size_t nodes_x = static_cast<std::size_t>(std::floor(extent_x / spacing)) + 2;
+  const std::size_t nodes_y = static_cast<std::size_t>(std::floor(extent_y / spacing)) + 2;
+  Rng rng(seed, kStreamMapError);
+  std::vector<double> lattice(nodes_x * nodes_y);
+  for (double& v : lattice) {
+    v = sigma * rng.normal();
+  }
+  const auto smooth = [](double t) { return t * t * (3.0 - 2.0 * t); };
+  const std::size_t stride = field.samples_x();
+  for (std::size_t j = 0; j < field.samples_y(); ++j) {
+    const double v = static_cast<double>(j) * field.cell_size / spacing;
+    const std::size_t j0 = static_cast<std::size_t>(std::floor(v));
+    const double tv = smooth(v - static_cast<double>(j0));
+    for (std::size_t i = 0; i < stride; ++i) {
+      const double u = static_cast<double>(i) * field.cell_size / spacing;
+      const std::size_t i0 = static_cast<std::size_t>(std::floor(u));
+      const double tu = smooth(u - static_cast<double>(i0));
+      const double a =
+          lattice[j0 * nodes_x + i0] * (1.0 - tu) + lattice[j0 * nodes_x + i0 + 1] * tu;
+      const double b =
+          lattice[(j0 + 1) * nodes_x + i0] * (1.0 - tu) + lattice[(j0 + 1) * nodes_x + i0 + 1] * tu;
+      heights[j * stride + i] += a * (1.0 - tv) + b * tv;
+    }
+  }
+}
+
+// Flattens the samples inside `rect` to the lowest height among the samples on its edge.
+void omit_rectangle(const Heightfield& field, std::vector<double>& heights, const OmitRect& rect) {
+  const auto first = [&](double v, double origin) {
+    return static_cast<long long>(std::ceil((v - origin) / field.cell_size));
+  };
+  const auto last = [&](double v, double origin) {
+    return static_cast<long long>(std::floor((v - origin) / field.cell_size));
+  };
+  const long long i0 = std::max<long long>(0, first(rect.x_min, field.origin_x));
+  const long long i1 = std::min<long long>(static_cast<long long>(field.samples_x()) - 1,
+                                           last(rect.x_max, field.origin_x));
+  const long long j0 = std::max<long long>(0, first(rect.y_min, field.origin_y));
+  const long long j1 = std::min<long long>(static_cast<long long>(field.samples_y()) - 1,
+                                           last(rect.y_max, field.origin_y));
+  if (i1 < i0 || j1 < j0) {
+    return;
+  }
+  const std::size_t stride = field.samples_x();
+  const auto at = [&](long long i, long long j) -> double& {
+    return heights[static_cast<std::size_t>(j) * stride + static_cast<std::size_t>(i)];
+  };
+  double level = std::numeric_limits<double>::infinity();
+  for (long long j = j0; j <= j1; ++j) {
+    for (long long i = i0; i <= i1; ++i) {
+      if (i == i0 || i == i1 || j == j0 || j == j1) {
+        level = std::min(level, at(i, j));
+      }
+    }
+  }
+  for (long long j = j0; j <= j1; ++j) {
+    for (long long i = i0; i <= i1; ++i) {
+      at(i, j) = level;
+    }
+  }
+}
+
+}  // namespace
+
+TerrainMap make_terrain_map(const SceneData& scene, const TerrainMapFaults& faults,
+                            std::uint64_t seed) {
   const Heightfield& field = scene.terrain;
   std::vector<double> heights = field.heights;
   const std::size_t stride = field.samples_x();
@@ -127,6 +202,17 @@ TerrainMap make_terrain_map(const SceneData& scene) {
         h = std::max(h, top);
       }
     }
+  }
+  if (faults.offset_m != 0.0) {
+    for (double& h : heights) {
+      h += faults.offset_m;
+    }
+  }
+  if (faults.error_sigma_m > 0.0) {
+    add_smooth_error(field, heights, faults.error_sigma_m, faults.error_correlation_m, seed);
+  }
+  for (const OmitRect& rect : faults.omit) {
+    omit_rectangle(field, heights, rect);
   }
   return TerrainMap(field.cells_x, field.cells_y, field.origin_x, field.origin_y, field.cell_size,
                     std::move(heights));
@@ -177,7 +263,8 @@ ScenarioWorld build_world(const Scenario& s) {
   world.scene = std::make_unique<Scene>(std::move(data));
   std::shared_ptr<const TerrainMap> terrain_map;
   if (s.terrain_guidance.enabled) {
-    terrain_map = std::make_shared<const TerrainMap>(make_terrain_map(world.scene->data()));
+    terrain_map = std::make_shared<const TerrainMap>(
+        make_terrain_map(world.scene->data(), s.map_faults, s.seed));
   }
 
   world.sim.dt = s.dt;
@@ -235,6 +322,15 @@ ScenarioWorld build_world(const Scenario& s) {
       c.brain.terrain = terrain_map;
       c.brain.terrain_guidance = s.terrain_guidance;
       c.brain.terrain_guidance.climb_rate = terrain_climb_rate(s);
+    }
+    if (s.forward_used && s.vehicle.kind == VehicleKind::kFixedWing) {
+      c.forward = s.forward;
+      c.brain.use_forward_sensor = true;
+      if (!s.terrain_guidance.enabled) {
+        // The clearance and the climb budget of the guidance, without a map.
+        c.brain.terrain_guidance = s.terrain_guidance;
+        c.brain.terrain_guidance.climb_rate = terrain_climb_rate(s);
+      }
     }
     c.dynamics = s.vehicle.dynamics;
     c.energy = s.vehicle.energy;

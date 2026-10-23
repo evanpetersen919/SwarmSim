@@ -101,7 +101,8 @@ bool environment_used(const Scenario& s) { return wind_used(s) || s.ground_conta
 
 std::uint64_t scenario_version(const Scenario& s) {
   if (s.vehicle.dynamics == FixedWingDynamics::kEnergy || environment_used(s) ||
-      s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit || s.altimeter_used) {
+      s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit || s.altimeter_used ||
+      s.forward_used) {
     return kScenarioFlightVersion;
   }
   return s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion;
@@ -232,6 +233,21 @@ std::string canonical_text(const Scenario& s) {
       line("    dropout_probability: " + num(a.dropout_probability));
       line("    period_ticks: " + uint(a.period_ticks));
     }
+    if (s.forward_used) {
+      const ForwardSensorConfig& fw = s.forward;
+      line("  forward:");
+      line("    horizontal_fov_deg: " + num(fw.horizontal_fov_deg));
+      line("    vertical_fov_deg: " + num(fw.vertical_fov_deg));
+      line("    pitch_deg: " + num(fw.pitch_deg));
+      line("    azimuth_rays: " + uint(fw.azimuth_rays));
+      line("    elevation_rays: " + uint(fw.elevation_rays));
+      line("    max_range_m: " + num(fw.max_range_m));
+      line("    sigma_floor_m: " + num(fw.sigma_floor_m));
+      line("    sigma_per_m: " + num(fw.sigma_per_m));
+      line("    dropout_probability: " + num(fw.dropout_probability));
+      line("    min_transmission: " + num(fw.min_transmission));
+      line("    period_ticks: " + uint(fw.period_ticks));
+    }
   } else {
     line("  lidar:");
     line("    beams: " + uint(s.lidar_beams));
@@ -343,6 +359,21 @@ std::string canonical_text(const Scenario& s) {
       line("    climb_fraction: " + num(t.climb_fraction));
       line("    sample_spacing_m: " + num(t.sample_spacing));
       line("    lookahead_m: " + num(t.lookahead));
+      const TerrainMapFaults& faults = s.map_faults;
+      if (faults.offset_m != 0.0) {
+        line("    offset_m: " + num(faults.offset_m));
+      }
+      if (faults.error_sigma_m > 0.0) {
+        line("    error_sigma_m: " + num(faults.error_sigma_m));
+        line("    error_correlation_m: " + num(faults.error_correlation_m));
+      }
+      if (!faults.omit.empty()) {
+        line("    omit:");
+        for (const OmitRect& r : faults.omit) {
+          line("      - x_m: [" + num(r.x_min) + ", " + num(r.x_max) + "]");
+          line("        y_m: [" + num(r.y_min) + ", " + num(r.y_max) + "]");
+        }
+      }
     }
   }
   line("  report_period_ticks: " + uint(s.report_period_ticks));

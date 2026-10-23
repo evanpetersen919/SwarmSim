@@ -34,7 +34,11 @@ bool build_scene_data(const Scenario& scenario, SceneData& out, std::string& err
 // raised into every sample under the bounding box of its footprint, so trees, rocks, and buildings
 // count as terrain. Conservative: a sample is raised if any part of its cell could be under the
 // obstacle.
-TerrainMap make_terrain_map(const SceneData& scene);
+// With `faults` (ADR 0013) the map is then made wrong: the offset is added, the random error drawn
+// from `seed` on its own stream (a fixed number of draws for a given grid and correlation
+// length), and the omitted rectangles flattened to the lowest height on their edge.
+TerrainMap make_terrain_map(const SceneData& scene, const TerrainMapFaults& faults = {},
+                            std::uint64_t seed = 0);
 
 // A scenario turned into things that can run: the generated scene, the simulation configuration,
 // and one agent configuration per drone. The world owns the scene, and every simulation made from

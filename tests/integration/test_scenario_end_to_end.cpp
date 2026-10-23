@@ -269,7 +269,8 @@ TEST(EndToEnd, AFullScenarioWithLossAJamAndAFailureRecordsVerifiesAndFillsEveryC
   for (std::size_t i = 0; i < row.size(); ++i) {
     // The orbit columns exist only for a fixed-wing scenario; this one is a quad.
     const bool orbit_column = header[i].rfind("orbit_", 0) == 0 || header[i] == "time_on_station" ||
-                              header[i] == "min_agl_m" || header[i] == "ground_contacts";
+                              header[i] == "min_agl_m" || header[i] == "mean_agl_m" ||
+                              header[i] == "ground_contacts";
     if (orbit_column) {
       EXPECT_TRUE(row[i].empty()) << "a quad has a value in: " << header[i];
     } else {

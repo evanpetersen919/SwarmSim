@@ -14,6 +14,7 @@
 #include "swarm/deterministic_channel.hpp"
 #include "swarm/fixed_wing.hpp"
 #include "swarm/fixed_wing_energy.hpp"
+#include "swarm/forward_sensor.hpp"
 #include "swarm/obstacles.hpp"
 #include "swarm/radar_altimeter.hpp"
 #include "swarm/terrain.hpp"
@@ -91,6 +92,31 @@ struct VehicleSettings {
 
 // Everything that defines a run except the thread count, which must never matter. Times are in
 // ticks; the file states them in seconds and the loader converts them.
+// A rectangle, in meters, in which the prior map of the terrain shows nothing that rises above the
+// lowest height on its edge.
+struct OmitRect {
+  double x_min = 0.0;
+  double x_max = 0.0;
+  double y_min = 0.0;
+  double y_max = 0.0;
+};
+
+// Errors of the prior map a fixed-wing aircraft carries (ADR 0013), with the keys of
+// `control.terrain`. The map is exact unless one is set. They are applied in this order: the
+// offset, the smooth random error, then the omitted rectangles. The scene, and so every sensor,
+// is not affected.
+struct TerrainMapFaults {
+  double offset_m = 0.0;  // added to every height of the map
+  // A smooth random error: independent normal values of this standard deviation on a lattice with
+  // this spacing, interpolated with a smoothstep. Zero means none. The standard deviation holds at
+  // the lattice nodes; between them the interpolated error is smaller.
+  double error_sigma_m = 0.0;
+  double error_correlation_m = 100.0;
+  std::vector<OmitRect> omit;
+
+  bool used() const { return offset_m != 0.0 || error_sigma_m > 0.0 || !omit.empty(); }
+};
+
 struct Scenario {
   std::string name;
   std::uint64_t seed = 0;
@@ -128,6 +154,11 @@ struct Scenario {
   // it only when set.
   bool altimeter_used = false;
   RadarAltimeterConfig altimeter;
+  // The forward obstacle sensor of a fixed-wing vehicle (ADR 0013), with the keys of
+  // `sensors.forward`. `forward_used` is set by that section; the canonical text writes it only
+  // when set.
+  bool forward_used = false;
+  ForwardSensorConfig forward;
   // Orbit guidance of a fixed-wing vehicle. Only the shape is set here (radius, steps, gains,
   // separation distance); the center, altitude, speed, and speed limits come from the mission
   // and the vehicle through orbit_params(). Written to the canonical text only for a
@@ -137,6 +168,7 @@ struct Scenario {
   // heightfield as a map. `climb_rate` is set from the vehicle. Written to the canonical text only
   // when enabled.
   TerrainGuidanceParams terrain_guidance;
+  TerrainMapFaults map_faults;
   // The pattern a fixed-wing vehicle flies (version 3); the default is the orbit above. Written to
   // the canonical text only when it is not the orbit.
   PatternParams pattern;

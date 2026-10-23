@@ -229,8 +229,8 @@ TEST(Batch, TheHeaderAndRowsHaveTheDocumentedColumns) {
   const std::string row = swarm::batch_csv_row(f.experiment, f.expansion, r.rows[4]);
   EXPECT_EQ(row.rfind("tiny,1,p00,n06,1,ok,0,tiny.p00-n06,101,", 0), 0U) << row;
   EXPECT_EQ(row.back(), '\n');
-  // 32 metric columns plus experiment, cell, two axes, replicate, status, and verified.
-  EXPECT_EQ(fields(header), 32U + 7U);
+  // 33 metric columns plus experiment, cell, two axes, replicate, status, and verified.
+  EXPECT_EQ(fields(header), 33U + 7U);
   EXPECT_EQ(fields(row.substr(0, row.size() - 1)), fields(header.substr(0, header.size() - 1)));
 }
 

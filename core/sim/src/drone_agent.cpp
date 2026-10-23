@@ -1,5 +1,6 @@
 #include "swarm/drone_agent.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -45,6 +46,9 @@ DroneAgent::DroneAgent(const DroneAgentConfig& config, const IScene& scene)
     camera_.emplace(config_.camera, config_.seed, config_.brain.id);
     if (config_.altimeter) {
       altimeter_.emplace(*config_.altimeter, config_.seed, config_.brain.id);
+    }
+    if (config_.forward) {
+      forward_.emplace(*config_.forward, config_.seed, config_.brain.id);
     }
   } else {
     lidar_.emplace(config_.lidar, config_.seed, config_.brain.id);
@@ -102,6 +106,16 @@ void DroneAgent::step(AgentContext& ctx) {
   if (altimeter_ && ctx.tick % altimeter_->config().period_ticks == 0) {
     in.altimeter =
         altimeter_->measure(truth_.pos, scene_.surface_height(truth_.pos.x, truth_.pos.y));
+  }
+  if (forward_ && ctx.tick % forward_->config().period_ticks == 0) {
+    // The fan points along the horizontal velocity, or along the yaw while there is none.
+    double heading_x = truth_.vel.x;
+    double heading_y = truth_.vel.y;
+    if (std::hypot(heading_x, heading_y) < 1e-9) {
+      heading_x = std::cos(truth_.yaw);
+      heading_y = std::sin(truth_.yaw);
+    }
+    in.forward = forward_->measure(truth_.pos, heading_x, heading_y, scene_, config_.weather);
   }
   in.inbox.reserve(ctx.inbox.size());
   for (Message& m : ctx.inbox) {

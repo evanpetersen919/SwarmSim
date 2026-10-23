@@ -83,6 +83,9 @@ struct MetricsResult {
   // that surface in some record, which is the number that crashed when the scenario sets
   // `ground_contact_crashes`.
   std::optional<double> min_agl;
+  // The mean of the same height over every aircraft and every record, meters: what staying clear
+  // of the ground costs in height (ADR 0013).
+  std::optional<double> mean_agl;
   std::optional<std::uint32_t> ground_contacts;
 
   // The share of the alive drones, counted over every record with drone state, that were in each
