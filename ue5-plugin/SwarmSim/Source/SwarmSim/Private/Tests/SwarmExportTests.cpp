@@ -34,6 +34,16 @@ bool FSwarmExportPlanTest::RunTest(const FString& Parameters) {
   TestTrue(TEXT("the options are valid"), Parsed.bValid);
   TestEqual(TEXT("path"), Parsed.OutPath, FString(TEXT("C:/x/a.swscene")));
   TestTrue(TEXT("no audit by default"), Parsed.AuditPath.IsEmpty());
+  {
+    const FExportOptions Skipped =
+        ParseExportOptions(TEXT("-SwarmExportScene=a -SwarmExportSkipActors=Background,Preview"));
+    TestEqual(TEXT("two actor names to skip"), Skipped.SkipActors.Num(), 2);
+    TestTrue(TEXT("an actor is matched by part of its name"),
+             NameMatchesAny(TEXT("PCGDemo_BackgroundBP_C_UAID_1"), Skipped.SkipActors));
+    TestFalse(TEXT("another actor is not"),
+              NameMatchesAny(TEXT("PCGPartitionActor_51200_1_0_0"), Skipped.SkipActors));
+    TestTrue(TEXT("none are skipped by default"), Parsed.SkipActors.IsEmpty());
+  }
   TestEqual(TEXT("audit path"),
             ParseExportOptions(TEXT("-SwarmAuditScene=C:/x/audit.csv -SwarmAnchor=1,2")).AuditPath,
             FString(TEXT("C:/x/audit.csv")));

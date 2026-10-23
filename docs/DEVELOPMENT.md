@@ -117,5 +117,5 @@ To write the scene file of a level for a scenario, run the game with the export 
 UnrealEditor.exe PROJECT.uproject /Game/Levels/MAP -game -windowed -EnablePlugins=SwarmSim -SwarmAnchor=X,Y -SwarmExportScene=level.swscene -SwarmExportTrees=NAME -SwarmExportRocks=NAME -SwarmExportGround=NAME
 ```
 
-The log lists the static meshes in the area with their counts (`survey` lines), which is how the names are chosen. The scene file is derived from the level's content and is not committed.
+The log lists the static meshes in the area with their counts (`survey` lines), which is how the names are chosen. `-SwarmExportCrown=0.7` adds a crown to each tree, and `-SwarmExportSkipActors=NAME` leaves out scenery that is in the level but not in the world an aircraft flies in (Electric Dreams has a distant background actor, `PCGDemo_BackgroundBP`, that has to be skipped). After exporting, check the scene: run the game once more with `-SwarmAuditScene=audit.csv` and the same anchor, size, and cell, and compare with `python scripts/audit_export.py level.swscene audit.csv`, which counts the places where the level rises above the scene and the obstacles that float with nothing under them (docs/MODELS.md, Audit). The scene file is derived from the level's content and is not committed.
 

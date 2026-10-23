@@ -9,6 +9,7 @@
 #include "GameFramework/Actor.h"
 #include "Landscape.h"
 #include "LandscapeHeightfieldCollisionComponent.h"
+#include "Misc/FileHelper.h"
 #include "SwarmCoordinates.h"
 #include "SwarmLog.h"
 
@@ -223,10 +224,16 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
   const FBox Area(FVector(Options.AnchorCm.X - HalfCm, Options.AnchorCm.Y - HalfCm, -1.0e9),
                   FVector(Options.AnchorCm.X + HalfCm, Options.AnchorCm.Y + HalfCm, 1.0e9));
   TArray<swarm::Obstacle> Obstacles;
+  TArray<FString> DebugLines;
   TMap<FString, FSurveyEntry> Survey;
   int32 ComponentsConsidered = 0;
+  int32 ActorsSkipped = 0;
   int64 InstancesInArea = 0;
   for (TActorIterator<AActor> It(World); It; ++It) {
+    if (NameMatchesAny(It->GetName(), Options.SkipActors)) {
+      ++ActorsSkipped;
+      continue;
+    }
     TInlineComponentArray<UStaticMeshComponent*> Components;
     It->GetComponents(Components);
     for (const UStaticMeshComponent* Component : Components) {
@@ -241,7 +248,7 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
       const EObstacleClass Kind = ClassifyMesh(MeshName, Options.TreeNames, Options.RockNames);
       const FBox LocalBounds = Mesh->GetBounds().GetBox();
       int32 InArea = 0;
-      const auto Consider = [&](const FTransform& Transform) {
+      const auto Consider = [&](const FTransform& Transform, int32 InstanceIndex) {
         const FVector Location = Transform.GetLocation();
         if (Location.X < Area.Min.X || Location.X > Area.Max.X || Location.Y < Area.Min.Y ||
             Location.Y > Area.Max.Y) {
@@ -255,6 +262,18 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
         if (ObstacleFromBounds(Kind, LocalBounds.TransformBy(Transform), Options, Obstacle)) {
           Obstacles.Add(Obstacle);
           (Kind == EObstacleClass::Tree ? OutReport.Trees : OutReport.Rocks) += 1;
+          if (!Options.DebugPath.IsEmpty()) {
+            const AActor* Owner = Component->GetOwner();
+            DebugLines.Add(FString::Printf(
+                TEXT("%.2f,%.2f,%.2f,%.2f,%s,%s,%s,%s,%s,%d,%d,%d,%.2f,%.2f,%.2f"), Obstacle.cx,
+                Obstacle.cy, Obstacle.base_z, Obstacle.base_z + Obstacle.height, *MeshName,
+                Kind == EObstacleClass::Tree ? TEXT("tree") : TEXT("rock"), *Component->GetName(),
+                *Component->GetClass()->GetName(), Owner != nullptr ? *Owner->GetName() : TEXT(""),
+                static_cast<int32>(Component->GetCollisionEnabled()),
+                Component->IsVisible() ? 1 : 0, InstanceIndex,
+                Transform.GetLocation().Z / MetersToCentimeters, Transform.GetScale3D().X,
+                Transform.GetScale3D().Z));
+          }
           swarm::Obstacle Crown;
           if (Kind == EObstacleClass::Tree &&
               CrownFromBounds(LocalBounds.TransformBy(Transform), Options, Crown)) {
@@ -268,11 +287,11 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
         for (int32 Index = 0; Index < Instanced->GetInstanceCount(); ++Index) {
           FTransform Transform;
           if (Instanced->GetInstanceTransform(Index, Transform, /*bWorldSpace=*/true)) {
-            Consider(Transform);
+            Consider(Transform, Index);
           }
         }
       } else {
-        Consider(Component->GetComponentTransform());
+        Consider(Component->GetComponentTransform(), -1);
       }
       if (InArea > 0) {
         FSurveyEntry& Entry = Survey.FindOrAdd(MeshName);
@@ -283,8 +302,9 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
     }
   }
   UE_LOG(LogSwarmSim, Display,
-         TEXT("export: %d static mesh components touch the area, %lld instances in it"),
-         ComponentsConsidered, InstancesInArea);
+         TEXT("export: %d static mesh components touch the area, %lld instances in it (%d actors "
+              "skipped)"),
+         ComponentsConsidered, InstancesInArea, ActorsSkipped);
 
   Survey.ValueSort([](const FSurveyEntry& A, const FSurveyEntry& B) { return A.Count > B.Count; });
   for (const TPair<FString, FSurveyEntry>& Pair : Survey) {
@@ -292,6 +312,17 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
                          : Pair.Value.Class == EObstacleClass::Rock ? TEXT("rock")
                                                                     : TEXT("not exported");
     OutReport.Survey.Add(FString::Printf(TEXT("%s: %d (%s)"), *Pair.Key, Pair.Value.Count, Class));
+  }
+  if (!Options.DebugPath.IsEmpty()) {
+    FString Text = TEXT(
+        "x_m,y_m,base_m,top_m,mesh,class,component,component_class,actor,collision,visible,"
+        "instance,"
+        "instance_z_m,scale_x,scale_z\n");
+    Text += FString::Join(DebugLines, TEXT("\n"));
+    Text += TEXT("\n");
+    if (!FFileHelper::SaveStringToFile(Text, *Options.DebugPath)) {
+      UE_LOG(LogSwarmSim, Error, TEXT("cannot write %s"), *Options.DebugPath);
+    }
   }
   if (static_cast<uint64>(Obstacles.Num()) > swarm::kMaxSceneObstacles) {
     OutError = TEXT("too many obstacles for a scene file");

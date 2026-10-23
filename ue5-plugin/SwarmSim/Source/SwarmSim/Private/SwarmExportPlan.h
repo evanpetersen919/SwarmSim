@@ -33,10 +33,18 @@
 //                            fraction of the mesh's half width, from -SwarmExportCrownBase of the
 //                            tree's height up to its top (default 0: no crown, the trunk alone)
 //   -SwarmExportCrownBase=F  the share of a tree's height below its crown (default 0.35)
+//   -SwarmExportSkipActors=A,B  actors whose name contains one of these are left out of the
+//                            obstacles. For scenery that is in the level but not part of the
+//                            world an aircraft flies in, like a distant background
+//   -SwarmExportDebug=PATH   also write a CSV with one line for each exported obstacle: its
+//                            position, the mesh, component, and actor it came from, and the
+//                            component's collision and visibility, for finding why an
+//                            obstacle is where it is
 
 namespace SwarmSim {
 struct FExportOptions {
   FString OutPath;
+  FString DebugPath;  // when set, a CSV about every exported obstacle is written here
   FString AuditPath;  // when set, the audit CSV is written instead of a scene
   FVector2D AnchorCm = FVector2D::ZeroVector;
   double SizeM = 1000.0;
@@ -45,6 +53,7 @@ struct FExportOptions {
   TArray<FString> TreeNames;
   TArray<FString> RockNames;
   TArray<FString> GroundNames;
+  TArray<FString> SkipActors;
   double MinTreeHeightM = 3.0;
   double MinRockSizeM = 1.0;
   double MaxRockSizeM = 60.0;

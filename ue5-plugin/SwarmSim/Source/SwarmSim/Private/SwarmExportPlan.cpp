@@ -31,6 +31,7 @@ FExportOptions ParseExportOptions(const TCHAR* CommandLine) {
   FExportOptions Options;
   FParse::Value(CommandLine, TEXT("SwarmExportScene="), Options.OutPath);
   FParse::Value(CommandLine, TEXT("SwarmAuditScene="), Options.AuditPath);
+  FParse::Value(CommandLine, TEXT("SwarmExportDebug="), Options.DebugPath);
 
   FString Text;
   if (FParse::Value(CommandLine, TEXT("SwarmAnchor="), Text, /*bShouldStopOnSeparator=*/false)) {
@@ -73,6 +74,7 @@ FExportOptions ParseExportOptions(const TCHAR* CommandLine) {
   ParseNames(CommandLine, TEXT("SwarmExportTrees="), Options.TreeNames);
   ParseNames(CommandLine, TEXT("SwarmExportRocks="), Options.RockNames);
   ParseNames(CommandLine, TEXT("SwarmExportGround="), Options.GroundNames);
+  ParseNames(CommandLine, TEXT("SwarmExportSkipActors="), Options.SkipActors);
   return Options;
 }
 
