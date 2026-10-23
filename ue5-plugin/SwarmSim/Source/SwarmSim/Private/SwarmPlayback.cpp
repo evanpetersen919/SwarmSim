@@ -3,9 +3,12 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "CanvasItem.h"
 #include "Components/InputComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Debug/DebugDrawService.h"
+#include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -75,6 +78,24 @@ ASwarmPlayback::ASwarmPlayback() {
 void ASwarmPlayback::BeginPlay() {
   Super::BeginPlay();
   BindKeys();
+  // The map is drawn on the game's canvas, by the engine's debug draw service.
+  MapDrawHandle = UDebugDrawService::Register(
+      TEXT("Game"), FDebugDrawDelegate::CreateUObject(this, &ASwarmPlayback::DrawMap));
+}
+
+void ASwarmPlayback::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+  if (MapDrawHandle.IsValid()) {
+    UDebugDrawService::Unregister(MapDrawHandle);
+    MapDrawHandle.Reset();
+  }
+  Super::EndPlay(EndPlayReason);
+}
+
+FBox2D ASwarmPlayback::GetMapBounds() const {
+  if (!(MapSize > 0.0)) {
+    return FBox2D(ForceInit);
+  }
+  return FBox2D(FVector2D(MapMinX, MapMinY), FVector2D(MapMinX + MapSize, MapMinY + MapSize));
 }
 
 void ASwarmPlayback::BindKeys() {
@@ -101,6 +122,7 @@ void ASwarmPlayback::BindKeys() {
   InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &ASwarmPlayback::ChooseCinematic);
   InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ASwarmPlayback::SelectNextDrone);
   InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ASwarmPlayback::ToggleMessages);
+  InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ASwarmPlayback::ToggleMap);
   bKeysBound = true;
 }
 
@@ -119,6 +141,22 @@ bool ASwarmPlayback::LoadLog(const FString& Path, FString& OutError) {
     return false;
   }
   Replay = Loaded;
+  // The map shows every position of the log, so it does not move or rescale during playback.
+  double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+  bool bAny = false;
+  for (const swarm::ReplayFrame& Frame : Replay->frames()) {
+    for (const swarm::AgentSnapshot& Agent : Frame.snapshot.agents) {
+      MinX = bAny ? FMath::Min(MinX, Agent.position[0]) : Agent.position[0];
+      MaxX = bAny ? FMath::Max(MaxX, Agent.position[0]) : Agent.position[0];
+      MinY = bAny ? FMath::Min(MinY, Agent.position[1]) : Agent.position[1];
+      MaxY = bAny ? FMath::Max(MaxY, Agent.position[1]) : Agent.position[1];
+      bAny = true;
+    }
+  }
+  const SwarmSim::FMapExtent Extent = SwarmSim::MapExtentFor(MinX, MinY, MaxX, MaxY);
+  MapMinX = Extent.Min.X;
+  MapMinY = Extent.Min.Y;
+  MapSize = bAny ? Extent.Size : 0.0;
   DestroyDrones();
   BuildDrones(static_cast<int32>(Replay->header().agent_count));
   PlaybackTick = static_cast<double>(Replay->first_tick());
@@ -653,9 +691,13 @@ int32 MessagePaintIndex(swarm::SnapshotEventKind Kind) {
   }
 }
 
-// The most lines drawn at once, and the width of a line in centimeters.
+// The most lines drawn at once, and how wide a line is: a fixed fraction of its distance from the
+// camera, so that it stays a couple of pixels wide whether the camera is 15 m or 500 m away, within
+// limits in centimeters.
 constexpr int32 kMaxMessageLines = 400;
-constexpr double kMessageLineWidthCm = 80.0;
+constexpr double kMessageLineWidthPerCm = 0.005;
+constexpr double kMessageLineMinCm = 2.0;
+constexpr double kMessageLineMaxCm = 120.0;
 
 const TCHAR* FallbackName(int32 State) {
   switch (State) {
@@ -813,6 +855,12 @@ void ASwarmPlayback::DrawMessages() {
         }
         const FVector Start = From.Root->GetComponentLocation();
         const FVector Direction = To.Root->GetComponentLocation() - Start;
+        const FVector Seen =
+            Camera != nullptr ? Camera->GetComponentLocation() : FVector::ZeroVector;
+        const double Near =
+            FMath::Min(FVector::Dist(Seen, Start), FVector::Dist(Seen, Start + Direction));
+        const double WidthCm =
+            FMath::Clamp(Near * kMessageLineWidthPerCm, kMessageLineMinCm, kMessageLineMaxCm);
         const double Length = Direction.Size();
         if (Length < 1.0) {
           return;
@@ -831,8 +879,7 @@ void ASwarmPlayback::DrawMessages() {
         // The cylinder is 100 cm tall and 100 cm across, centered, standing along Z.
         Line->SetWorldLocationAndRotation(Start + 0.5 * Direction,
                                           FRotationMatrix::MakeFromZ(Direction).Rotator());
-        Line->SetWorldScale3D(
-            FVector(kMessageLineWidthCm / 100.0, kMessageLineWidthCm / 100.0, Length / 100.0));
+        Line->SetWorldScale3D(FVector(WidthCm / 100.0, WidthCm / 100.0, Length / 100.0));
         Line->SetMaterial(0, MessagePaints[MessagePaintIndex(Event.kind)]);
         Line->SetVisibility(true);
       });
@@ -842,6 +889,130 @@ void ASwarmPlayback::DrawMessages() {
     }
   }
   bMessagesDrawn = true;
+}
+
+void ASwarmPlayback::DrawMap(UCanvas* Canvas, APlayerController*) {
+  if (!bShowMap || Canvas == nullptr || !Replay.IsValid() || Drones.IsEmpty() || !(MapSize > 0.0) ||
+      Canvas->DefaultTexture == nullptr) {
+    return;
+  }
+  const SwarmSim::FMapExtent Extent{FVector2D(MapMinX, MapMinY), MapSize};
+  const double Side = FMath::Clamp(0.3 * Canvas->SizeY, 140.0, 380.0);
+  const FVector2D Origin(Canvas->SizeX - Side - 16.0, 16.0);
+
+  const auto Tile = [&](const FVector2D& Position, const FVector2D& Size,
+                        const FLinearColor& Color) {
+    FCanvasTileItem Item(Position, Canvas->DefaultTexture->GetResource(), Size, Color);
+    Item.BlendMode = SE_BLEND_Translucent;
+    Canvas->DrawItem(Item);
+  };
+  const auto Line = [&](const FVector2D& From, const FVector2D& To, const FLinearColor& Color,
+                        float Thickness) {
+    FCanvasLineItem Item(From, To);
+    Item.SetColor(Color);
+    Item.LineThickness = Thickness;
+    Canvas->DrawItem(Item);
+  };
+  const auto Text = [&](const FString& Label, const FVector2D& Position,
+                        const FLinearColor& Color) {
+    FCanvasTextItem Item(Position, FText::FromString(Label), GEngine->GetSmallFont(), Color);
+    Item.EnableShadow(FLinearColor::Black);
+    Canvas->DrawItem(Item);
+  };
+
+  // The background, a border, and north.
+  Tile(Origin, FVector2D(Side, Side), FLinearColor(0.0f, 0.0f, 0.0f, 0.55f));
+  const FLinearColor Border(0.8f, 0.8f, 0.8f, 0.8f);
+  Line(Origin, Origin + FVector2D(Side, 0.0), Border, 1.0f);
+  Line(Origin + FVector2D(Side, 0.0), Origin + FVector2D(Side, Side), Border, 1.0f);
+  Line(Origin + FVector2D(Side, Side), Origin + FVector2D(0.0, Side), Border, 1.0f);
+  Line(Origin + FVector2D(0.0, Side), Origin, Border, 1.0f);
+  Text(TEXT("N"), Origin + FVector2D(0.5 * Side - 3.0, 3.0), FLinearColor::White);
+
+  // A scale bar of a round length, about a third of the width.
+  const double BarMeters = SwarmSim::ScaleBarMeters(Extent.Size / 3.0);
+  if (BarMeters > 0.0) {
+    const double BarPixels = BarMeters / Extent.Size * Side;
+    const FVector2D BarStart = Origin + FVector2D(8.0, Side - 12.0);
+    Line(BarStart, BarStart + FVector2D(BarPixels, 0.0), FLinearColor::White, 2.0f);
+    Text(FString::Printf(TEXT("%.0f m"), BarMeters), BarStart + FVector2D(0.0, -14.0),
+         FLinearColor::White);
+  }
+
+  // Trails: the last few seconds of every drone, dimmer the older.
+  const double Dt = Replay->header().dt;
+  const int32 TrailSteps = 12;
+  const double StepTicks = Dt > 0.0 ? 0.5 / Dt : 25.0;
+  std::vector<swarm::AgentSnapshot> Past;
+  std::vector<std::vector<FVector2D>> Trails(static_cast<size_t>(Drones.Num()));
+  for (int32 K = 1; K <= TrailSteps; ++K) {
+    const double Tick = FMath::Max(static_cast<double>(Replay->first_tick()),
+                                   PlaybackTick - static_cast<double>(K) * StepTicks);
+    if (!Replay->sample(Tick, Past)) {
+      break;
+    }
+    for (int32 I = 0; I < Drones.Num() && static_cast<size_t>(I) < Past.size(); ++I) {
+      Trails[static_cast<size_t>(I)].push_back(
+          SwarmSim::MapPoint(Extent, Origin, Side, Past[static_cast<size_t>(I)].position[0],
+                             Past[static_cast<size_t>(I)].position[1]));
+    }
+  }
+
+  std::vector<swarm::AgentSnapshot> Now;
+  if (!Replay->sample(PlaybackTick, Now)) {
+    return;
+  }
+  // Messages of the last moments, as lines between the drones in the colors of the 3D lines:
+  // delivered faint, the others (lost, rate limited, jammed) strong, so a jam shows as red lines.
+  VisitRecentMessages(
+      *Replay, PlaybackTick, Dt, kMessageDrawSeconds,
+      [&](const swarm::SnapshotEvent& Event, double) {
+        if (Event.sender >= Now.size() || Event.receiver >= Now.size()) {
+          return;
+        }
+        const swarm::AgentSnapshot& From = Now[Event.sender];
+        const swarm::AgentSnapshot& To = Now[Event.receiver];
+        FLinearColor Paint = SwarmSim::StateColor(MessagePaintIndex(Event.kind), true);
+        const bool bDelivered = Event.kind == swarm::SnapshotEventKind::kScheduled;
+        Paint.A = bDelivered ? 0.25f : 0.9f;
+        Line(SwarmSim::MapPoint(Extent, Origin, Side, From.position[0], From.position[1]),
+             SwarmSim::MapPoint(Extent, Origin, Side, To.position[0], To.position[1]), Paint,
+             bDelivered ? 1.0f : 1.5f);
+      });
+  const int32 Followed = FMath::Clamp(FollowIndex, 0, Drones.Num() - 1);
+  for (int32 I = 0; I < Drones.Num() && static_cast<size_t>(I) < Now.size(); ++I) {
+    const swarm::AgentSnapshot& A = Now[static_cast<size_t>(I)];
+    const FLinearColor Color = SwarmSim::StateColor(A.fallback_state, A.alive);
+    const FVector2D Here = SwarmSim::MapPoint(Extent, Origin, Side, A.position[0], A.position[1]);
+    FVector2D Previous = Here;
+    const std::vector<FVector2D>& Trail = Trails[static_cast<size_t>(I)];
+    for (size_t K = 0; K < Trail.size(); ++K) {
+      const float Fade = 0.6f * (1.0f - static_cast<float>(K) / static_cast<float>(TrailSteps));
+      Line(Previous, Trail[K], FLinearColor(Color.R, Color.G, Color.B, Fade), 1.0f);
+      Previous = Trail[K];
+    }
+    if (!A.alive) {
+      // A failed drone is a gray cross where it stopped.
+      const FLinearColor Gray(0.6f, 0.6f, 0.6f, 1.0f);
+      Line(Here + FVector2D(-4.0, -4.0), Here + FVector2D(4.0, 4.0), Gray, 2.0f);
+      Line(Here + FVector2D(-4.0, 4.0), Here + FVector2D(4.0, -4.0), Gray, 2.0f);
+      continue;
+    }
+    // Heading: the velocity, with +Y up the screen.
+    const double PlaneSpeed =
+        FMath::Sqrt(A.velocity[0] * A.velocity[0] + A.velocity[1] * A.velocity[1]);
+    if (PlaneSpeed > 0.5) {
+      Line(Here, Here + FVector2D(A.velocity[0], -A.velocity[1]) / PlaneSpeed * 14.0, Color, 2.0f);
+    }
+    Tile(Here - FVector2D(4.0, 4.0), FVector2D(8.0, 8.0), Color);
+    if (I == Followed) {
+      const FLinearColor White = FLinearColor::White;
+      Line(Here + FVector2D(-8.0, -8.0), Here + FVector2D(8.0, -8.0), White, 1.5f);
+      Line(Here + FVector2D(8.0, -8.0), Here + FVector2D(8.0, 8.0), White, 1.5f);
+      Line(Here + FVector2D(8.0, 8.0), Here + FVector2D(-8.0, 8.0), White, 1.5f);
+      Line(Here + FVector2D(-8.0, 8.0), Here + FVector2D(-8.0, -8.0), White, 1.5f);
+    }
+  }
 }
 
 void ASwarmPlayback::DrawHud() const {

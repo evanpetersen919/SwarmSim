@@ -120,6 +120,7 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
   }
   FParse::Value(CommandLine, TEXT("SwarmDroneModel="), Options.DroneModel);
   Options.bMessages = FParse::Param(CommandLine, TEXT("SwarmMessages"));
+  Options.bNoMap = FParse::Param(CommandLine, TEXT("SwarmNoMap"));
   FParse::Value(CommandLine, TEXT("SwarmShotDir="), Options.ShotDir);
   const auto ReadNumber = [&](const TCHAR* Key, double Low, double High, double& Out) {
     FString Value;
@@ -149,4 +150,29 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
 bool ShotDue(double Clock, double Delay, double Every, int32 Taken, int32 Count) {
   return Taken < Count && Clock >= Delay + Every * static_cast<double>(Taken);
 }
+
+FMapExtent MapExtentFor(double MinX, double MinY, double MaxX, double MaxY, double Margin) {
+  const double Span = FMath::Max3(MaxX - MinX, MaxY - MinY, 1.0) * (1.0 + 2.0 * Margin);
+  FMapExtent Extent;
+  Extent.Size = Span;
+  Extent.Min = FVector2D(0.5 * (MinX + MaxX) - 0.5 * Span, 0.5 * (MinY + MaxY) - 0.5 * Span);
+  return Extent;
+}
+
+FVector2D MapPoint(const FMapExtent& Extent, const FVector2D& MapOrigin, double MapSize, double X,
+                   double Y) {
+  const double U = (X - Extent.Min.X) / Extent.Size;
+  const double V = (Y - Extent.Min.Y) / Extent.Size;
+  return FVector2D(MapOrigin.X + U * MapSize, MapOrigin.Y + (1.0 - V) * MapSize);
+}
+
+double ScaleBarMeters(double MaxMeters) {
+  if (!(MaxMeters > 0.0)) {
+    return 0.0;
+  }
+  const double Base = FMath::Pow(10.0, FMath::FloorToDouble(FMath::LogX(10.0, MaxMeters)));
+  const double Mantissa = MaxMeters / Base;
+  return Base * (Mantissa >= 5.0 ? 5.0 : (Mantissa >= 2.0 ? 2.0 : 1.0));
+}
+
 }  // namespace SwarmSim

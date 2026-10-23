@@ -80,6 +80,7 @@ struct FLaunchOptions {
   FString Camera = TEXT("free");
   FString DroneModel;
   bool bMessages = false;  // -SwarmMessages: draw the messages between drones from the start
+  bool bNoMap = false;     // -SwarmNoMap: start without the mini map
   FString ShotDir;
   double ShotDelay = 30.0;
   double ShotEvery = 20.0;
@@ -96,4 +97,24 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine);
 // Whether the next screenshot is due, after `Clock` seconds of play with `Taken` taken so far: the
 // first at `Delay`, then every `Every` seconds, until `Count` have been taken.
 bool ShotDue(double Clock, double Delay, double Every, int32 Taken, int32 Count);
+
+// The mini map is a square of the plane, in simulation meters, that holds every position of a run
+// with a margin on each side. `Min` is its lower left corner, +X to the right and +Y up.
+struct FMapExtent {
+  FVector2D Min = FVector2D::ZeroVector;
+  double Size = 1.0;
+};
+
+// The square that holds the box [MinX, MaxX] x [MinY, MaxY] with `Margin` (a fraction of the larger
+// side) on each side. Never smaller than one meter, so a run that does not move still has a map.
+FMapExtent MapExtentFor(double MinX, double MinY, double MaxX, double MaxY, double Margin = 0.08);
+
+// Where the simulation point (X, Y) falls on a map drawn as a square of `MapSize` pixels with its
+// upper left corner at `MapOrigin`. +Y is up the screen, so the screen's y is flipped.
+FVector2D MapPoint(const FMapExtent& Extent, const FVector2D& MapOrigin, double MapSize, double X,
+                   double Y);
+
+// A round length for a scale bar: 1, 2, or 5 times a power of ten, the largest not above
+// `MaxMeters`. Zero for a length that is not positive.
+double ScaleBarMeters(double MaxMeters);
 }  // namespace SwarmSim

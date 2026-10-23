@@ -37,6 +37,8 @@ enum class ESwarmCameraMode : uint8 {
 // Keys, in a game: Space pauses, Up and Down double and halve the speed, Left and Right step back
 // and forward ten seconds, R restarts, 1 to 4 choose the camera (free, orbit, follow, cinematic),
 // and Tab chooses the drone to follow.
+class UCanvas;
+
 UCLASS()
 class SWARMSIM_API ASwarmPlayback : public AActor {
   GENERATED_BODY()
@@ -46,6 +48,7 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
 
   virtual void Tick(float DeltaSeconds) override;
   virtual void BeginPlay() override;
+  virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
   // Reads a run log and creates a drone for each agent. Returns false and sets `OutError` if the
   // file is not a usable log. Replaces any log loaded before.
@@ -155,6 +158,16 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bShowMessages = false;
 
+  // A small top-down map in the upper right corner: a dot for every drone, colored by its fallback
+  // state, with its heading, a short trail, and a ring around the drone the camera follows. North
+  // (the simulation's +Y) is up. N toggles it; -SwarmNoMap starts without it.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  bool bShowMap = true;
+
+  // The square of the simulation's plane, in meters, that the map shows: every position of the log
+  // with a margin. Empty before a log is loaded.
+  FBox2D GetMapBounds() const;
+
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bLoop = false;
 
@@ -188,6 +201,8 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   void UpdateCamera(double DeltaSeconds);
   void DrawHud() const;
   void DrawMessages();
+  void DrawMap(UCanvas* Canvas, APlayerController* Controller);
+  void ToggleMap() { bShowMap = !bShowMap; }
   void HideMessageLines();
   void ToggleMessages() { bShowMessages = !bShowMessages; }
   void BindKeys();
@@ -216,6 +231,12 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   TObjectPtr<UStaticMesh> MessageShape;
 
   bool bMessagesDrawn = false;
+
+  // The map's extent in simulation meters, from every position of the log, and its draw handle.
+  double MapMinX = 0.0;
+  double MapMinY = 0.0;
+  double MapSize = 0.0;
+  FDelegateHandle MapDrawHandle;
 
   UPROPERTY()
   TObjectPtr<UCameraComponent> Camera;

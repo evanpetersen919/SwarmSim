@@ -148,6 +148,35 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
             ParseLaunchOptions(TEXT("-SwarmLog=a")).bMessages);
   TestTrue(TEXT("-SwarmMessages draws them"),
            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmMessages")).bMessages);
+  TestFalse(TEXT("the map starts on"), ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoMap);
+  TestTrue(TEXT("-SwarmNoMap starts without it"),
+           ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoMap")).bNoMap);
+
+  // The mini map's square, with the numbers written out. The larger side of the box is 40 m, and
+  // with a quarter on each side the square is 60 m, centered on (10, 10).
+  const SwarmSim::FMapExtent Extent = SwarmSim::MapExtentFor(-10.0, 0.0, 30.0, 20.0, 0.25);
+  TestTrue(TEXT("map size"), FMath::IsNearlyEqual(Extent.Size, 60.0, 1e-9));
+  TestTrue(TEXT("map corner"), Extent.Min.Equals(FVector2D(-20.0, -20.0), 1e-9));
+  // On a map of 100 px with its upper left corner at (50, 10), the lower left of the square is the
+  // lower left of the map (the screen's y is flipped) and the center of the square is the center.
+  const FVector2D Origin(50.0, 10.0);
+  TestTrue(TEXT("lower left"),
+           SwarmSim::MapPoint(Extent, Origin, 100.0, -20.0, -20.0).Equals(FVector2D(50.0, 110.0)));
+  TestTrue(TEXT("upper right"),
+           SwarmSim::MapPoint(Extent, Origin, 100.0, 40.0, 40.0).Equals(FVector2D(150.0, 10.0)));
+  TestTrue(TEXT("center"),
+           SwarmSim::MapPoint(Extent, Origin, 100.0, 10.0, 10.0).Equals(FVector2D(100.0, 60.0)));
+  TestTrue(TEXT("a run that does not move still has a map"),
+           SwarmSim::MapExtentFor(5.0, 5.0, 5.0, 5.0).Size >= 1.0);
+  // Scale bars are 1, 2, or 5 times a power of ten, the largest not above the limit.
+  TestTrue(TEXT("scale bars"), FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(7.0), 5.0) &&
+                                   FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(30.0), 20.0) &&
+                                   FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(120.0), 100.0) &&
+                                   FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(250.0), 200.0) &&
+                                   FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(0.9), 0.5) &&
+                                   FMath::IsNearlyEqual(SwarmSim::ScaleBarMeters(1.0), 1.0));
+  TestEqual(TEXT("no scale bar for no length"), SwarmSim::ScaleBarMeters(0.0), 0.0);
+
   TestEqual(TEXT("the default camera is free"), ParseLaunchOptions(TEXT("-SwarmLog=a")).Camera,
             FString(TEXT("free")));
   for (const TCHAR* Bad :
@@ -230,6 +259,17 @@ bool FSwarmPlaybackActorTest::RunTest(const FString& Parameters) {
   TestTrue(FString::Printf(TEXT("the log loads (%s)"), *Error), Playback->LoadLog(Path, Error));
   TestEqual(TEXT("a drone per agent"), Playback->GetDroneCount(), 3);
   TestEqual(TEXT("all alive at the start"), Playback->GetAliveCount(), 3);
+
+  // The map holds every position of the log: a square with an area, around drone 0 at x = 15 m,
+  // drone 1 at (10, 10), and the place drone 2 stops, (-5, 0). It is on by default.
+  const FBox2D MapBounds = Playback->GetMapBounds();
+  TestTrue(TEXT("the map is square and has an area"),
+           MapBounds.GetSize().X > 0.0 &&
+               FMath::IsNearlyEqual(MapBounds.GetSize().X, MapBounds.GetSize().Y, 1e-6));
+  TestTrue(TEXT("the map holds drone 0"), MapBounds.IsInside(FVector2D(15.0, 0.0)));
+  TestTrue(TEXT("the map holds drone 1"), MapBounds.IsInside(FVector2D(10.0, 10.0)));
+  TestTrue(TEXT("the map holds where drone 2 stops"), MapBounds.IsInside(FVector2D(-5.0, 0.0)));
+  TestTrue(TEXT("the map is on by default"), Playback->bShowMap);
 
   // Positions, with the numbers written out here and not computed with the conversion helpers:
   // the simulation's y is Unreal's -Y, meters become centimeters. Drone 0 is at x = 5 m/s * 3 s
