@@ -1115,6 +1115,7 @@ void read_avoid(Section& control, Scenario& s, std::uint64_t version) {
   read_choice<AvoidFeasibility>(
       a, "feasibility", s.avoid.feasibility,
       {{"budget", AvoidFeasibility::kBudget}, {"kinematic", AvoidFeasibility::kKinematic}});
+  read_double(a, "urgent_s", s.avoid.urgent_s, at_least(0.0));
   double clearance = 0.0;
   if (read_double(a, "clearance_m", clearance, at_least(0.0))) {
     s.avoid.clearance_m = clearance;

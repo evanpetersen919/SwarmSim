@@ -390,6 +390,9 @@ std::string canonical_text(const Scenario& s) {
       if (av.clearance_m) {
         line("    clearance_m: " + num(*av.clearance_m));
       }
+      if (av.urgent_s > 0.0) {
+        line("    urgent_s: " + num(av.urgent_s));
+      }
     }
     if (s.share.mode != ShareMode::kOff) {
       const ShareParams& sh = s.share;

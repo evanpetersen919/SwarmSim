@@ -57,6 +57,11 @@ struct AvoidParams {
   // The clearance a return must be cleared by to count as clearable, meters. Empty means the
   // terrain guidance's clearance.
   std::optional<double> clearance_m;
+
+  // ADR 0017. When the time to the threat is less than this, the turn uses the whole of the bank
+  // the rule may use and the aircraft slows, instead of the turn proportional to the angle. Zero
+  // means off, which is the behavior of ADR 0015.
+  double urgent_s = 0.0;
 };
 
 // Throws std::invalid_argument unless the horizon, hold, and turn time are finite and positive, the

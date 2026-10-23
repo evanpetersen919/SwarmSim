@@ -1,6 +1,6 @@
 # 0017. Using the whole turn and the lowest speed when the time to a threat is short
 
-Date: 2026-10-23. Status: proposed.
+Date: 2026-10-23. Status: accepted.
 
 ## Context
 

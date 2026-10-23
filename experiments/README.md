@@ -22,6 +22,7 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `fixed_wing_avoid.yaml` | The avoidance experiment: 4 steepness levels, 4 maps, 3 sensor arms, 2 weather levels; 96 cells (ADR 0014) |
 | `fixed_wing_avoid_sensitivity.yaml` | The avoidance rule's horizon and bank fraction on 400 m hills; 12 cells (ADR 0014) |
 | `fixed_wing_avoid_rejoin.yaml` | The rejoin experiment: 4 steepness levels, 2 maps, 2 weather levels, 7 arms; 112 cells (ADR 0015) |
+| `fixed_wing_avoid_urgent.yaml` | The urgent-turn experiment: 2 weather levels, 3 steepness levels, 2 maps, 4 arms (urgent_s of 0, 4, 6, 8 s); 48 cells (ADR 0017) |
 | `fixed_wing_avoid_clearance.yaml` | The avoidance clearance (15, 30, 60 m) with the three changes of ADR 0015; 6 cells |
 | `fixed_wing_share.yaml` | The sharing experiment: 3 steepness levels, 2 weather levels, 3 loss levels, 2 jam levels, 3 arms (avoid, memory, share); 108 cells (ADR 0016) |
 | `fixed_wing_share_sensitivity.yaml` | How long a point is kept and how many a report carries; 6 cells (ADR 0016) |

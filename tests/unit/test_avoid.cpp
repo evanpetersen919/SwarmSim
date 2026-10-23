@@ -284,6 +284,30 @@ Vec3 command(DroneBrain& brain, std::uint64_t tick, const ForwardSample& reading
 
 }  // namespace
 
+namespace {
+
+// The sideways command (x, heading +y) five ticks into a blocked heading whose threat is 9 s away.
+double turn_command(double urgent_s) {
+  BrainConfig c = avoiding_brain(true);
+  c.avoid.urgent_s = urgent_s;
+  DroneBrain brain(c);
+  const ForwardSample none;
+  for (std::uint64_t t = 0; t < 5; ++t) {
+    command(brain, t, none);
+  }
+  return command(brain, 5, blocked_center()).x;
+}
+
+}  // namespace
+
+TEST(AvoidBrain, LittleTimeUsesTheWholeBankAndMoreTimeLeavesTheTurnAlone) {
+  const double proportional = turn_command(0.0);
+  // The threat is 150 m / 16.7 m/s = 9 s away: not urgent at 5 s, urgent at 12 s.
+  EXPECT_DOUBLE_EQ(turn_command(5.0), proportional);
+  const double urgent = turn_command(12.0);
+  EXPECT_GT(urgent, proportional + 2.0);
+}
+
 TEST(AvoidBrain, ABlockedHeadingTurnsRightWhenTheLeftAndRightAreEquallyFree) {
   DroneBrain with(avoiding_brain(true));
   DroneBrain without(avoiding_brain(false));
@@ -408,8 +432,8 @@ TEST(AvoidScenario, ItNeedsTheForwardSensorVersionThreeAFixedWingVehicleAndValid
   EXPECT_FALSE(
       swarm::load_scenario(avoid_scenario(3, "vehicle: {type: quad}\n", forward, "  avoid: {}\n"))
           .ok());
-  for (const char* bad :
-       {"horizon_s: 0", "hold_s: 0", "bank_fraction: 0", "bank_fraction: 1.5", "unknown_key: 1"}) {
+  for (const char* bad : {"horizon_s: 0", "hold_s: 0", "bank_fraction: 0", "bank_fraction: 1.5",
+                          "urgent_s: -1", "unknown_key: 1"}) {
     EXPECT_FALSE(swarm::load_scenario(
                      avoid_scenario(3, fw, forward, std::string("  avoid: {") + bad + "}\n"))
                      .ok())
@@ -598,8 +622,10 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   const std::string fw = "vehicle: {type: fixed_wing}\n";
   const std::string forward = "  forward: {period_ticks: 5}\n";
   const swarm::LoadResult r = swarm::load_scenario(avoid_scenario(
-      3, fw, forward, "  avoid: {rejoin: true, feasibility: kinematic, clearance_m: 30}\n"));
+      3, fw, forward,
+      "  avoid: {rejoin: true, feasibility: kinematic, clearance_m: 30, urgent_s: 6}\n"));
   ASSERT_TRUE(r.ok()) << first_error(r);
+  EXPECT_DOUBLE_EQ(r.scenario.avoid.urgent_s, 6.0);
   EXPECT_TRUE(r.scenario.avoid.rejoin);
   EXPECT_EQ(r.scenario.avoid.feasibility, swarm::AvoidFeasibility::kKinematic);
   ASSERT_TRUE(r.scenario.avoid.clearance_m.has_value());
@@ -608,6 +634,7 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_NE(text.find("rejoin: true"), std::string::npos);
   EXPECT_NE(text.find("feasibility: kinematic"), std::string::npos);
   EXPECT_NE(text.find("clearance_m: 30"), std::string::npos);
+  EXPECT_NE(text.find("urgent_s: 6"), std::string::npos);
   const swarm::LoadResult again = swarm::load_scenario(text);
   ASSERT_TRUE(again.ok()) << first_error(again);
   EXPECT_EQ(swarm::canonical_text(again.scenario), text);
@@ -623,6 +650,8 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_FALSE(bare.scenario.avoid.rejoin);
   EXPECT_EQ(bare.scenario.avoid.feasibility, swarm::AvoidFeasibility::kBudget);
   EXPECT_FALSE(bare.scenario.avoid.clearance_m.has_value());
+  EXPECT_DOUBLE_EQ(bare.scenario.avoid.urgent_s, 0.0);
+  EXPECT_EQ(swarm::canonical_text(bare.scenario).find("urgent_s"), std::string::npos);
 
   for (const char* bad : {"feasibility: fast", "clearance_m: -1", "rejoin: maybe"}) {
     EXPECT_FALSE(swarm::load_scenario(

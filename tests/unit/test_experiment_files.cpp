@@ -48,6 +48,7 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"fixed_wing_avoid.yaml", 96},
       {"fixed_wing_avoid_sensitivity.yaml", 12},
       {"fixed_wing_avoid_rejoin.yaml", 112},
+      {"fixed_wing_avoid_urgent.yaml", 48},
       {"fixed_wing_avoid_clearance.yaml", 6},
       {"fixed_wing_share.yaml", 108},
       {"fixed_wing_share_sensitivity.yaml", 6},

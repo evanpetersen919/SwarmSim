@@ -24,6 +24,9 @@ void validate(const AvoidParams& p) {
   if (!(std::isfinite(p.bank_fraction) && p.bank_fraction > 0.0 && p.bank_fraction <= 1.0)) {
     throw std::invalid_argument("AvoidParams: bank_fraction must be in (0, 1]");
   }
+  if (!(std::isfinite(p.urgent_s) && p.urgent_s >= 0.0)) {
+    throw std::invalid_argument("AvoidParams: urgent_s must be finite and not negative");
+  }
   if (p.clearance_m && !(std::isfinite(*p.clearance_m) && *p.clearance_m >= 0.0)) {
     throw std::invalid_argument("AvoidParams: clearance_m must be finite and not negative");
   }
@@ -213,6 +216,11 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
     result.slow = result.time_to_threat < std::abs(result.turn_angle) / turn_rate;
   }
   if (result.all_blocked) {
+    result.turn_accel = result.turn_angle > 0.0 ? limit : -limit;
+    result.slow = true;
+  } else if (params.urgent_s > 0.0 && result.time_to_threat < params.urgent_s &&
+             std::abs(result.turn_angle) > 1e-12) {
+    // Little time: the whole bank toward the chosen column, and the lowest speed.
     result.turn_accel = result.turn_angle > 0.0 ? limit : -limit;
     result.slow = true;
   }
