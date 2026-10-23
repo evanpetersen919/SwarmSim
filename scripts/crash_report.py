@@ -123,7 +123,11 @@ def classify(drone, tracks, k, scene, dt_s):
     for other, other_track in tracks.items():
         if other == drone:
             continue
+        # A neighbor that has already stopped on the ground is a wreck, not a flying aircraft.
+        stopped = crash_index(other_track)
         for i in range(max(0, k - int(round(3.0 / dt_s))), min(k + 1, len(other_track))):
+            if stopped is not None and i >= stopped:
+                continue
             d = math.dist(track[i][1:4], other_track[i][1:4])
             if close is None or d < close:
                 close = d
@@ -150,6 +154,8 @@ def main():
     parser.add_argument("--seeds", type=int, default=30)
     parser.add_argument("--work", default="crash_report_work")
     parser.add_argument("--every", type=int, default=5, help="ticks between positions read")
+    parser.add_argument("--reuse", action="store_true",
+                        help="read the files already in the work directory instead of running")
     args = parser.parse_args()
     os.makedirs(args.work, exist_ok=True)
     text = open(args.scenario, encoding="utf-8").read()
@@ -161,11 +167,12 @@ def main():
         log_path = os.path.join(args.work, f"run_{seed}.swlog")
         pos_path = os.path.join(args.work, f"run_{seed}.csv")
         scene_path = os.path.join(args.work, f"run_{seed}.swscene")
-        with open(yaml_path, "w", encoding="utf-8") as handle:
-            handle.write(re.sub(r"(?m)^seed:.*$", f"seed: {seed}", text, count=1))
-        run([args.sim, "run", yaml_path, "--out", log_path])
-        run([args.sim, "positions", log_path, "--csv", pos_path, "--every", str(args.every)])
-        run([args.sim, "export-scene", log_path, "--out", scene_path])
+        if not args.reuse:
+            with open(yaml_path, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^seed:.*$", f"seed: {seed}", text, count=1))
+            run([args.sim, "run", yaml_path, "--out", log_path])
+            run([args.sim, "positions", log_path, "--csv", pos_path, "--every", str(args.every)])
+            run([args.sim, "export-scene", log_path, "--out", scene_path])
         scene = audit_export.read_scene(scene_path)
         tracks = load_positions(pos_path)
         dt_s = tracks[0][1][0] - tracks[0][0][0]
