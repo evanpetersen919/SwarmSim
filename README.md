@@ -4,6 +4,10 @@ Deterministic C++17 simulation and benchmark for drone-swarm behavior under degr
 
 [![ci](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml/badge.svg)](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![A fixed-wing aircraft banking through a canyon, from the viewer's follow camera](docs/img/hero.gif)
+
+Eight seconds of a recorded run played back in the Unreal viewer, with the viewer's overlay showing the run: five aircraft on a tight orbit, seed 7, follow camera. The scenario is a scratch one fitted to a 2 km export of a premade level and is not in the repository. The GIF is small (480 px, 8 frames per second) to stay under 5 MB.
+
 ![A fixed-wing aircraft flying between two rock pillars](docs/img/viewer_pillars.jpg)
 
 One of five aircraft on a tight orbit, seen from the viewer's follow camera as it flies between two rock pillars. A scratch scenario fitted to a 2 km export of a premade level (5 aircraft, 120 m radius, terrain guidance on, seed 7); it is not in the repository. The aircraft is drawn 2.5 times its size so that it reads at this distance.
