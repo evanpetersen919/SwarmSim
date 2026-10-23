@@ -483,6 +483,30 @@ TEST(ScenarioLoader, TheAblationSwitchesAreReadAndRoundTripAndAreAbsentWhenOn) {
   EXPECT_FALSE(load_scenario(std::string(kMinimal) + "control:\n  fallback: maybe\n").ok());
 }
 
+TEST(ScenarioLoader, DropStaleAfterTicksIsReadRoundTripsAndIsAbsentWhenZero) {
+  const LoadResult defaults = load_scenario(kMinimal);
+  ASSERT_TRUE(defaults.ok()) << describe(defaults);
+  EXPECT_EQ(defaults.scenario.drop_stale_after_ticks, 0U);
+  const std::string plain = swarm::canonical_text(defaults.scenario);
+  EXPECT_EQ(plain.find("drop_stale"), std::string::npos);  // existing canonical text is unchanged
+
+  const LoadResult set =
+      load_scenario(std::string(kMinimal) + "control:\n  drop_stale_after_ticks: 75\n");
+  ASSERT_TRUE(set.ok()) << describe(set);
+  EXPECT_EQ(set.scenario.drop_stale_after_ticks, 75U);
+  const std::string text = swarm::canonical_text(set.scenario);
+  EXPECT_NE(text.find("  drop_stale_after_ticks: 75"), std::string::npos);
+  const LoadResult again = load_scenario(text);
+  ASSERT_TRUE(again.ok()) << describe(again);
+  EXPECT_EQ(again.scenario.drop_stale_after_ticks, 75U);
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+
+  const LoadResult zero =
+      load_scenario(std::string(kMinimal) + "control:\n  drop_stale_after_ticks: 0\n");
+  ASSERT_TRUE(zero.ok());
+  EXPECT_EQ(swarm::canonical_text(zero.scenario), plain);
+}
+
 TEST(ScenarioLoader, ASceneCanComeFromAFile) {
   const std::string text = std::string(kMinimal) +
                            "scene:\n"

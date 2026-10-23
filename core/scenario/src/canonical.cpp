@@ -347,6 +347,9 @@ std::string canonical_text(const Scenario& s) {
   }
   line("  report_period_ticks: " + uint(s.report_period_ticks));
   line("  staleness_ticks: " + uint(s.staleness_ticks));
+  if (s.drop_stale_after_ticks > 0) {
+    line("  drop_stale_after_ticks: " + uint(s.drop_stale_after_ticks));
+  }
 
   if (s.faults.empty()) {
     line("faults: []");

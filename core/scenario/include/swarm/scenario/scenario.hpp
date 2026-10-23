@@ -150,6 +150,10 @@ struct Scenario {
   bool separation_enabled = true;
   std::uint64_t report_period_ticks = 5;
   std::uint64_t staleness_ticks = 50;
+  // Formation guidance: a neighbor not heard from for more than this many ticks is left out of the
+  // formation consensus (see BrainConfig). 0 keeps every neighbor. Written to the canonical text
+  // only when set.
+  std::uint64_t drop_stale_after_ticks = 0;
 
   std::vector<Fault> faults;
   // Sorted by tick. When not empty, the world has a ground station as its last endpoint.

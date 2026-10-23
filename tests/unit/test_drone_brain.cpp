@@ -438,6 +438,29 @@ TEST(DroneBrain, TheLastKnownPositionAppliesOnlyAfterTheConfiguredSilence) {
   EXPECT_NE(command_at(150, 150), command_at(150, 0));
 }
 
+TEST(DroneBrain, ASilentNeighborLeavesTheFormationConsensusOnlyWhenTheRuleIsOn) {
+  // Neighbor 0 reports once at tick 0 and is then silent; neighbor 2 never reports. With the rule
+  // on, neighbor 0 is used until it has been silent for more than 100 ticks and is dropped after.
+  // With the rule off it stays, predicted onward.
+  const auto used_at = [](std::uint64_t at_tick, std::uint64_t drop_after) {
+    BrainConfig c = config(1, 3, {0, 0, 20}, false);
+    c.drop_stale_after_ticks = drop_after;
+    DroneBrain brain(c);
+    for (std::uint64_t t = 0; t <= at_tick; ++t) {
+      swarm::BrainInput in;
+      in.imu.accel = {0.0, 0.0, 9.81};
+      if (t == 0) {
+        in.inbox.push_back(report_from(0, 0, {4, 0, 20}, {20, 0, 0}));
+      }
+      brain.step(in, t);
+    }
+    return brain.target().neighbors_used;
+  };
+  EXPECT_EQ(used_at(100, 100), 1U);  // silent for exactly the limit: still used
+  EXPECT_EQ(used_at(101, 100), 0U);  // one tick past it: dropped
+  EXPECT_EQ(used_at(101, 0), 1U);    // rule off: kept, predicted onward
+}
+
 TEST(DroneBrain, SuppliedNeighborEstimatesReplaceThePredictorsAndMakeEveryNeighborFresh) {
   const BrainConfig c = config(1, 3, {0, 0, 20}, false);
   DroneBrain with(c);

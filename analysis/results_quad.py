@@ -5,7 +5,8 @@ Usage, from the analysis directory, after running the experiments (see docs/RESU
     python results_quad.py ../results
 
 It reads baselines_quad_30.csv, baselines_burst_quad_30.csv, ablation_quad_30.csv, and
-matrix_quad_30.csv from the directory given. Intervals are 95 percent Student t intervals for the
+matrix_quad_30.csv from the directory given, and baselines_drop_quad_30.csv and
+baselines_burst_drop_quad_30.csv when they are there (the stale-neighbor rule experiments). Intervals are 95 percent Student t intervals for the
 mean over runs. A paired difference is a - b over runs that share every other axis level and the
 seed, so it removes the variation between cells.
 """
@@ -65,6 +66,35 @@ def by_failure(directory, name, title):
             paired(part, "predictor", "kalman", "hold_last", metric)
 
 
+def drop_rule(directory, name, title):
+    """The stale-neighbor rule off (keep) and on (drop100), by failure level."""
+    path = os.path.join(directory, name)
+    if not os.path.exists(path):
+        return
+    table = load_table(path)
+    print(f"\n{title}, stale-neighbor rule  ({name}, {len(table.rows)} runs, "
+          f"{len(table.failed_rows())} failed)")
+    for metric in (FORMATION, SEPARATION, COLLISIONS):
+        print(f" paired differences, drop100 - keep, {metric}:")
+        for level in table.levels("faults"):
+            part = copy.copy(table)
+            part.rows = [r for r in table.rows if r["faults"] == level]
+            for predictor in table.levels("predictor"):
+                one = copy.copy(part)
+                one.rows = [r for r in part.rows if r["predictor"] == predictor]
+                s = paired_difference(one, "stale_rule", "drop100", "keep", metric)
+                print(f"  faults={level} {predictor}: {s.mean:+.3f} [{s.ci_low:+.3f}, "
+                      f"{s.ci_high:+.3f}]  pairs={s.n}")
+    for rule in table.levels("stale_rule"):
+        for level in table.levels("faults"):
+            part = copy.copy(table)
+            part.rows = [r for r in table.rows
+                         if r["stale_rule"] == rule and r["faults"] == level]
+            print(f" rule={rule} faults={level}, kalman - hold_last, {FORMATION}:")
+            paired(part, "predictor", "kalman", "hold_last", FORMATION)
+            show(part, ["predictor"], [FORMATION])
+
+
 def ablation(directory):
     table = load_table(os.path.join(directory, "ablation_quad_30.csv"))
     print(f"\nAblation  (ablation_quad_30.csv, {len(table.rows)} runs, "
@@ -118,6 +148,8 @@ def main():
     baselines(directory, "baselines_burst_quad_30.csv", "Baselines, bursty loss")
     by_failure(directory, "baselines_quad_30.csv", "Baselines, independent loss")
     by_failure(directory, "baselines_burst_quad_30.csv", "Baselines, bursty loss")
+    drop_rule(directory, "baselines_drop_quad_30.csv", "Baselines, independent loss")
+    drop_rule(directory, "baselines_burst_drop_quad_30.csv", "Baselines, bursty loss")
     ablation(directory)
     fog_ablation(directory)
     matrix(directory)

@@ -170,6 +170,12 @@ BrainOutput DroneBrain::step(const BrainInput& input, std::uint64_t tick) {
       if (j == config_.id || !estimates_[j].valid) {
         continue;
       }
+      if (config_.drop_stale_after_ticks > 0 && !supplied) {
+        const auto age = table_.age(j, tick);
+        if (age && *age > config_.drop_stale_after_ticks) {
+          continue;
+        }
+      }
       neighbors.push_back({j, estimates_[j]});
     }
     formation.alpha += (1.0 - formation.alpha) * behavior.reference_boost;

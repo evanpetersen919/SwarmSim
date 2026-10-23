@@ -106,6 +106,11 @@ struct BrainConfig {
   // A neighbor report older than this is not fresh. Comms is not judged during the first this many
   // ticks, so a drone is not degraded merely because the first reports are still in flight.
   std::uint64_t staleness_ticks = 100;
+  // Formation guidance only. A neighbor whose latest report is older than this many ticks is left
+  // out of the formation consensus, instead of being predicted onward and pulling the swarm toward
+  // a position nobody has checked. Separation is unchanged: it still keeps clear of the
+  // prediction. 0 keeps every neighbor with an estimate.
+  std::uint64_t drop_stale_after_ticks = 0;
 };
 
 // A message payload delivered to this drone and who sent it.

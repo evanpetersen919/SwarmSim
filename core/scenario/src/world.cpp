@@ -215,6 +215,7 @@ ScenarioWorld build_world(const Scenario& s) {
     c.brain.separation_enabled = s.separation_enabled;
     c.brain.report_period_ticks = s.report_period_ticks;
     c.brain.staleness_ticks = s.staleness_ticks;
+    c.brain.drop_stale_after_ticks = s.drop_stale_after_ticks;
     c.start = starts[i];
     c.vehicle.max_accel = c.brain.separation.max_accel;
     c.vehicle_kind = s.vehicle.kind;

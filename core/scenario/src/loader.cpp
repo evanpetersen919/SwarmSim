@@ -1033,6 +1033,7 @@ void read_control(Section& root, Scenario& s, std::uint64_t version) {
   read_pattern(sec, s, version);
   read_uint(sec, "report_period_ticks", s.report_period_ticks, 1, 1000000);
   read_uint(sec, "staleness_ticks", s.staleness_ticks, 1, 1000000);
+  read_uint(sec, "drop_stale_after_ticks", s.drop_stale_after_ticks, 0, 1000000);
   sec.finish();
 }
 

@@ -31,6 +31,8 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"ablation_fog.yaml", 16},
       {"baselines.yaml", 48},
       {"baselines_burst.yaml", 48},
+      {"baselines_drop.yaml", 96},
+      {"baselines_burst_drop.yaml", 96},
       {"fog_convention.yaml", 12},
       {"matrix_fixed_wing.yaml", 216},
       {"baselines_fixed_wing.yaml", 72},

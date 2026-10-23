@@ -68,8 +68,27 @@ The same runs split by whether one drone fails (settled formation error; 180 run
 
 - With no failure, prediction helps by 0.30 m under independent loss and 0.60 m under bursty loss, and the oracle equals dead reckoning and the Kalman filter.
 - When one drone fails, hold-last and the oracle go to about 5.5 m and dead reckoning and the Kalman filter stay near 1.5 m. The cause, from the code: the formation target averages the position of every neighbor less its slot offset, weighted by the inverse of its uncertainty. A failed drone stops and goes silent. The hold-last predictor reports the uncertainty of its last report unchanged (`neighbor_predictor.cpp`) and the oracle reports zero, so a failed drone keeps its full weight and the surviving drones keep averaging in a frozen position while the formation moves on. Dead reckoning and the Kalman filter let the uncertainty of a silent neighbor grow, so its weight falls and the survivors stop following it.
-- So most of the pooled prediction effect is a property of how the formation consensus treats a silent neighbor, not of tracking healthy neighbors better. A rule that drops a neighbor that has not been heard from within the staleness time would probably remove most of the gap between hold-last and the other predictors. That rule is not in the controller and has not been tested.
+- So most of the pooled prediction effect is a property of how the formation consensus treats a silent neighbor, not of tracking healthy neighbors better. A rule that drops a silent neighbor from the consensus removes most of that gap; it was tested after this release and is described in the next section.
 - The minimum separation does not depend on the failure level (it is the same in both halves), so its gain from prediction (0.55 m under independent loss and 0.96 m under bursty loss) is a separate effect.
+
+### A rule that drops a silent neighbor
+
+The controller has an optional setting, `control.drop_stale_after_ticks` (0 = off, the default, so every table above is unchanged). When set, a neighbor whose latest report is older than that many ticks is left out of the formation consensus; separation still keeps clear of its prediction. `experiments/baselines_drop.yaml` and `experiments/baselines_burst_drop.yaml` repeat the baselines with the rule off (`keep`) and on at 100 ticks (`drop100`, 2 s at the 0.02 s step, 20 report periods). 100 is the only threshold tried and was fixed before the run. Each file is 96 cells, 30 seeds, 2,880 runs, none failed, with the same setup as above.
+
+Settled formation error (180 runs per predictor in each row, pooled over loss level and jamming):
+
+| Failure | Loss | Hold-last, keep | Hold-last, drop100 | Dead reckoning and Kalman | Oracle | Kalman minus hold-last, drop100 (paired) |
+|---|---|---|---|---|---|---|
+| None | Independent | 1.74 m | 1.74 m | 1.44 m | 1.44 m | -0.30 m [-0.32, -0.27] |
+| None | Bursty | 2.09 m | 2.02 m | 1.49 and 1.50 m | 1.44 m | -0.53 m [-0.59, -0.47] |
+| One drone | Independent | 5.49 m | 1.80 m | 1.50 m | 5.60 m | -0.30 m [-0.32, -0.28] |
+| One drone | Bursty | 5.83 m | 2.08 m | 1.55 and 1.56 m | 5.60 m | -0.52 m [-0.59, -0.46] |
+
+- The rule changes hold-last and nothing else. Paired by seed, drop100 minus keep for hold-last with a failed drone is -3.69 m [-3.74, -3.63] under independent loss and -3.76 m [-3.82, -3.70] under bursty loss. For dead reckoning and the Kalman filter the difference is zero to the printed precision, because a silent neighbor's weight has already fallen with its growing uncertainty.
+- With the rule on, the Kalman advantage over hold-last with a failed drone falls from 3.99 and 4.28 m to 0.30 and 0.52 m, which is about the no-failure advantage. The large failure effect in the tables above comes from the consensus treating a silent neighbor at full weight, as the section above says, and not from prediction quality.
+- The oracle is unchanged at 5.60 m with a failure. Its estimates are supplied from outside and counted as always fresh, so the rule does not apply to them. The oracle's failure result is a property of reading the truth of a drone that no longer moves, not of the rule.
+- Minimum separation and collision episodes do not change by more than the intervals: the largest paired difference is +0.014 m [-0.001, +0.030] for hold-last under bursty loss.
+- The rule does not improve the proposed method (Kalman) on these scenarios. It makes the hold-last baseline a fairer comparison. Reproduce with `python results_quad.py ../results` after running the two experiments with the command above.
 
 ## Ablation
 
@@ -124,7 +143,7 @@ The default controller across the full matrix (12,960 runs; the axes are fully c
 
 - They come from one scene family, one controller design, and one simulator. The weather, loss, and jamming models are parametric and are not validated against real data, apart from one published visibility curve.
 - The intervals are for the mean over runs, treating runs as independent. The pooled groups mix scenarios (jamming and failure levels); the per-cell numbers are in the result tables.
-- The hold-last baseline as implemented keeps a silent neighbor at constant certainty, so the comparison with it is partly a comparison of how a silent neighbor is treated. It is not a measurement of how well a predictor tracks healthy neighbors, which is the 0.30 and 0.60 m of the no-failure rows.
+- The hold-last baseline as implemented keeps a silent neighbor at constant certainty, so the comparison with it is partly a comparison of how a silent neighbor is treated (the drop rule above removes most of that, for hold-last). It is not a measurement of how well a predictor tracks healthy neighbors, which is the 0.30 and 0.60 m of the no-failure rows.
 - The fallback result is for one kind of failure (a lost LiDAR position fix in fog) and one degraded-communication state in the other scenarios. The state machine was not tested against other kinds of navigation failure.
 
 ## The fixed-wing aircraft
