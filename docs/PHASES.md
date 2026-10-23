@@ -145,7 +145,7 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 
 ## Phase 9: Release
 
-Status: not started. The README has no results table because none is final (see Results there). Until a hero GIF exists it carries three screenshots of the viewer.
+Status: the quadrotor results table is done (see RESULTS.md); the fixed-wing aircraft has only pilots, and a hero GIF, the Docker check, and the tag are not done. Until a hero GIF exists the README carries three screenshots of the viewer.
 
 | # | Commit | Check |
 |---|---|---|

@@ -31,6 +31,7 @@ A forward-looking EO/IR camera with a field of view and a gimbal, obstacle detec
 
 ## Consequences
 
+- A pilot on the dense scenario (docs/phases/flight-realism.md) found no benefit with the terrain map present: the worst dip in blind weather was the same with and without the altimeter (a paired difference of 0.02 m over ten seeds). Its value shown so far is the no-map case. Whether it earns its place needs a map with errors, which the aircraft does not have yet.
 - Results with the altimeter are not comparable with runs without it. Runs without the section are unchanged.
 - Terrain guidance gains a second input, so its tests must cover a map that disagrees with the world, a dropout, and a failed reading.
 - The altimeter does not remove the limit of vertical-only avoidance: terrain that rises faster than the aircraft can climb still needs a turn or a speed change, which is not built.

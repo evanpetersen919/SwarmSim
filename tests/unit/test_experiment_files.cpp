@@ -29,11 +29,15 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"matrix.yaml", 432},
       {"ablation.yaml", 48},
       {"baselines.yaml", 48},
+      {"baselines_burst.yaml", 48},
       {"fog_convention.yaml", 12},
       {"matrix_fixed_wing.yaml", 216},
       {"baselines_fixed_wing.yaml", 72},
       {"ablation_fixed_wing.yaml", 48},
       {"probe_fixed_wing.yaml", 384},
+      {"pilot_fixed_wing.yaml", 8},
+      {"pilot_fixed_wing_comms.yaml", 24},
+      {"pilot_fixed_wing_altimeter.yaml", 4},
   };
   const swarm::ReadFile read = swarm::testing::read_from(SWARM_EXPERIMENT_DIR);
   for (const auto& [file, cells] : documented) {

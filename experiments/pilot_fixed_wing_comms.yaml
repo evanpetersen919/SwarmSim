@@ -1,0 +1,25 @@
+# A comms pilot for the fixed-wing aircraft on the current model: weather x neighbor predictor x
+# loss = 2 x 4 x 3 = 24 cells, five seeds, 120 runs. The aircraft are dense enough that separation
+# acts, and in blinding weather they lose the camera fix, so what they hear about their neighbors
+# decides how close they pass. pilot_fixed_wing.yaml found that packet loss changed nothing when the
+# aircraft stay apart and see well.
+version: 1
+name: pilot_fixed_wing_comms
+base: base_fixed_wing_dense.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: blind, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+  - name: predictor
+    levels:
+      - {label: holdlast, set: {control: {predictor: hold_last}}}
+      - {label: deadreck, set: {control: {predictor: dead_reckoning}}}
+      - {label: kalman, set: {control: {predictor: kalman}}}
+      - {label: turning, set: {control: {predictor: turning}}}
+  - name: loss
+    levels:
+      - {label: none, set: {comms: {loss_model: independent, loss: 0.0}}}
+      - {label: p30, set: {comms: {loss_model: independent, loss: 0.3}}}
+      - {label: burst30, set: {comms: {loss_model: burst, loss: 0.3, mean_burst: 6.0}}}

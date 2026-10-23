@@ -1,0 +1,18 @@
+# An altimeter pilot for the fixed-wing aircraft on the current model: blinding weather x radar
+# An altimeter pilot for the fixed-wing aircraft on the current model: weather x radar
+# altimeter = 2 x 2 = 4 cells, ten seeds, 40 runs (clear air is the control).
+# drifts, and the terrain map is read at the wrong place; the altimeter measures the height above
+# the surface directly. pilot_fixed_wing.yaml found it changed nothing when the camera could see.
+version: 1
+name: pilot_fixed_wing_altimeter
+base: base_fixed_wing_dense.yaml
+seeds: {first: 1, count: 10}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: blind, set: {weather: {visibility_m: 200, rain_mm_h: 0}}}
+  - name: altimeter
+    levels:
+      - {label: off, set: {}}
+      - {label: on, set: {sensors: {radar_altimeter: {period_ticks: 5}}}}

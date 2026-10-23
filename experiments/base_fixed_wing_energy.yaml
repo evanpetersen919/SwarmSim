@@ -1,0 +1,63 @@
+# The scenario that the fixed-wing pilot varies, on the current model (scenario version 3): eight
+# ALTIUS-class aircraft on stacked orbits over 120 m hills, with the energy model, a steady wind
+# with gusts, ground contact that ends a flight, and terrain guidance. The axes replace parts of
+# it; its seed is ignored.
+version: 3
+name: fixed_wing_pilot_base
+seed: 1
+dt: 0.02
+duration_s: 120
+
+scene:
+  type: hills
+  size_m: [2000, 2000]
+  cell_m: 10
+  amplitude_m: 120
+  obstacles:
+    density_per_m2: 0.0
+
+swarm:
+  drones: 8
+  formation: {shape: grid, spacing_m: 25}
+  start: {columns: 4, spacing_m: 60, jitter_m: 10, altitude_m: 100, altitude_jitter_m: 0}
+
+mission:
+  waypoints:
+    - [0, 0, 100]
+  speed_mps: 17
+
+vehicle:
+  type: fixed_wing
+  dynamics: energy
+
+environment:
+  wind: {mean_mps: [3, -2], gust_mps: 1.5, gust_scale_m: 150}
+  ground_contact_crashes: true
+
+weather: {visibility_m: 20000, rain_mm_h: 0}
+
+comms:
+  latency_ticks: 2
+  jitter_ticks: 1
+  loss_model: independent
+  loss: 0.0
+  jammers: []
+
+control:
+  predictor: kalman
+  report_period_ticks: 5
+  staleness_ticks: 50
+  orbit:
+    radius_m: 150
+    radius_step_m: 12
+    altitude_step_m: 10
+  terrain:
+    clearance_m: 60
+
+faults: []
+
+metrics:
+  settle_s: 20
+  collision_radius_m: 10.0
+  recovery_threshold_m: 40.0
+  recovery_hold_s: 5.0

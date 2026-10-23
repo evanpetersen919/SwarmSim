@@ -1,0 +1,31 @@
+# The baselines of baselines.yaml with bursty loss in place of independent loss: the same average
+# loss rates (10, 30, and 50 percent) delivered in bursts of a mean length of 6 messages. 4 predictors x
+# 3 loss levels x 2 jamming x 2 faults = 48 cells.
+version: 1
+name: baselines_burst
+base: base.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: predictor
+    levels:
+      - {label: hold_last, set: {control: {predictor: hold_last}}}
+      - {label: dead_reckoning, set: {control: {predictor: dead_reckoning}}}
+      - {label: kalman, set: {control: {predictor: kalman}}}
+      - {label: oracle, set: {control: {predictor: oracle}}}
+  - name: loss
+    levels:
+      - {label: b10, set: {comms: {loss_model: burst, loss: 0.1, mean_burst: 6.0}}}
+      - {label: b30, set: {comms: {loss_model: burst, loss: 0.3, mean_burst: 6.0}}}
+      - {label: b50, set: {comms: {loss_model: burst, loss: 0.5, mean_burst: 6.0}}}
+  - name: jamming
+    levels:
+      - {label: none, set: {comms: {jammers: []}}}
+      - label: pulsed
+        set:
+          comms:
+            jammers:
+              - {center: [0, 0, 20], radius_m: 150, mode: pulsed, from_s: 20, to_s: 40, period_ticks: 100, duty: 0.5, loss: 0.9, affects: receiver}
+  - name: faults
+    levels:
+      - {label: none, set: {faults: []}}
+      - {label: one, set: {faults: [{drone: 2, at_s: 30}]}}

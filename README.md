@@ -29,7 +29,17 @@ What exists, by area. [docs/PLAN.md](docs/PLAN.md) has the scope and the dated c
 
 ## Results
 
-There are no benchmark results to report yet. The fixed-wing experiments of ADR 0010 (see [docs/phases/fixed-wing-vehicle.md](docs/phases/fixed-wing-vehicle.md)) were run before the energy model, wind, and terrain guidance existed, so they do not describe the current model, and the 30-seed fixed-wing runs and the quadrotor matrix have not been run. Every number that goes here will come from `swarm_batch` on a file in [experiments/](experiments/), with the hardware, compiler, commit, and seed count named.
+For the quadrotor swarm, run with 30 seeds per cell (15,840 runs in four experiments, none failed), on Windows with the MSVC release build. The full tables, the setup, and what they do not show are in [docs/RESULTS.md](docs/RESULTS.md). The research question is how much neighbor prediction with a fallback state machine preserves formation integrity compared with holding the last reported state.
+
+| Predictor | Settled formation error, independent loss | Settled formation error, bursty loss | Minimum separation, bursty loss |
+|---|---|---|---|
+| Hold-last | 3.61 m [3.42, 3.81] | 3.96 m [3.76, 4.17] | 3.09 m [2.98, 3.20] |
+| Dead reckoning | 1.47 m [1.42, 1.53] | 1.52 m [1.46, 1.59] | 4.11 m [4.02, 4.21] |
+| Kalman | 1.47 m [1.41, 1.53] | 1.53 m [1.46, 1.60] | 4.05 m [3.96, 4.15] |
+
+Means over 360 runs each, with 95 percent intervals, pooled over jamming and drone-failure levels and over the loss levels of 10, 30, and 50 percent. Paired by seed, Kalman prediction lowers the formation error by 2.14 m [1.95, 2.34] under independent loss and by 2.44 m [2.24, 2.64] under bursty loss compared with hold-last. The hold-last predictor gets worse as the loss rises and the Kalman predictor changes little. Dead reckoning does as well as the Kalman filter. In the ablation, removing the separation rule drops the minimum separation by 3.0 m and adds 0.58 collision episodes per run, and removing the fallback state machine does not change the result, so it is not shown to help in these scenarios. Fog, constant jamming, and a swarm of 20 raise the formation error most in the matrix.
+
+There are no benchmark results for the fixed-wing aircraft. Three pilots on it found that only fog reaches its flight (see [docs/phases/flight-realism.md](docs/phases/flight-realism.md)). To regenerate the table, see the commands in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## Build and run
 
@@ -104,7 +114,7 @@ Not covered by CI: the Unreal plugin, which needs a local UE 5.4 install, and th
 - The quadrotor's pose comes from a LiDAR-derived position fix, and the fixed-wing aircraft's from an assumed camera position fix. Neither is full localization, and how the real aircraft navigates without GPS is not public.
 - The fixed-wing aircraft's terrain handling is vertical only: it raises its altitude (from a prior map, and with the altimeter from a measurement) but does not turn or slow down for terrain, so ground that rises faster than the aircraft can climb still catches it.
 - The flight patterns are standard ones chosen as assumptions. A lawnmower sweep with turns is not modeled; the rake flies one pass.
-- Performance numbers will come from one machine.
+- The results come from one machine and one build (Windows, MSVC release). Floating-point behavior may differ on other compilers and platforms.
 - There is no flight testing, hardware-in-the-loop, or autopilot integration.
 
 ## Repository layout

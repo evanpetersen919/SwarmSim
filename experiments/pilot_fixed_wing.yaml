@@ -1,0 +1,19 @@
+# Pilot: weather x altimeter x loss = 2 x 2 x 2 = 8 cells, five seeds, 40 runs, on the current
+# fixed-wing model (energy dynamics, wind, ground contact, terrain guidance).
+version: 1
+name: pilot_fixed_wing
+base: base_fixed_wing_energy.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 350, rain_mm_h: 0}}}
+  - name: altimeter
+    levels:
+      - {label: off, set: {}}
+      - {label: on, set: {sensors: {radar_altimeter: {period_ticks: 5}}}}
+  - name: loss
+    levels:
+      - {label: p00, set: {comms: {loss_model: independent, loss: 0.0}}}
+      - {label: p30, set: {comms: {loss_model: independent, loss: 0.3}}}
