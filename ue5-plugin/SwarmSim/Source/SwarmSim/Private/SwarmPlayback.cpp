@@ -14,6 +14,7 @@
 #include "HAL/PlatformMisc.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Math/RotationMatrix.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "SwarmCoordinates.h"
@@ -34,8 +35,10 @@ FRotator kModelTurn() { return FRotator(0.0, -90.0, 0.0); }
 constexpr double kAccelerationWindowTicks = 5.0;
 // Time constant of the display attitude's smoothing, in seconds.
 constexpr double kAttitudeSmoothing = 0.2;
-// The propeller of a folder model turns this many degrees per meter per second of airspeed.
-constexpr double kPropellerDegPerMps = 140.0;
+// The propeller of a folder model turns this many degrees per meter per second of airspeed: about
+// 26 turns per second at 60 km/h. At the frame rate of a capture a spin this fast looks like a
+// blur or a slow, steady turn, as a real propeller does on film.
+constexpr double kPropellerDegPerMps = 560.0;
 // Mesh-name prefixes of the ALTIUS model's pusher propeller: two thin blades (Cylinder006 and
 // Cylinder012) and the four small cylinders at their roots, at the very tail of the fuselage. The
 // spinner (Mesh002) is nearly round about the axis and stays still. The glTF gives its nodes
@@ -97,6 +100,7 @@ void ASwarmPlayback::BindKeys() {
   InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ASwarmPlayback::ChooseFollow);
   InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &ASwarmPlayback::ChooseCinematic);
   InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ASwarmPlayback::SelectNextDrone);
+  InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ASwarmPlayback::ToggleMessages);
   bKeysBound = true;
 }
 
@@ -139,6 +143,9 @@ void ASwarmPlayback::DestroyDrones() {
   }
   Drones.Reset();
   AliveCount = 0;
+  for (int32& InState : StateCounts) {
+    InState = 0;
+  }
 }
 
 void ASwarmPlayback::BuildDrones(int32 Count) {
@@ -248,14 +255,9 @@ void ASwarmPlayback::BuildDrones(int32 Count) {
           AddPart(Drone.Root, Mesh, ModelOffset, ModelTurn, FVector(ModelScale), nullptr);
         }
       }
-      // The model's materials have no color parameter, so a lamp on top of the fuselage carries
-      // the state color. The lamp's component holds its material, which keeps it from being
-      // collected (FDrone is not a UPROPERTY).
-      if (Basic != nullptr && Sphere != nullptr) {
-        Drone.Paint = UMaterialInstanceDynamic::Create(Basic, this);
-        AddPart(Drone.Root, Sphere, FVector(0.0, 0.0, 0.5 * kModelSpanCm * 0.18),
-                FRotator::ZeroRotator, FVector(0.45), Drone.Paint);
-      }
+      // The model's materials have no color parameter, and a lamp on the fuselage looked wrong on
+      // the aircraft, so a folder model carries no state color: the heads-up display shows the
+      // fallback state instead (see BuildHud).
       Drone.Color = FLinearColor::Black;
       continue;
     }
@@ -404,6 +406,11 @@ void ASwarmPlayback::Tick(float DeltaSeconds) {
   TakeScheduledShot(DeltaSeconds);
   ApplyFrame(DeltaSeconds, false);
   UpdateCamera(DeltaSeconds);
+  if (bShowMessages) {
+    DrawMessages();
+  } else if (bMessagesDrawn) {
+    HideMessageLines();
+  }
   if (bShowHud) {
     DrawHud();
   }
@@ -431,13 +438,19 @@ void ASwarmPlayback::ApplyFrame(double DeltaSeconds, bool bFirst) {
   const double Window = (PlaybackTick - Earlier) * Dt;
 
   AliveCount = 0;
+  for (int32& InState : StateCounts) {
+    InState = 0;
+  }
   const int32 Count = FMath::Min(Drones.Num(), static_cast<int32>(Now.size()));
   for (int32 I = 0; I < Count; ++I) {
     FDrone& Drone = Drones[I];
     const swarm::AgentSnapshot& A = Now[I];
     if (A.alive) {
       ++AliveCount;
+      ++StateCounts[FMath::Min<int32>(A.fallback_state, 3)];
     }
+    Drone.FallbackState = A.fallback_state;
+    Drone.SpeedMps = FVector(A.velocity[0], A.velocity[1], A.velocity[2]).Size();
     const FVector Location = DroneWorldLocation(A.position[0], A.position[1], A.position[2]);
 
     // Display attitude from the velocity and the change of velocity over the last window.
@@ -599,35 +612,248 @@ FString ASwarmPlayback::GetHashString() const {
   return Frame != nullptr ? SwarmSim::HashString(Frame->hash) : FString();
 }
 
-TArray<FString> ASwarmPlayback::GetHudLines() const {
-  TArray<FString> Lines;
+namespace {
+
+// How far back the messages shown and counted reach, in seconds of play time.
+constexpr double kMessageDrawSeconds = 0.6;
+constexpr double kMessageCountSeconds = 1.0;
+
+// Calls `Visit` with every message event of the frames in the last `WindowSeconds` before `Tick`,
+// and the age of its frame in seconds. The frames are in tick order.
+void VisitRecentMessages(const swarm::Replay& Replay, double Tick, double Dt, double WindowSeconds,
+                         TFunctionRef<void(const swarm::SnapshotEvent&, double)> Visit) {
+  const swarm::ReplayFrame* Last = Replay.frame_at_or_before(Tick);
+  if (Last == nullptr || !(Dt > 0.0)) {
+    return;
+  }
+  const std::vector<swarm::ReplayFrame>& Frames = Replay.frames();
+  const double WindowTicks = WindowSeconds / Dt;
+  for (std::ptrdiff_t I = Last - Frames.data(); I >= 0; --I) {
+    const double Age = Tick - static_cast<double>(Frames[static_cast<size_t>(I)].tick);
+    if (Age > WindowTicks) {
+      break;
+    }
+    for (const swarm::SnapshotEvent& Event : Frames[static_cast<size_t>(I)].snapshot.events) {
+      Visit(Event, Age * Dt);
+    }
+  }
+}
+
+// The paint of a message line by outcome: delivered, lost, rate limited, jammed.
+int32 MessagePaintIndex(swarm::SnapshotEventKind Kind) {
+  switch (Kind) {
+    case swarm::SnapshotEventKind::kScheduled:
+      return 0;
+    case swarm::SnapshotEventKind::kDroppedLoss:
+      return 1;
+    case swarm::SnapshotEventKind::kDroppedRate:
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+// The most lines drawn at once, and the width of a line in centimeters.
+constexpr int32 kMaxMessageLines = 400;
+constexpr double kMessageLineWidthCm = 80.0;
+
+const TCHAR* FallbackName(int32 State) {
+  switch (State) {
+    case 0:
+      return TEXT("nominal");
+    case 1:
+      return TEXT("degraded comms");
+    case 2:
+      return TEXT("degraded navigation");
+    default:
+      return TEXT("safe hold");
+  }
+}
+
+}  // namespace
+
+void ASwarmPlayback::BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) const {
+  const auto Add = [&](const FString& Text, const FColor& Color) {
+    Lines.Add(Text);
+    Colors.Add(Color);
+  };
   if (!Replay.IsValid()) {
-    Lines.Add(TEXT("SwarmSim replay: no log loaded"));
-    return Lines;
+    Add(TEXT("SwarmSim replay: no log loaded"), FColor::Cyan);
+    return;
   }
   const double Dt = Replay->header().dt;
   const double Total = static_cast<double>(Replay->last_tick()) * Dt;
-  Lines.Add(TEXT("SwarmSim replay"));
-  Lines.Add(FString::Printf(TEXT("tick %.0f of %llu   time %.1f s of %.1f s"), PlaybackTick,
-                            static_cast<uint64>(Replay->last_tick()), PlaybackTick * Dt, Total));
-  Lines.Add(FString::Printf(TEXT("speed %gx%s"), Speed, bPaused ? TEXT("  (paused)") : TEXT("")));
-  Lines.Add(FString::Printf(TEXT("drones alive %d of %d"), AliveCount, Drones.Num()));
-  Lines.Add(FString::Printf(TEXT("state hash %s"), *GetHashString()));
+  Add(TEXT("SwarmSim replay"), FColor::Cyan);
+  Add(FString::Printf(TEXT("tick %.0f of %llu   time %.1f s of %.1f s"), PlaybackTick,
+                      static_cast<uint64>(Replay->last_tick()), PlaybackTick * Dt, Total),
+      FColor::White);
+  Add(FString::Printf(TEXT("speed %gx%s"), Speed, bPaused ? TEXT("  (paused)") : TEXT("")),
+      FColor::White);
+  Add(FString::Printf(TEXT("drones alive %d of %d"), AliveCount, Drones.Num()), FColor::White);
+  Add(FString::Printf(TEXT("state hash %s"), *GetHashString()), FColor::White);
   static const TCHAR* Names[] = {TEXT("free"), TEXT("orbit"), TEXT("follow"), TEXT("cinematic")};
-  Lines.Add(FString::Printf(TEXT("camera %s   seed %llu"), Names[static_cast<int32>(CameraMode)],
-                            static_cast<uint64>(Replay->header().seed)));
+  Add(FString::Printf(TEXT("camera %s   seed %llu"), Names[static_cast<int32>(CameraMode)],
+                      static_cast<uint64>(Replay->header().seed)),
+      FColor::White);
+  if (Drones.IsEmpty()) {
+    return;
+  }
+
+  // The speed in the log of the drone the camera follows (Tab chooses it).
+  const int32 Followed = FMath::Clamp(FollowIndex, 0, Drones.Num() - 1);
+  const FDrone& Own = Drones[Followed];
+  Add(FString::Printf(TEXT("drone %d speed %.1f m/s (%.0f km/h, %.0f mph)"), Followed, Own.SpeedMps,
+                      Own.SpeedMps * 3.6, Own.SpeedMps * 2.2369363),
+      FColor::White);
+
+  // The fallback states. A model drawn from a folder has no color to show them, so they are words
+  // here: green while every drone is nominal, red as soon as one is not.
+  const int32 Failed = Drones.Num() - AliveCount;
+  if (StateCounts[1] + StateCounts[2] + StateCounts[3] + Failed == 0) {
+    Add(TEXT("fallback: all drones nominal"), FColor::Green);
+  } else {
+    FString Text = TEXT("FALLBACK ACTIVE");
+    for (int32 State = 1; State <= 3; ++State) {
+      if (StateCounts[State] > 0) {
+        Text += FString::Printf(TEXT("   %s %d"), FallbackName(State), StateCounts[State]);
+      }
+    }
+    if (Failed > 0) {
+      Text += FString::Printf(TEXT("   failed %d"), Failed);
+    }
+    Add(Text, FColor::Red);
+  }
+  // The messages of the last second: how many were delivered, lost, and jammed.
+  int32 Delivered = 0;
+  int32 Lost = 0;
+  int32 Jammed = 0;
+  VisitRecentMessages(*Replay, PlaybackTick, Dt, kMessageCountSeconds,
+                      [&](const swarm::SnapshotEvent& Event, double) {
+                        switch (Event.kind) {
+                          case swarm::SnapshotEventKind::kScheduled:
+                            ++Delivered;
+                            break;
+                          case swarm::SnapshotEventKind::kDroppedJam:
+                            ++Jammed;
+                            break;
+                          default:
+                            ++Lost;
+                            break;
+                        }
+                      });
+  Add(FString::Printf(TEXT("messages, last 1 s: delivered %d   lost %d   jammed %d%s"), Delivered,
+                      Lost, Jammed, bShowMessages ? TEXT("") : TEXT("   (M draws them)")),
+      Jammed > 0 ? FColor::Red : FColor::White);
+  const bool bOut = !Own.bAlive || Own.FallbackState != 0;
+  const FString OwnState = Own.bAlive ? FString(FallbackName(Own.FallbackState)) : TEXT("failed");
+  Add(FString::Printf(TEXT("drone %d state: %s"), Followed,
+                      *(bOut ? OwnState.ToUpper() : OwnState)),
+      bOut ? FColor::Red : FColor::White);
+}
+
+TArray<FString> ASwarmPlayback::GetHudLines() const {
+  TArray<FString> Lines;
+  TArray<FColor> Colors;
+  BuildHud(Lines, Colors);
   return Lines;
+}
+
+TArray<FColor> ASwarmPlayback::GetHudColors() const {
+  TArray<FString> Lines;
+  TArray<FColor> Colors;
+  BuildHud(Lines, Colors);
+  return Colors;
+}
+
+void ASwarmPlayback::HideMessageLines() {
+  for (UStaticMeshComponent* Line : MessageLines) {
+    if (Line != nullptr) {
+      Line->SetVisibility(false);
+    }
+  }
+  bMessagesDrawn = false;
+}
+
+void ASwarmPlayback::DrawMessages() {
+  if (!Replay.IsValid()) {
+    return;
+  }
+  if (MessagePaints.IsEmpty()) {
+    MessageShape = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+    UMaterialInterface* Basic = LoadObject<UMaterialInterface>(
+        nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+    // The colors of the fallback states: delivered green, lost yellow, rate limited orange,
+    // jammed red.
+    const FLinearColor Colors[4] = {SwarmSim::StateColor(0, true), SwarmSim::StateColor(1, true),
+                                    SwarmSim::StateColor(2, true), SwarmSim::StateColor(3, true)};
+    for (const FLinearColor& Color : Colors) {
+      UMaterialInstanceDynamic* Paint =
+          Basic != nullptr ? UMaterialInstanceDynamic::Create(Basic, this) : nullptr;
+      if (Paint != nullptr) {
+        Paint->SetVectorParameterValue(kColorParameter, Color);
+      }
+      MessagePaints.Add(Paint);
+    }
+  }
+  if (MessageShape == nullptr) {
+    return;
+  }
+  int32 Used = 0;
+  VisitRecentMessages(
+      *Replay, PlaybackTick, Replay->header().dt, kMessageDrawSeconds,
+      [&](const swarm::SnapshotEvent& Event, double) {
+        if (Used >= kMaxMessageLines || Event.sender >= static_cast<uint32>(Drones.Num()) ||
+            Event.receiver >= static_cast<uint32>(Drones.Num())) {
+          return;
+        }
+        const FDrone& From = Drones[static_cast<int32>(Event.sender)];
+        const FDrone& To = Drones[static_cast<int32>(Event.receiver)];
+        if (From.Root == nullptr || To.Root == nullptr) {
+          return;
+        }
+        const FVector Start = From.Root->GetComponentLocation();
+        const FVector Direction = To.Root->GetComponentLocation() - Start;
+        const double Length = Direction.Size();
+        if (Length < 1.0) {
+          return;
+        }
+        if (Used >= MessageLines.Num()) {
+          UStaticMeshComponent* Line = NewObject<UStaticMeshComponent>(this);
+          Line->SetStaticMesh(MessageShape);
+          Line->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+          Line->SetCastShadow(false);
+          Line->SetupAttachment(GetRootComponent());
+          Line->RegisterComponent();
+          AddInstanceComponent(Line);
+          MessageLines.Add(Line);
+        }
+        UStaticMeshComponent* Line = MessageLines[Used++];
+        // The cylinder is 100 cm tall and 100 cm across, centered, standing along Z.
+        Line->SetWorldLocationAndRotation(Start + 0.5 * Direction,
+                                          FRotationMatrix::MakeFromZ(Direction).Rotator());
+        Line->SetWorldScale3D(
+            FVector(kMessageLineWidthCm / 100.0, kMessageLineWidthCm / 100.0, Length / 100.0));
+        Line->SetMaterial(0, MessagePaints[MessagePaintIndex(Event.kind)]);
+        Line->SetVisibility(true);
+      });
+  for (int32 I = Used; I < MessageLines.Num(); ++I) {
+    if (MessageLines[I] != nullptr) {
+      MessageLines[I]->SetVisibility(false);
+    }
+  }
+  bMessagesDrawn = true;
 }
 
 void ASwarmPlayback::DrawHud() const {
   if (GEngine == nullptr) {
     return;
   }
-  const TArray<FString> Lines = GetHudLines();
+  TArray<FString> Lines;
+  TArray<FColor> Colors;
+  BuildHud(Lines, Colors);
   for (int32 I = 0; I < Lines.Num(); ++I) {
-    GEngine->AddOnScreenDebugMessage(kHudKeyBase + static_cast<uint64>(I), 1.0f,
-                                     I == 0 ? FColor::Cyan : FColor::White, Lines[I], false,
-                                     FVector2D(1.4, 1.4));
+    GEngine->AddOnScreenDebugMessage(kHudKeyBase + static_cast<uint64>(I), 1.0f, Colors[I],
+                                     Lines[I], false, FVector2D(1.4, 1.4));
   }
 }
 

@@ -79,6 +79,7 @@ struct FLaunchOptions {
   double DroneScale = 4.0;
   FString Camera = TEXT("free");
   FString DroneModel;
+  bool bMessages = false;  // -SwarmMessages: draw the messages between drones from the start
   FString ShotDir;
   double ShotDelay = 30.0;
   double ShotEvery = 20.0;

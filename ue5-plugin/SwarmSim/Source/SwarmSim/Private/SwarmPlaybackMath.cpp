@@ -119,6 +119,7 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
     }
   }
   FParse::Value(CommandLine, TEXT("SwarmDroneModel="), Options.DroneModel);
+  Options.bMessages = FParse::Param(CommandLine, TEXT("SwarmMessages"));
   FParse::Value(CommandLine, TEXT("SwarmShotDir="), Options.ShotDir);
   const auto ReadNumber = [&](const TCHAR* Key, double Low, double High, double& Out) {
     FString Value;

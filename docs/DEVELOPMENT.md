@@ -54,6 +54,8 @@ The plugin's automation tests run without a window and without a GPU:
 F:\UE_5.4\Engine\Binaries\Win64\UnrealEditor-Cmd.exe F:\vscode\Drone\UnrealHost\UnrealHost.uproject -ExecCmds="Automation RunTests SwarmSim; Quit" -unattended -nullrhi -nosplash -stdout -log -DisablePlugins=Fab
 ```
 
+From PowerShell, pass the `-ExecCmds` argument with its quotes inside single quotes (`'-ExecCmds="Automation RunTests SwarmSim; Quit"'`) when it is built as an argument list: unquoted it is split at the spaces, Unreal receives only `Automation`, and the run waits forever with no test output.
+
 `-DisablePlugins=Fab` is needed because Unreal's Fab plugin crashes in a windowless editor when it restores its browser tab. The tests that use an asset pack report "skipped" when the pack is not installed. They are not part of CI, which cannot build Unreal.
 
 The terrain is built from a scene file, which `swarm_sim export-scene LOG --out FILE` writes. In the editor's Python, `unreal.SwarmSceneLibrary.build_terrain_from_scene_file(world, path)` builds it.

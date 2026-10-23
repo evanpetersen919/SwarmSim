@@ -106,6 +106,10 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   UFUNCTION(BlueprintCallable, Category = "SwarmSim")
   TArray<FString> GetHudLines() const;
 
+  // The color of each line of GetHudLines: the fallback lines are red while any drone is out of the
+  // nominal state, and green while none is.
+  TArray<FColor> GetHudColors() const;
+
   // Saves screenshots of the game's own render (never of the desktop) into `Directory`: the first
   // after `DelaySeconds` of play and then one every `EverySeconds`, `Count` in all. The game quits
   // after the last when `bQuitAfter` is set.
@@ -145,6 +149,12 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bShowHud = true;
 
+  // Draws a line between the sender and the receiver of every message sent in the last 0.6 s of
+  // play time: green when it will be delivered, yellow when the loss model dropped it, orange when
+  // the rate limit did, and red when a jammer did. M toggles it; -SwarmMessages starts with it on.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  bool bShowMessages = false;
+
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bLoop = false;
 
@@ -164,6 +174,8 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
     double RollDeg = 0.0;
     double SpinDeg = 0.0;
     bool bAlive = true;
+    uint8 FallbackState = 0;  // the logged fallback state, 0 nominal to 3 safe hold
+    double SpeedMps = 0.0;    // the speed in the log, in meters per second
   };
 
   // Whether the drone model is an aircraft, which is tilted by its flight path and not by its
@@ -175,6 +187,9 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   void ApplyFrame(double DeltaSeconds, bool bFirst);
   void UpdateCamera(double DeltaSeconds);
   void DrawHud() const;
+  void DrawMessages();
+  void HideMessageLines();
+  void ToggleMessages() { bShowMessages = !bShowMessages; }
   void BindKeys();
   void SpeedUp();
   void SlowDown();
@@ -188,6 +203,19 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
 
   TSharedPtr<swarm::Replay> Replay;
   TArray<FDrone> Drones;
+
+  // The lines between drones are thin cylinders from a pool, not debug lines: the exposure of a
+  // bright level darkens debug lines to almost black. One paint per outcome.
+  UPROPERTY()
+  TArray<TObjectPtr<UStaticMeshComponent>> MessageLines;
+
+  UPROPERTY()
+  TArray<TObjectPtr<UMaterialInstanceDynamic>> MessagePaints;
+
+  UPROPERTY()
+  TObjectPtr<UStaticMesh> MessageShape;
+
+  bool bMessagesDrawn = false;
 
   UPROPERTY()
   TObjectPtr<UCameraComponent> Camera;
@@ -232,7 +260,11 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   bool bPaused = false;
   bool bKeysBound = false;
   int32 AliveCount = 0;
+  // Alive drones by fallback state: nominal, degraded comms, degraded navigation, safe hold.
+  int32 StateCounts[4] = {0, 0, 0, 0};
   int32 FollowIndex = 0;
+
+  void BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) const;
   double CameraClock = 0.0;
   FVector CameraLocation = FVector::ZeroVector;
 };

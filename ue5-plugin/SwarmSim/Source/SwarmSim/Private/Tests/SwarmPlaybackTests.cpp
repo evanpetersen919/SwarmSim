@@ -144,6 +144,10 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
   TestTrue(TEXT("anchor"), Full.AnchorCm.Equals(FVector2D(81187.5, -14778.0), 1e-9));
   TestTrue(TEXT("speed and scale"), Full.Speed == 2.0 && Full.DroneScale == 8.0);
   TestEqual(TEXT("camera, lowercased"), Full.Camera, FString(TEXT("orbit")));
+  TestFalse(TEXT("messages are not drawn unless asked for"),
+            ParseLaunchOptions(TEXT("-SwarmLog=a")).bMessages);
+  TestTrue(TEXT("-SwarmMessages draws them"),
+           ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmMessages")).bMessages);
   TestEqual(TEXT("the default camera is free"), ParseLaunchOptions(TEXT("-SwarmLog=a")).Camera,
             FString(TEXT("free")));
   for (const TCHAR* Bad :
@@ -251,6 +255,30 @@ bool FSwarmPlaybackActorTest::RunTest(const FString& Parameters) {
            Playback->GetDroneColor(1).Equals(StateColor(2, true), 1e-4f));
   TestTrue(TEXT("drone 0 is nominal"),
            Playback->GetDroneColor(0).Equals(StateColor(0, true), 1e-4f));
+
+  // The heads-up display carries the speed of the followed drone and the fallback states, in red
+  // while a drone is out of the nominal state.
+  {
+    const TArray<FString> Lines = Playback->GetHudLines();
+    const TArray<FColor> Colors = Playback->GetHudColors();
+    TestEqual(TEXT("a color for every line"), Colors.Num(), Lines.Num());
+    const int32 Fallback = Lines.IndexOfByPredicate(
+        [](const FString& Line) { return Line.StartsWith(TEXT("FALLBACK ACTIVE")); });
+    TestTrue(TEXT("the fallback line is shown while drone 1 is degraded"), Fallback != INDEX_NONE);
+    if (Fallback != INDEX_NONE) {
+      TestTrue(TEXT("and it is red"), Colors[Fallback] == FColor::Red);
+      TestTrue(TEXT("and counts the state"),
+               Lines[Fallback].Contains(TEXT("degraded navigation 1")));
+    }
+    TestTrue(TEXT("the message counts are shown"),
+             Lines.ContainsByPredicate([](const FString& Line) {
+               return Line.StartsWith(TEXT("messages, last 1 s: delivered"));
+             }));
+    TestTrue(TEXT("the followed drone's speed is shown"),
+             Lines.ContainsByPredicate([](const FString& Line) {
+               return Line.Contains(TEXT("drone 0 speed 5.0 m/s (18 km/h, 11 mph)"));
+             }));
+  }
 
   // A drone fails: dark, and no longer counted.
   Playback->SetPlaybackTick(80.0);

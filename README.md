@@ -6,15 +6,15 @@ Deterministic C++17 simulation and benchmark for drone-swarm behavior under degr
 
 ![A fixed-wing aircraft banking through a canyon, from the viewer's follow camera](docs/img/hero.gif)
 
-Eight seconds of a recorded run played back in the Unreal viewer, with the viewer's overlay showing the run: five aircraft on a tight orbit, seed 7, follow camera. The scenario is a scratch one fitted to a 2 km export of a premade level and is not in the repository. The GIF is small (480 px, 8 frames per second) to stay under 5 MB.
+Eight seconds of a recorded run played back in the Unreal viewer: five ALTIUS-700-class aircraft on a 300 m orbit at 70 mph, seed 7, follow camera, with the viewer's overlay. A jammer blocks the radio from 5 s to 8 s of the run. A line joins the sender and receiver of every message, green when it is delivered and red when the jammer blocks it, and the overlay counts the messages of the last second and turns red while any drone is out of its nominal state. The scenario is a scratch one fitted to a 2 km export of a premade level and is not in the repository; the aircraft parameters are figures supplied without a source (see below). The GIF is small (480 px, 8 frames per second) to stay under 5 MB.
 
-![A fixed-wing aircraft flying between two rock pillars](docs/img/viewer_pillars.jpg)
+![A fixed-wing aircraft banking past a cliff](docs/img/viewer_cliff.jpg)
 
-One of five aircraft on a tight orbit, seen from the viewer's follow camera as it flies between two rock pillars. A scratch scenario fitted to a 2 km export of a premade level (5 aircraft, 120 m radius, terrain guidance on, seed 7); it is not in the repository. The aircraft is drawn 2.5 times its size so that it reads at this distance.
+One of the five aircraft of the same run, banking past a cliff, from the viewer's follow camera. The aircraft is drawn 2.5 times its size so that it reads at this distance. The small two-blade propeller at the tail is the part that turns.
 
-![A fixed-wing aircraft banking past a cliff edge](docs/img/viewer_cliff.jpg)
+![A fixed-wing aircraft flying through a gap between cliffs](docs/img/viewer_gap.jpg)
 
-The same run a few seconds later, banking past a cliff edge with a clearing below.
+The same run, flying through a gap between cliffs. The orbit is raised by terrain guidance, from a prior map of the level, to clear the highest ground along it.
 
 ![Four fixed-wing aircraft in formation over a clearing](docs/img/viewer_formation.jpg)
 
@@ -29,7 +29,7 @@ What exists, by area. [docs/PLAN.md](docs/PLAN.md) has the scope and the dated c
 - **Estimation and control.** A Kalman pose estimator, neighbor reports, three neighbor predictors (hold last state, dead reckoning, Kalman), a drone brain with consensus formation, separation, and a fallback state machine, and for the fixed-wing aircraft orbit, racetrack, lanes, and formation patterns (trail, echelon, vee, rake) with terrain-aware altitude guidance.
 - **Scenarios and metrics.** Runs are described by strict, versioned scenario files and measured from their logs: formation or path error, separation, collisions, recovery time, message latency and delivery ratio, height above ground and ground contacts, exported as CSV. A scenario can run with its messages over real UDP and TCP sockets on loopback and writes the same log as the simulated run.
 - **Experiments.** Experiment files expand into a matrix of cells that `swarm_batch` runs in parallel into a table that does not depend on the job count. A Python package summarizes the table with intervals and figures.
-- **Unreal viewer.** A plugin that builds a scene from a log and plays it back, or plays a log in a premade level. It is checked by automation tests and by eye locally, not by CI.
+- **Unreal viewer.** A plugin that builds a scene from a log and plays it back, or plays a log in a premade level. Its overlay shows the speed of the followed drone, the fallback states in words (green while every drone is nominal, red when one is not), and counts of the messages delivered, lost, and jammed; on request it draws a line for every message. It is checked by automation tests and by eye locally, not by CI.
 
 ## Results
 
