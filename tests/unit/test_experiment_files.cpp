@@ -41,6 +41,9 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"pilot_fixed_wing.yaml", 8},
       {"pilot_fixed_wing_comms.yaml", 24},
       {"pilot_fixed_wing_altimeter.yaml", 4},
+      {"probe_fixed_wing_map_errors.yaml", 13},
+      {"fixed_wing_forward.yaml", 64},
+      {"fixed_wing_forward_sensitivity.yaml", 36},
   };
   const swarm::ReadFile read = swarm::testing::read_from(SWARM_EXPERIMENT_DIR);
   for (const auto& [file, cells] : documented) {

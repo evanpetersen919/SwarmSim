@@ -14,6 +14,9 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `baselines_burst.yaml` | The same four predictors under bursty loss (mean burst of 6) at the same average rates; 48 cells |
 | `baselines_drop.yaml` | `baselines.yaml` with the stale-neighbor rule off and on (a neighbor silent for more than 100 ticks leaves the formation consensus); 96 cells |
 | `baselines_burst_drop.yaml` | The same with bursty loss; 96 cells |
+| `probe_fixed_wing_map_errors.yaml` | A probe of how wrong the prior map must be before aircraft without a forward sensor reach the ground; 13 cells, five seeds, not a result (ADR 0013) |
+| `fixed_wing_forward.yaml` | The forward obstacle sensor experiment: 8 map levels, 4 sensor arms, 2 weather levels; 64 cells (ADR 0013) |
+| `fixed_wing_forward_sensitivity.yaml` | The forward sensor's range and dropout against four maps; 36 cells (ADR 0013) |
 | `base_fixed_wing.yaml` | The fixed-wing scenario (scenario version 2) that the fixed-wing experiments vary |
 | `matrix_fixed_wing.yaml` | Weather, jamming, loss, drone count, and faults for the default fixed-wing controller; 216 cells |
 | `baselines_fixed_wing.yaml` | Four neighbor predictors against three consensus weights, under jamming and loss; 72 cells |
@@ -21,6 +24,7 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `base_fixed_wing_energy.yaml` | The fixed-wing scenario on the current model (scenario version 3: energy dynamics, wind, ground contact, terrain guidance, 120 m hills) |
 | `pilot_fixed_wing.yaml` | A pilot on the current model: weather, radar altimeter, and loss; 8 cells, 40 runs. See docs/phases/flight-realism.md |
 | `base_fixed_wing_dense.yaml` | Twelve fixed-wing aircraft on one 80 m orbit, about 41 m apart so that separation acts (scenario version 3) |
+| `base_fixed_wing_forward.yaml` | The dense base with the mission altitude at 20 m, below the clearance, so the prior map decides the altitude flown (ADR 0013) |
 | `pilot_fixed_wing_comms.yaml` | A comms pilot on that scenario: weather, neighbor predictor, and loss; 24 cells, 120 runs |
 | `pilot_fixed_wing_altimeter.yaml` | An altimeter pilot on the dense scenario: weather and radar altimeter; 4 cells, 40 runs |
 | `probe_fixed_wing.yaml` | A probe of 384 cells that shaped the fixed-wing matrix; see docs/phases/fixed-wing-vehicle.md |

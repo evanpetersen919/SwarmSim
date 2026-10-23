@@ -1,0 +1,34 @@
+# A probe, not a result: how wrong the prior map has to be before the aircraft without a forward
+# sensor reach the ground (ADR 0013). One axis, an exact map and several sizes of each kind of error,
+# no sensor, so that the levels of fixed_wing_forward.yaml can be chosen to bracket the range from no
+# ground contact to certain contact. Five seeds per cell on the forward-sensor scenario (base_fixed_wing_forward.yaml). The probe
+# is run before the experiment and its numbers are not reported as findings.
+#
+# offset_m: the map says the ground is that much lower than it is. error_sigma_m: smooth random
+# error of that standard deviation with a 100 m correlation length. omit: the map shows nothing
+# above the lowest height on the edge of a square around the orbit.
+version: 1
+name: probe_fixed_wing_map_errors
+base: base_fixed_wing_forward.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: map
+    levels:
+      - {label: exact, set: {}}
+      - {label: offset20, set: {control: {terrain: {offset_m: -20}}}}
+      - {label: offset40, set: {control: {terrain: {offset_m: -40}}}}
+      - {label: offset60, set: {control: {terrain: {offset_m: -60}}}}
+      - {label: offset80, set: {control: {terrain: {offset_m: -80}}}}
+      - {label: sigma10, set: {control: {terrain: {error_sigma_m: 10, error_correlation_m: 100}}}}
+      - {label: sigma20, set: {control: {terrain: {error_sigma_m: 20, error_correlation_m: 100}}}}
+      - {label: sigma30, set: {control: {terrain: {error_sigma_m: 30, error_correlation_m: 100}}}}
+      - {label: sigma40, set: {control: {terrain: {error_sigma_m: 40, error_correlation_m: 100}}}}
+      - {label: sigma60, set: {control: {terrain: {error_sigma_m: 60, error_correlation_m: 100}}}}
+      - {label: sigma80, set: {control: {terrain: {error_sigma_m: 80, error_correlation_m: 100}}}}
+      - {label: sigma120, set: {control: {terrain: {error_sigma_m: 120, error_correlation_m: 100}}}}
+      - label: omit
+        set:
+          control:
+            terrain:
+              omit:
+                - {x_m: [-250, 250], y_m: [-250, 250]}

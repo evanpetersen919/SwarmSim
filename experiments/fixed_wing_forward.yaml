@@ -1,0 +1,47 @@
+# The forward obstacle sensor experiment (ADR 0013): does a sensor that looks ahead keep the
+# aircraft off the ground when the prior map is wrong, and what does it cost? 8 map levels x 4
+# sensor arms x 2 weather = 64 cells. Run with 30 seeds, 1,920 runs, on base_fixed_wing_forward.yaml.
+# Compare arms with `paired_difference` on the sensors axis, within each map and weather level.
+#
+# The levels were fixed before the first run, from experiments/probe_fixed_wing_map_errors.yaml
+# (five seeds, no sensor): an offset of -30 m is safe, -60 m puts aircraft on the ground on some
+# seeds, -80 m on every seed; the omitted square puts aircraft on the ground on some seeds; a smooth
+# random error never does, even at 120 m, because the footprint maximum of a symmetric error raises
+# the aircraft more than it lowers them, so those three levels measure cost and not safety.
+#
+# map:      exact; offset_m of -30, -60, -80; error_sigma_m of 20, 60, 120 (correlation 100 m);
+#           one omitted square of 500 m around the orbit.
+# sensors:  none; the radar altimeter; the forward obstacle sensor; both. All at their default
+#           parameters except a reading every 5 ticks.
+# weather:  clear air; fog of 750 m visibility, which shortens the forward sensor's detection
+#           distance (transmission 0.2) from its 800 m range to about 400 m.
+version: 1
+name: fixed_wing_forward
+base: base_fixed_wing_forward.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: map
+    levels:
+      - {label: exact, set: {}}
+      - {label: offset30, set: {control: {terrain: {offset_m: -30}}}}
+      - {label: offset60, set: {control: {terrain: {offset_m: -60}}}}
+      - {label: offset80, set: {control: {terrain: {offset_m: -80}}}}
+      - {label: sigma20, set: {control: {terrain: {error_sigma_m: 20, error_correlation_m: 100}}}}
+      - {label: sigma60, set: {control: {terrain: {error_sigma_m: 60, error_correlation_m: 100}}}}
+      - {label: sigma120, set: {control: {terrain: {error_sigma_m: 120, error_correlation_m: 100}}}}
+      - label: omit
+        set:
+          control:
+            terrain:
+              omit:
+                - {x_m: [-250, 250], y_m: [-250, 250]}
+  - name: sensors
+    levels:
+      - {label: none, set: {}}
+      - {label: altimeter, set: {sensors: {radar_altimeter: {period_ticks: 5}}}}
+      - {label: forward, set: {sensors: {forward: {period_ticks: 5}}}}
+      - {label: both, set: {sensors: {radar_altimeter: {period_ticks: 5}, forward: {period_ticks: 5}}}}
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 750, rain_mm_h: 0}}}
