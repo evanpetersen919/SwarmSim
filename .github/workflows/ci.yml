@@ -62,6 +62,15 @@ jobs:
           diff out_1.txt out_4.txt
           diff out_1.txt out_8.txt
 
+      - name: Run every scenario, verify its log on eight threads
+        run: |
+          sim=./build/release/apps/swarm_sim
+          for f in scenarios/*.yaml; do
+            echo "$f"
+            $sim run "$f" --out scenario.swlog --threads 1
+            $sim --replay scenario.swlog --verify --threads 8
+          done
+
   lint:
     runs-on: ubuntu-24.04
     steps:

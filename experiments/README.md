@@ -16,4 +16,6 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `ablation_fixed_wing.yaml` | The full controller and three variants, with and without altitude layers, in three weathers, with and without a failure; 48 cells |
 | `probe_fixed_wing.yaml` | A probe of 384 cells that shaped the fixed-wing matrix; see docs/phases/fixed-wing-vehicle.md |
 
+The fixed-wing experiments use scenario version 2, the coordinated-turn model without wind, and were run before the energy model, wind, and terrain guidance existed (ADR 0011). They are not results for the current model; the reruns are listed in [docs/PHASES.md](../docs/PHASES.md).
+
 A `base` path is relative to the experiment file.

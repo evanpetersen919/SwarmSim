@@ -145,6 +145,8 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 
 ## Phase 9: Release
 
+Status: not started. The README has no results table because none is final (see Results there). Until a hero GIF exists it carries three screenshots of the viewer.
+
 | # | Commit | Check |
 |---|---|---|
 | 71 | Benchmark run with 5 seeds, results table in README | Numbers regenerate from one command |
@@ -155,3 +157,12 @@ Goal: replay a recorded run in Unreal 5.4 as a presentation, with drones that fl
 ## Fixed-wing vehicle and flight realism
 
 Not part of the original phase order. The fixed-wing vehicle (ADR 0010) is described in [phases/fixed-wing-vehicle.md](phases/fixed-wing-vehicle.md): a vehicle interface, a coordinated-turn model, a camera position fix, orbit guidance with closest-approach separation, a turning neighbor predictor, orbit metrics, and three experiments. The flight realism work (ADR 0011) is described in [phases/flight-realism.md](phases/flight-realism.md): wind, an energy model, terrain-aware guidance, patterns, and ground-contact metrics.
+
+Later changes, each with a dated line in the [PLAN.md](PLAN.md) change log:
+
+- A formation pattern (trail, echelon, vee) and a rake shape for a wide-area search, with an altitude stagger.
+- Ground contact and the height-above-ground metric count the tops of obstacles, not only the terrain.
+- Terrain guidance plans its climb from what the energy model's propulsion can hold at the mission speed, and an aircraft starts at the floor of its whole path.
+- A radar altimeter used as a floor on the present (ADR 0012).
+
+Still to do: rerun the ADR 0010 experiments under the energy model, then the 30-seed fixed-wing runs and the quadrotor matrix; turning or slowing for terrain; and a forward camera, which needs its own decision record.

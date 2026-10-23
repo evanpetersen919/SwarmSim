@@ -236,7 +236,7 @@ Numbers come from `tests/integration/test_formation_swarm.cpp` and `tests/unit/t
 
 - The brain's speed-aware margin: the margin does not depend on closing speed, so safety relies on the speed limit.
 - All thresholds, gains, and scales are starting values and have not been tuned or ablated (Phase 7).
-- Terrain and obstacle avoidance, and yaw control, are not implemented. Scenarios must keep the corridor clear.
+- Terrain and obstacle avoidance, and yaw control, are not implemented for the quadrotor. Scenarios must keep the corridor clear. The fixed-wing aircraft has terrain-aware altitude (ADR 0011).
 - Linux CI for commits 33 and 34 appears in the Actions history after the push.
 - Benchmark numbers are still not recorded.
 

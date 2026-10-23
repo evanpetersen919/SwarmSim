@@ -43,7 +43,15 @@ On the scene exported from the Electric Dreams level (17 849 trees and 102 819 r
 ## Two defects found by running it
 
 - **The climb response was a fiftieth of what was asked.** The energy model read a vertical acceleration command as `vz + a * dt` and then passed it through the pitch lag, so a 2 m/s^2 command gave about 0.07 m/s^2. Aircraft sat at their starting altitude while the controller asked for a 10 m/s^2 climb. The unit tests did not catch it because they ran for long enough to saturate. The target is now `vz + a * tau`, and a test checks that 1 m/s^2 held for 2 s gives 1 to 2.5 m/s.
-- **The start altitude ignored obstacles.** Aircraft started at the bare ground plus the clearance, under rock tops that the map included. They now start at the map height plus the clearance.
+- **The start altitude ignored obstacles.** Aircraft started at the bare ground plus the clearance, under rock tops that the map included. They then started at the map height plus the clearance, and a later fix (below) made them start at the floor of their whole path.
+
+## Later changes
+
+- **Formation and rake.** A formation pattern (trail, echelon, vee) and a rake shape, with an altitude stagger that applies to any shape. See `docs/MODELS.md`.
+- **Obstacle-aware ground contact.** Ground contact and the height-above-ground metric use `Scene::surface_height`, the highest of the terrain and any obstacle top above the point, instead of the terrain alone.
+- **Climb budget from the energy model.** Terrain guidance used a fixed fraction of the vehicle's climb limit at any speed. It now uses the climb the propulsion can hold at the mission speed (`EnergyParams::steady_climb_rate`), and a scenario whose aircraft cannot climb at that speed is refused when terrain guidance is on.
+- **Start altitude from the whole path.** An aircraft started at the altitude that cleared only the ground under its start point. On hills that rise faster than it can climb, that left it too low to recover. It now starts at the floor of its own path. In scratch runs of `fixed_wing_flight.yaml` with hills of 400 and 500 m (`swarm_sim run`, then `metrics`), an aircraft was lost before this change and none after, and the lowest height above the surface was 64 to 79 m for hills up to 700 m.
+- **Radar altimeter.** A nadir height sensor used as a floor on the present (ADR 0012).
 
 ## What this does not show
 

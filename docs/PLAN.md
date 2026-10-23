@@ -1,6 +1,6 @@
 # SwarmSim: Project Plan
 
-Status: approved scope, timeline flexible. Last updated 2026-10-20.
+Status: approved scope, timeline flexible. Last updated 2026-10-22.
 
 This document is the log of what the project is, what is in scope, what is deliberately cut, and in what order work happens. Changes to scope go here first, with a dated entry in the change log at the bottom.
 
@@ -88,7 +88,7 @@ Validation: one sourced fog visibility fit, a real-socket versus simulated-chann
 
 ## Testing
 
-Target about 100 tests, and report the real number. Unit, property (minimum separation, no ground-truth access, deterministic message order), determinism (same seed same hash, thread-count invariance, no wall-clock calls), and integration. Sanitizers (ASan, UBSan, TSan) in CI.
+Target about 100 tests, and report the real number. Unit, determinism (same seed same hash, thread-count invariance, no wall-clock calls), and integration; the property group (minimum separation, no ground-truth access, deterministic message order) is an empty directory, and those properties are checked by tests in the other groups and by `scripts/check_core_invariants.sh`. Sanitizers (ASan, UBSan, TSan) in CI.
 
 ## Timeline
 

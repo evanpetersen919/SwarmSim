@@ -5,7 +5,7 @@
 #
 # What is published: the sequence, the 60 km/h cruise speed (16.7 m/s), and that launches were
 # spaced 10 to 15 s apart. What is assumed, because no source gives it: the altitude (150 m, in the
-# 30 to 198 m AGL range that the datasheets of the similar Raven and Switchblade 600 give), the
+# range of the datasheets of the similar Raven, 30 to 152 m AGL, and Switchblade 600, up to 198 m), the
 # spacing of the formation, the times of the changes, and every flight parameter of the model.
 # Launch is not flown: the aircraft start already in the echelon. Closing a launch trail of
 # several 12 s intervals into an echelon takes over a minute at the speed margin of the aircraft.
