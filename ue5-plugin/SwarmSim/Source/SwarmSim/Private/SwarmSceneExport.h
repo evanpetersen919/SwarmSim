@@ -14,6 +14,7 @@ struct FExportReport {
   double MinHeightM = 0.0;
   double MaxHeightM = 0.0;
   int32 Trees = 0;
+  int32 Crowns = 0;  // second cylinders, one per tree, when crowns are on
   int32 Rocks = 0;
   // Static meshes found inside the area, most numerous first: "name: count (class)". Meant for
   // choosing the name patterns for a level the exporter has not seen.

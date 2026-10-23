@@ -14,6 +14,7 @@
 #include <system_error>
 #include <vector>
 
+#include "swarm/format/replay.hpp"
 #include "swarm/net/socket_channel.hpp"
 #include "swarm/run.hpp"
 #include "swarm/scenario/metrics.hpp"
@@ -51,6 +52,10 @@ void print_usage() {
          "  swarm_sim metrics LOG [--csv FILE]         compute metrics from a scenario log and\n"
          "                                             write a CSV header and row (stdout if\n"
          "                                             no file is given)\n"
+         "  swarm_sim positions LOG [--csv FILE] [--every N]\n"
+         "                                             the position of every drone at every Nth\n"
+         "                                             record with drone state, as CSV (stdout\n"
+         "                                             if no file is given)\n"
          "  swarm_sim [config options]               run and print the final state hash\n"
          "  swarm_sim --record FILE [config options]   run and write a log\n"
          "  swarm_sim --replay FILE --verify           re-execute a log and compare hashes\n"
@@ -455,9 +460,94 @@ int run_metrics_command(int argc, char** argv) {
   return kExitOk;
 }
 
+// swarm_sim positions LOG [--csv FILE] [--every N]
+int run_positions_command(int argc, char** argv) {
+  std::string log_path;
+  std::string csv_path;
+  std::uint64_t every = 1;
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--csv" || arg == "--every") {
+      if (i + 1 >= argc) {
+        std::cerr << "swarm_sim: missing value for " << arg << "\n";
+        return kExitUsage;
+      }
+      const std::string value = argv[++i];
+      if (arg == "--csv") {
+        csv_path = value;
+      } else {
+        const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), every);
+        if (error != std::errc() || end != value.data() + value.size() || every == 0) {
+          std::cerr << "swarm_sim: --every needs a whole number of at least 1\n";
+          return kExitUsage;
+        }
+      }
+    } else if (log_path.empty() && arg.rfind("--", 0) != 0) {
+      log_path = arg;
+    } else {
+      std::cerr << "swarm_sim: unexpected argument " << arg << "\n";
+      return kExitUsage;
+    }
+  }
+  if (log_path.empty()) {
+    std::cerr << "swarm_sim: positions needs a log file\n";
+    return kExitUsage;
+  }
+  std::vector<std::uint8_t> bytes;
+  if (!read_file(log_path, bytes)) {
+    std::cerr << "cannot read " << log_path << "\n";
+    return kExitUsage;
+  }
+  swarm::Replay replay;
+  const swarm::ReplayStatus status = replay.load(bytes.data(), bytes.size());
+  if (status != swarm::ReplayStatus::kOk) {
+    std::cerr << log_path << ": " << swarm::to_string(status) << "\n";
+    return kExitUsage;
+  }
+
+  std::string csv = "tick,time_s,drone,x_m,y_m,z_m,alive\n";
+  std::uint64_t seen = 0;
+  char line[160];
+  for (const swarm::ReplayFrame& frame : replay.frames()) {
+    if (!frame.has_state()) {
+      continue;
+    }
+    if (seen++ % every != 0) {
+      continue;
+    }
+    for (std::size_t drone = 0; drone < frame.snapshot.agents.size(); ++drone) {
+      const swarm::AgentSnapshot& a = frame.snapshot.agents[drone];
+      std::snprintf(line, sizeof(line), "%llu,%.9g,%zu,%.9g,%.9g,%.9g,%d\n",
+                    static_cast<unsigned long long>(frame.tick),
+                    static_cast<double>(frame.tick) * replay.header().dt, drone, a.position[0],
+                    a.position[1], a.position[2], a.alive ? 1 : 0);
+      csv += line;
+    }
+  }
+  if (csv_path.empty()) {
+    std::cout << csv;
+    return kExitOk;
+  }
+  const std::vector<std::uint8_t> out(csv.begin(), csv.end());
+  if (!write_file(csv_path, out)) {
+    std::cerr << "cannot write " << csv_path << "\n";
+    return kExitUsage;
+  }
+  std::cout << "wrote positions to " << csv_path << "\n";
+  return kExitOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (argc >= 2 && std::string(argv[1]) == "positions") {
+    try {
+      return run_positions_command(argc, argv);
+    } catch (const std::exception& e) {
+      std::cerr << "swarm_sim: " << e.what() << "\n";
+      return kExitUsage;
+    }
+  }
   if (argc >= 2 && std::string(argv[1]) == "metrics") {
     try {
       return run_metrics_command(argc, argv);

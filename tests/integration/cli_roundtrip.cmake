@@ -105,6 +105,22 @@ if(NOT csv_row MATCHES "^formation_jam,7,8,0\.02,3000,60,")
 ${csv_row}")
 endif()
 
+# Positions: a CSV with a header and one row per drone for each record that holds drone state.
+set(POSITIONS "${WORKDIR}/cli_positions.csv")
+file(REMOVE "${POSITIONS}")
+run_sim(0 positions "${SLOG}" --csv "${POSITIONS}" --every 500)
+file(STRINGS "${POSITIONS}" position_lines)
+list(GET position_lines 0 position_header)
+if(NOT position_header STREQUAL "tick,time_s,drone,x_m,y_m,z_m,alive")
+  message(FATAL_ERROR "unexpected positions header: ${position_header}")
+endif()
+list(LENGTH position_lines position_line_count)
+if(position_line_count LESS 9)
+  message(FATAL_ERROR "expected at least one row for each of eight drones, got ${position_line_count} lines")
+endif()
+run_sim(2 positions)
+run_sim(2 positions "${SLOG}" --every 0)
+
 # Without --csv the same two lines go to standard output.
 run_sim(0 metrics "${SLOG}")
 if(NOT last_out MATCHES "^scenario,seed,drones,")

@@ -18,7 +18,10 @@ is what an aircraft over that point would hit. For every point the script compar
 
 It prints how far the level rises above each, in meters, over the whole area and in a corridor
 around a circle if one is given (an orbit), and which meshes are the highest thing at the points
-where the level rises most above the scene. Standard library only.
+where the level rises most above the scene. It also counts the obstacles of the scene that float:
+those whose base is more than --floating meters above the scene's terrain under them, and of those
+the ones that have nothing under them in the level (the level's top surface at their center is below
+their base), which are obstacles the simulation has and the level does not. Standard library only.
 """
 
 import argparse
@@ -162,6 +165,8 @@ def main():
     parser.add_argument("--radius", type=float, default=300.0)
     parser.add_argument("--band", type=float, default=60.0, help="half width of the corridor, m")
     parser.add_argument("--threshold", type=float, default=5.0)
+    parser.add_argument("--floating", type=float, default=100.0,
+                        help="how far above the terrain an obstacle's base must be to count, m")
     args = parser.parse_args()
 
     scene = read_scene(args.scene)
@@ -185,6 +190,26 @@ def main():
         report(f"corridor (radius {args.radius:g} m, +/- {args.band:g} m)", corridor, args.threshold)
     else:
         corridor = rows
+
+    # Obstacles that float, and whether the level has anything at that height under them.
+    top = {}
+    with open(args.audit, newline="") as handle:
+        for r in csv.DictReader(handle):
+            top[(round(float(r["x_m"])), round(float(r["y_m"])))] = float(r["top_m"])
+    step = scene["cell"]
+    floating = phantom = 0
+    for kind, cx, cy, base, height, half_x, half_y in scene["obstacles"]:
+        if base - terrain_height(scene, cx, cy) <= args.floating:
+            continue
+        floating += 1
+        i = round((cx - scene["origin_x"]) / step)
+        j = round((cy - scene["origin_y"]) / step)
+        under = top.get((round(scene["origin_x"] + i * step), round(scene["origin_y"] + j * step)))
+        if under is not None and under < base - 5.0:
+            phantom += 1
+    print(f"\nobstacles with the base more than {args.floating:g} m above the terrain under them: "
+          f"{floating} of {len(scene['obstacles'])}; of those, with nothing at that height in the "
+          f"level: {phantom}")
 
     print("\nthe highest thing at the points where the level is more than "
           f"{args.threshold:g} m above the scene ({'corridor' if args.center else 'whole area'}):")

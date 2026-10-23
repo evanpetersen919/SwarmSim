@@ -133,8 +133,8 @@ void ASwarmSceneExporter::Export() {
   }
   UE_LOG(LogSwarmSim, Display,
          TEXT("Exported scene to %s: %d x %d cells of %g m, ground from %.1f to %.1f m (%d of %d "
-              "samples had none), %d trees, %d rocks, hash=%016llx"),
+              "samples had none), %d trees (%d crowns), %d rocks, hash=%016llx"),
          *Options->OutPath, Scene.terrain.cells_x, Scene.terrain.cells_y, Scene.terrain.cell_size,
          Report.MinHeightM, Report.MaxHeightM, Report.HeightMisses, Report.HeightSamples,
-         Report.Trees, Report.Rocks, swarm::scene_hash(Scene));
+         Report.Trees, Report.Crowns, Report.Rocks, swarm::scene_hash(Scene));
 }

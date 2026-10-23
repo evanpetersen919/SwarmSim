@@ -29,6 +29,10 @@
 //   -SwarmExportMaxGap=F     largest share of samples that may have no ground (default 0.01)
 //   -SwarmExportTrunk=F      a tree's trunk radius as this fraction of its half width
 //                            (default 0.15)
+//   -SwarmExportCrown=F      also export each tree's crown, a second cylinder whose radius is this
+//                            fraction of the mesh's half width, from -SwarmExportCrownBase of the
+//                            tree's height up to its top (default 0: no crown, the trunk alone)
+//   -SwarmExportCrownBase=F  the share of a tree's height below its crown (default 0.35)
 
 namespace SwarmSim {
 struct FExportOptions {
@@ -48,6 +52,9 @@ struct FExportOptions {
   double TrunkFraction = 0.15;
   double MinTrunkRadiusM = 0.2;
   double MaxTrunkRadiusM = 1.5;
+  double CrownFraction = 0.0;       // 0 exports no crowns
+  double CrownBaseFraction = 0.35;  // the part of a tree's height below its crown
+  double MaxCrownRadiusM = 15.0;
   bool bValid = true;  // false if a value could not be read
   FString Problem;
 };
@@ -87,6 +94,12 @@ int32 FillMissingHeights(TArray<double>& Heights, TArray<bool>& Known, int32 Sam
 // a tree or a rock of the allowed size.
 bool ObstacleFromBounds(EObstacleClass Kind, const FBox& BoundsCm, const FExportOptions& Options,
                         swarm::Obstacle& Out);
+
+// The crown of a tree, the second cylinder a tree gets when `CrownFraction` is above 0: from
+// `CrownBaseFraction` of the tree's height to its top, with a radius of `CrownFraction` of the
+// half width of the mesh's bounds, limited to the trunk's smallest radius and `MaxCrownRadiusM`.
+// False when crowns are off or the bounds are not a tree of the allowed size.
+bool CrownFromBounds(const FBox& BoundsCm, const FExportOptions& Options, swarm::Obstacle& Out);
 
 // The scene from sampled heights (meters, x varying fastest) and the obstacles. False and `Error`
 // if the result is not a valid scene.

@@ -255,6 +255,12 @@ bool FinishExport(UWorld* World, const FExportOptions& Options, FGroundSamples& 
         if (ObstacleFromBounds(Kind, LocalBounds.TransformBy(Transform), Options, Obstacle)) {
           Obstacles.Add(Obstacle);
           (Kind == EObstacleClass::Tree ? OutReport.Trees : OutReport.Rocks) += 1;
+          swarm::Obstacle Crown;
+          if (Kind == EObstacleClass::Tree &&
+              CrownFromBounds(LocalBounds.TransformBy(Transform), Options, Crown)) {
+            Obstacles.Add(Crown);
+            ++OutReport.Crowns;
+          }
         }
       };
       if (const UInstancedStaticMeshComponent* Instanced =

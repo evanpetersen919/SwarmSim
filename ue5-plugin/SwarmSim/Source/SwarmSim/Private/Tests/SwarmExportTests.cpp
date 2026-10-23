@@ -117,6 +117,37 @@ bool FSwarmExportPlanTest::RunTest(const FString& Parameters) {
   TestEqual(TEXT("base"), Tree.base_z, 2.0);
   TestEqual(TEXT("height"), Tree.height, 10.0);
   TestEqual(TEXT("radius is a fraction of the half width"), Tree.half_x, 0.15 * 4.0);
+  // A crown is a second cylinder, only when asked for: from 35 percent of the height to the top,
+  // with a radius of the given fraction of the half width of the bounds.
+  swarm::Obstacle Crown;
+  TestFalse(TEXT("no crown by default"), CrownFromBounds(TreeBounds, Anchored, Crown));
+  FExportOptions WithCrown = Anchored;
+  WithCrown.CrownFraction = 0.75;
+  TestTrue(TEXT("a crown"), CrownFromBounds(TreeBounds, WithCrown, Crown));
+  TestTrue(TEXT("a cylinder"), Crown.kind == swarm::ObstacleKind::kCylinder);
+  TestEqual(TEXT("crown x"), Crown.cx, Tree.cx);
+  TestEqual(TEXT("crown y"), Crown.cy, Tree.cy);
+  TestEqual(TEXT("crown base: 35 percent up the tree"), Crown.base_z, 2.0 + 0.35 * 10.0);
+  TestEqual(TEXT("crown height: the rest"), Crown.height, 0.65 * 10.0);
+  TestEqual(TEXT("crown radius"), Crown.half_x, 0.75 * 4.0);
+  swarm::Obstacle WideCrown;
+  TestTrue(TEXT("a very wide crown"),
+           CrownFromBounds(FBox(FVector(0.0, 0.0, 0.0), FVector(8000.0, 8000.0, 3000.0)), WithCrown,
+                           WideCrown));
+  TestEqual(TEXT("the crown radius is limited"), WideCrown.half_x, 15.0);
+  swarm::Obstacle NoCrown;
+  TestFalse(TEXT("a bush has no crown"),
+            CrownFromBounds(FBox(FVector(0.0, 0.0, 0.0), FVector(100.0, 100.0, 200.0)), WithCrown,
+                            NoCrown));
+  TestTrue(TEXT("the options are read"),
+           ParseExportOptions(
+               TEXT("-SwarmExportScene=a -SwarmExportCrown=0.6 -SwarmExportCrownBase=0.5"))
+                       .CrownFraction == 0.6 &&
+               ParseExportOptions(
+                   TEXT("-SwarmExportScene=a -SwarmExportCrown=0.6 -SwarmExportCrownBase=0.5"))
+                       .CrownBaseFraction == 0.5);
+  TestFalse(TEXT("a crown larger than the mesh is refused"),
+            ParseExportOptions(TEXT("-SwarmExportScene=a -SwarmExportCrown=1.5")).bValid);
   swarm::Obstacle Small;
   TestFalse(TEXT("a bush is not a tree"),
             ObstacleFromBounds(EObstacleClass::Tree,

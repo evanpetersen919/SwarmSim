@@ -68,6 +68,8 @@ FExportOptions ParseExportOptions(const TCHAR* CommandLine) {
   ReadNumber(TEXT("SwarmExportMinRock="), 0.0, 200.0, Options.MinRockSizeM);
   ReadNumber(TEXT("SwarmExportMaxGap="), 0.0, 1.0, Options.MaxGapFraction);
   ReadNumber(TEXT("SwarmExportTrunk="), 0.01, 1.0, Options.TrunkFraction);
+  ReadNumber(TEXT("SwarmExportCrown="), 0.0, 1.0, Options.CrownFraction);
+  ReadNumber(TEXT("SwarmExportCrownBase="), 0.0, 0.9, Options.CrownBaseFraction);
   ParseNames(CommandLine, TEXT("SwarmExportTrees="), Options.TreeNames);
   ParseNames(CommandLine, TEXT("SwarmExportRocks="), Options.RockNames);
   ParseNames(CommandLine, TEXT("SwarmExportGround="), Options.GroundNames);
@@ -178,6 +180,29 @@ bool ObstacleFromBounds(EObstacleClass Kind, const FBox& BoundsCm, const FExport
   Out.kind = swarm::ObstacleKind::kBox;
   Out.half_x = 0.5 * Size.X;
   Out.half_y = 0.5 * Size.Y;
+  return true;
+}
+
+bool CrownFromBounds(const FBox& BoundsCm, const FExportOptions& Options, swarm::Obstacle& Out) {
+  if (!(Options.CrownFraction > 0.0) || !BoundsCm.IsValid) {
+    return false;
+  }
+  const FVector Size = BoundsCm.GetSize() / MetersToCentimeters;
+  const double Width = FMath::Max(Size.X, Size.Y);
+  if (Size.Z < Options.MinTreeHeightM || !(Width > 0.0)) {
+    return false;
+  }
+  const FVector Center = BoundsCm.GetCenter();
+  double Sim[3];
+  ToSimulation(FVector(Center.X - Options.AnchorCm.X, Center.Y - Options.AnchorCm.Y, 0.0), Sim);
+  Out.kind = swarm::ObstacleKind::kCylinder;
+  Out.cx = Sim[0];
+  Out.cy = Sim[1];
+  Out.base_z = BoundsCm.Min.Z / MetersToCentimeters + Options.CrownBaseFraction * Size.Z;
+  Out.height = (1.0 - Options.CrownBaseFraction) * Size.Z;
+  Out.half_x = FMath::Clamp(Options.CrownFraction * 0.5 * Width, Options.MinTrunkRadiusM,
+                            Options.MaxCrownRadiusM);
+  Out.half_y = 0.0;
   return true;
 }
 
