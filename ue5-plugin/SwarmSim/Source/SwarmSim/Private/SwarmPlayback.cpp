@@ -794,7 +794,7 @@ void ASwarmPlayback::BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) co
                         }
                       });
   Add(FString::Printf(TEXT("messages, last 1 s: delivered %d   lost %d   jammed %d%s"), Delivered,
-                      Lost, Jammed, bShowMessages ? TEXT("") : TEXT("   (M draws them in 3D)")),
+                      Lost, Jammed, bShowMessages ? TEXT("") : TEXT("   (M: 3D lines)")),
       Jammed > 0 ? FColor::Red : FColor::White);
   const bool bOut = !Own.bAlive || Own.FallbackState != 0;
   const FString OwnState = Own.bAlive ? FString(FallbackName(Own.FallbackState)) : TEXT("failed");
