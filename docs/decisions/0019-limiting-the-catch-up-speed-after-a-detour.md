@@ -44,3 +44,7 @@ The range at which the threat is first seen in fog; the aircraft that stop withi
 ## Consequences
 
 If X1 to X4 hold, the speed after a detour is part of the residual, and the cap is a cheap way to take it. If X1 fails, the speed above the mission speed is not what limits the warning, and the next steps are the sensing range and the early crashes. If X4 fails, the cap costs the spacing, and the better rule is the one tied to the sensor range. A null result is reported as one.
+
+## Outcome
+
+Recorded on 2026-10-23 after the experiment ran; the numbers are in docs/RESULTS.md. The criteria were applied as written. X1 is met on 480 m hills (late contacts in fog with no map -0.47 [-0.72, -0.21]) and not on 400 m hills (-0.07 [-0.16, +0.03]), so it is not met as written, as was V1 of ADR 0018. X2, X3, and X4 are met. The cost is a smaller closest approach (3 to 13 m at a cap of 3 m/s in the cells examined) and, at a cap of 0, less time on station. The crash classes in fog on 480 m hills: 35 aircraft of 180 on the ground against 49, of which 32 are launch and early cases; the late ones were at a mean of 35.9 m/s with `base` and 23.5 m/s with `cap3`. The option stays off by default because the earlier results were measured without it. What was not examined: the aircraft that stop within seconds of the start, which are now nearly all of what remains in this case; the range at which the threat is first seen; and the better rule in principle, a cap tied to the sensor range.
