@@ -320,3 +320,27 @@ ADR 0020 asked whether starting above the true ground removes the launch and ear
 - **The crash classes, as the ADR said they would be reported.** `scripts/crash_report.py` on fog, 480 m hills, 30 seeds, 180 aircraft with `cleared`: 18 on the ground against 35 (1 launch, 11 early, 0 separation, 0 climb, 2 turn, 0 blind, 4 other; with the free start: 23, 9, 0, 0, 1, 0, 2). Of the 11 early ones, 8 stopped within 2.4 s of the start; the impact point was 17 to 79 m ahead 3 s before (or at the start), and clearing it needed 4.7 to 19 times the climb the vehicle can make in the time. They started at least 60 m above the ground under them and next to a hill face on their circle, and no avoidance acts on a face 17 to 66 m ahead at 31 m/s (0.5 to 2 s). The 4 `other` and 2 `turn` are the late ones.
 
 What this does not show. The clearance of 60 m is one level, fixed from the planning clearance; a different level would move aircraft between the first-step cases and the early ones. The early cases are a property of where the orbit passes in these generated hills, and a scenario with a launch site chosen away from the faces would not have them. One scenario family.
+
+### The whole ladder on one setup
+
+The avoidance experiments above were each run with the options of their time and with the aircraft starting on their slots at the nominal altitude, so their numbers are not comparable to each other. `experiments/fixed_wing_final.yaml` runs every stage on one setup, all with a cleared start (`swarm.start.clearance_m` 60, ADR 0020): `forward` (the forward sensor and its altitude floor only, ADR 0013), `avoid` (turning and slowing, ADR 0014), `all3` (rejoin, kinematic feasibility, clearance 30 m, ADR 0015), `turnfirst` (ADR 0018), `cap3` (a catch-up cap of 3 m/s, ADR 0019), `urgent6` (the whole bank under 6 s, ADR 0017), and `share` (the aircraft also share what they see, ADR 0016). Weather (clear, fog of 375 m visibility), hills of 40, 400, and 480 m, a map (none, exact): 84 cells, 30 seeds, 2,520 runs, none failed. It describes; it tests no new claim. Reproduce with `swarm_batch experiments/fixed_wing_final.yaml --out results/fixed_wing_final_30.csv --jobs 16 --seeds 30` and `python results_final.py ../results`.
+
+Ground contacts of six aircraft over the run (means over 30 seeds), steep hills with no map:
+
+| Arm | Clear, 400 m | Clear, 480 m | Fog, 400 m | Fog, 480 m |
+|---|---|---|---|---|
+| forward | 1.87 | 3.13 | 3.47 | 5.03 |
+| avoid | 0.27 | 0.40 | 0.73 | 1.70 |
+| all3 | 0.33 | 0.43 | 0.70 | 1.57 |
+| turnfirst | 0.27 | 0.40 | 0.43 | 0.93 |
+| cap3 | 0.27 | 0.43 | 0.33 | 0.60 |
+| urgent6 | 0.27 | 0.37 | 0.30 | 0.57 |
+| share | 0.27 | 0.37 | 0.27 | 0.40 |
+
+- **Most of the gain is the first step.** Turning and slowing against the sensor with an altitude floor alone: -1.60 [-2.28, -0.92] (clear, 400 m), -2.73 [-3.45, -2.02] (clear, 480 m), -2.73 [-3.63, -1.84] (fog, 400 m), and -3.33 [-3.96, -2.70] (fog, 480 m). The whole stack against the sensor alone, in fog on 480 m hills: -4.63 [-5.11, -4.16], from 5.03 to 0.40.
+- **In clear air nothing after the first step moves the contacts that the intervals show** (every step from `all3` on is within about 0.1 of zero, with intervals that include it). In fog the later steps do: `turnfirst` against `all3` -0.63 [-0.98, -0.29] on 480 m hills (-0.27 [-0.54, +0.01] on 400 m), `cap3` against `turnfirst` -0.33 [-0.58, -0.09] (-0.10 [-0.21, +0.01]), and `urgent6` and `share` each smaller than their intervals (`share` against `urgent6` -0.17 [-0.36, +0.03] on 480 m hills).
+- **The rejoin step is about the formation, not the contacts.** `all3` against `avoid`: the share of time within 100 m of the circle rises by +0.45 [+0.42, +0.49] (clear, 400 m), +0.48 [+0.44, +0.53] (clear, 480 m), +0.11 [+0.07, +0.15] (fog, 400 m), and +0.14 [+0.10, +0.18] (fog, 480 m), with contacts unchanged.
+- **The formation is still not the benchmark's.** The radial error to the circle is 31 to 67 m with `share` against 9 to 18 m with the sensor alone; time on station is 0.06 to 0.18 against 0.14 to 0.75; and the mean height is higher by 56 m (clear, 400 m) to 101 m (fog, 480 m) than with the sensor alone. With an exact map every arm has no contacts, and `avoid` alone costs time on station (0.75 against 0.96 on 400 m hills), which the later stages give back.
+- **The costs in closest approach.** In fog on 480 m hills the closest approach of the aircraft is 7.8 m with the sensor alone and 60 to 84 m with the stages (82 m for `share`), and collision episodes fall from 1.57 to 0.00 per run.
+
+What this does not show. One scenario family and one aircraft parameter set, six aircraft on one circle, a cleared start of 60 m in every arm (a different start moves the early losses), and no test of whether the stages interact; each step was judged against its own criteria in its own ADR. The aircraft that still stop on the ground in fog on 480 m hills (0.40 of six) are mostly early cases next to a hill face (previous section).
