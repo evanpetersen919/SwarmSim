@@ -1,0 +1,19 @@
+# A probe for ADR 0019: how much of the speed above the mission speed after an avoidance detour is
+# the orbit's catch-up of the lost phase (control.orbit.phase_gain), and what does a lower gain do to
+# safety and to the spacing between aircraft? 2 steepness levels x 3 gains = 6 cells in fog with no
+# map, on base_fixed_wing_avoid.yaml with the avoidance of ADR 0015 and turn_first (ADR 0018). Run
+# with 10 seeds. The levels of the experiment are fixed from this probe, before it is run.
+version: 1
+name: probe_fixed_wing_phase
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: amplitude
+    levels:
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: gain
+    levels:
+      - {label: g05, set: {sensors: {forward: {period_ticks: 5}}, weather: {visibility_m: 375, rain_mm_h: 0}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}
+      - {label: g02, set: {sensors: {forward: {period_ticks: 5}}, weather: {visibility_m: 375, rain_mm_h: 0}, control: {orbit: {phase_gain: 0.02}, avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}
+      - {label: g00, set: {sensors: {forward: {period_ticks: 5}}, weather: {visibility_m: 375, rain_mm_h: 0}, control: {orbit: {phase_gain: 0.0}, avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}

@@ -5,6 +5,7 @@
 // Enforced by scripts/check_core_invariants.sh.
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "swarm/control/separation.hpp"
@@ -35,6 +36,9 @@ struct OrbitParams {
   double min_speed = 12.0;      // m/s, the vehicle's limits
   double max_speed = 25.0;
   double speed_margin = 1.0;  // m/s kept clear of both limits when asking for a speed
+  // ADR 0019. The most the phase correction may ask for above the commanded speed, m/s. Empty means
+  // no cap beyond the speed limit, as before. Slowing down to correct the phase is not capped.
+  std::optional<double> max_catchup;
 
   double radial_gain = 1.0;       // cut toward the circle per unit of relative radial error
   double phase_gain = 0.05;       // 1/s: m/s of speed per meter of arc error

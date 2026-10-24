@@ -1,0 +1,39 @@
+# The catch-up experiment (ADR 0019): does limiting the speed that the orbit's phase correction asks
+# for above the mission speed keep more aircraft off the ground after detours, and what does it cost?
+# 2 weather levels x 3 steepness levels x 2 maps x 4 arms = 48 cells. Run with 30 seeds, 1,440 runs,
+# on base_fixed_wing_avoid.yaml. Compare arms with `paired_difference` on the arm axis, within each
+# weather, steepness, and map level.
+#
+# The criteria X1 to X5 were written in ADR 0019 before this file was run. They apply to the arm
+# cap3 against base; cap0 and cap6 are reported and are not part of the criteria.
+#
+# weather:   clear air, and fog of 375 m visibility.
+# amplitude: hills of 40 (a gentle control), 400, and 480 m.
+# map:       none (no terrain guidance; the aircraft fly at 100 m and only a sensor can react), and
+#            exact (terrain guidance from an exact map, where every trigger is a false alarm).
+# arm:       base (avoidance with the changes of ADR 0015 and turn_first of ADR 0018); cap6, cap3,
+#            and cap0 (the same with catchup_cap_mps of 6, 3, and 0 m/s).
+version: 1
+name: fixed_wing_avoid_catchup
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+  - name: arm
+    levels:
+      - {label: base, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}
+      - {label: cap6, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 6}}}}
+      - {label: cap3, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3}}}}
+      - {label: cap0, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 0}}}}

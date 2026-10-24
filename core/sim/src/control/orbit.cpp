@@ -44,6 +44,9 @@ void validate(const OrbitParams& p) {
         "OrbitParams: steps, margin, and gains must be finite and "
         "not negative");
   }
+  if (p.max_catchup && !(std::isfinite(*p.max_catchup) && *p.max_catchup >= 0.0)) {
+    throw std::invalid_argument("OrbitParams: max_catchup must be finite and not negative");
+  }
   if (!(p.min_speed + p.speed_margin < p.speed && p.speed < p.max_speed - p.speed_margin)) {
     throw std::invalid_argument(
         "OrbitParams: speed must be inside the speed limits by more than speed_margin");
@@ -126,9 +129,12 @@ Vec3 orbit_guidance(const Vec3& position, const Vec3& velocity, const Vec3& cent
   dx /= dn;
   dy /= dn;
 
-  const double desired =
-      std::clamp(speed + params.phase_gain * radius * phase_error,
-                 params.min_speed + params.speed_margin, params.max_speed - params.speed_margin);
+  double upper = params.max_speed - params.speed_margin;
+  if (params.max_catchup) {
+    upper = std::min(upper, speed + *params.max_catchup);
+  }
+  const double desired = std::clamp(speed + params.phase_gain * radius * phase_error,
+                                    params.min_speed + params.speed_margin, upper);
   const double centripetal = desired * desired / radius;
   const double kv = params.velocity_gain * gain_scale;
 

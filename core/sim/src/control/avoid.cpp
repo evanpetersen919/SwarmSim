@@ -27,6 +27,9 @@ void validate(const AvoidParams& p) {
   if (!(std::isfinite(p.urgent_s) && p.urgent_s >= 0.0)) {
     throw std::invalid_argument("AvoidParams: urgent_s must be finite and not negative");
   }
+  if (p.catchup_cap_mps && !(std::isfinite(*p.catchup_cap_mps) && *p.catchup_cap_mps >= 0.0)) {
+    throw std::invalid_argument("AvoidParams: catchup_cap_mps must be finite and not negative");
+  }
   if (p.clearance_m && !(std::isfinite(*p.clearance_m) && *p.clearance_m >= 0.0)) {
     throw std::invalid_argument("AvoidParams: clearance_m must be finite and not negative");
   }

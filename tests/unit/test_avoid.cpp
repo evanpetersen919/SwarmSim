@@ -452,7 +452,7 @@ TEST(AvoidScenario, ItNeedsTheForwardSensorVersionThreeAFixedWingVehicleAndValid
       swarm::load_scenario(avoid_scenario(3, "vehicle: {type: quad}\n", forward, "  avoid: {}\n"))
           .ok());
   for (const char* bad : {"horizon_s: 0", "hold_s: 0", "bank_fraction: 0", "bank_fraction: 1.5",
-                          "urgent_s: -1", "unknown_key: 1"}) {
+                          "urgent_s: -1", "catchup_cap_mps: -1", "unknown_key: 1"}) {
     EXPECT_FALSE(swarm::load_scenario(
                      avoid_scenario(3, fw, forward, std::string("  avoid: {") + bad + "}\n"))
                      .ok())
@@ -640,10 +640,10 @@ TEST(AvoidBrain, OnItsCircleTheRejoinTurnIsTowardTheCenterAndTheOldTieIsAwayFrom
 TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhenSet) {
   const std::string fw = "vehicle: {type: fixed_wing}\n";
   const std::string forward = "  forward: {period_ticks: 5}\n";
-  const swarm::LoadResult r =
-      swarm::load_scenario(avoid_scenario(3, fw, forward,
-                                          "  avoid: {rejoin: true, feasibility: kinematic, "
-                                          "clearance_m: 30, urgent_s: 6, turn_first: true}\n"));
+  const swarm::LoadResult r = swarm::load_scenario(
+      avoid_scenario(3, fw, forward,
+                     "  avoid: {rejoin: true, feasibility: kinematic, "
+                     "clearance_m: 30, urgent_s: 6, turn_first: true, catchup_cap_mps: 3}\n"));
   ASSERT_TRUE(r.ok()) << first_error(r);
   EXPECT_DOUBLE_EQ(r.scenario.avoid.urgent_s, 6.0);
   EXPECT_TRUE(r.scenario.avoid.rejoin);
@@ -657,6 +657,9 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_NE(text.find("urgent_s: 6"), std::string::npos);
   EXPECT_NE(text.find("turn_first: true"), std::string::npos);
   EXPECT_TRUE(r.scenario.avoid.turn_first);
+  ASSERT_TRUE(r.scenario.avoid.catchup_cap_mps.has_value());
+  EXPECT_DOUBLE_EQ(*r.scenario.avoid.catchup_cap_mps, 3.0);
+  EXPECT_NE(text.find("catchup_cap_mps: 3"), std::string::npos);
   const swarm::LoadResult again = swarm::load_scenario(text);
   ASSERT_TRUE(again.ok()) << first_error(again);
   EXPECT_EQ(swarm::canonical_text(again.scenario), text);
@@ -674,6 +677,8 @@ TEST(AvoidScenario, TheRejoinFeasibilityAndClearanceKeysAreReadAndWrittenOnlyWhe
   EXPECT_FALSE(bare.scenario.avoid.clearance_m.has_value());
   EXPECT_DOUBLE_EQ(bare.scenario.avoid.urgent_s, 0.0);
   EXPECT_FALSE(bare.scenario.avoid.turn_first);
+  EXPECT_FALSE(bare.scenario.avoid.catchup_cap_mps.has_value());
+  EXPECT_EQ(swarm::canonical_text(bare.scenario).find("catchup_cap_mps"), std::string::npos);
   EXPECT_EQ(swarm::canonical_text(bare.scenario).find("turn_first"), std::string::npos);
   EXPECT_EQ(swarm::canonical_text(bare.scenario).find("urgent_s"), std::string::npos);
 

@@ -67,6 +67,11 @@ struct AvoidParams {
   // vertical commands together stay within the brain's acceleration limit, with the sideways and
   // the vertical first. Off is the behavior of ADR 0017. The brain applies it.
   bool turn_first = false;
+
+  // ADR 0019. The most the orbit's phase correction may ask for above the mission speed while this
+  // option is set, m/s. Empty means no cap, as before. After a detour the aircraft is behind its
+  // slot and asks for a higher speed, which shortens the warning time and widens the turn.
+  std::optional<double> catchup_cap_mps;
 };
 
 // Throws std::invalid_argument unless the horizon, hold, and turn time are finite and positive, the

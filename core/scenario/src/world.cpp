@@ -336,6 +336,7 @@ ScenarioWorld build_world(const Scenario& s) {
         c.brain.avoid = s.avoid;
         c.brain.avoid.max_lateral_accel = s.vehicle.fixed_wing.max_lateral_accel();
         c.brain.avoid.max_vertical_accel = s.vehicle.fixed_wing.max_vertical_accel;
+        c.brain.orbit.max_catchup = s.avoid.catchup_cap_mps;
       }
       if (!s.terrain_guidance.enabled) {
         // The clearance and the climb budget of the guidance, without a map.

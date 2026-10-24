@@ -396,6 +396,9 @@ std::string canonical_text(const Scenario& s) {
       if (av.turn_first) {
         line("    turn_first: true");
       }
+      if (av.catchup_cap_mps) {
+        line("    catchup_cap_mps: " + num(*av.catchup_cap_mps));
+      }
     }
     if (s.share.mode != ShareMode::kOff) {
       const ShareParams& sh = s.share;

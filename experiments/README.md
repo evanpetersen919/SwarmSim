@@ -24,6 +24,8 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `fixed_wing_avoid_rejoin.yaml` | The rejoin experiment: 4 steepness levels, 2 maps, 2 weather levels, 7 arms; 112 cells (ADR 0015) |
 | `fixed_wing_avoid_urgent.yaml` | The urgent-turn experiment: 2 weather levels, 3 steepness levels, 2 maps, 4 arms (urgent_s of 0, 4, 6, 8 s); 48 cells (ADR 0017) |
 | `fixed_wing_avoid_turnfirst.yaml` | The turn-first experiment: 2 weather levels, 3 steepness levels, 2 maps, 3 arms (all3, turnfirst, turnfirst_urgent6); 36 cells (ADR 0018) |
+| `probe_fixed_wing_phase.yaml` | A probe of the orbit phase gain (0.05, 0.02, 0) on 400 and 480 m hills in fog; 6 cells (ADR 0019) |
+| `fixed_wing_avoid_catchup.yaml` | The catch-up experiment: 2 weather levels, 3 steepness levels, 2 maps, 4 arms (no cap, 6, 3, and 0 m/s); 48 cells (ADR 0019) |
 | `fixed_wing_avoid_clearance.yaml` | The avoidance clearance (15, 30, 60 m) with the three changes of ADR 0015; 6 cells |
 | `fixed_wing_share.yaml` | The sharing experiment: 3 steepness levels, 2 weather levels, 3 loss levels, 2 jam levels, 3 arms (avoid, memory, share); 108 cells (ADR 0016) |
 | `fixed_wing_share_sensitivity.yaml` | How long a point is kept and how many a report carries; 6 cells (ADR 0016) |

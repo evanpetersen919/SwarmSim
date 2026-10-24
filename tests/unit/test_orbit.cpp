@@ -161,6 +161,37 @@ TEST(Orbit, ASteadyCircleNeedsNoCorrection) {
   EXPECT_NEAR(a.z, 0.0, 1e-12);
 }
 
+TEST(Orbit, TheCatchUpCapLimitsOnlyTheSpeedAskedForAboveTheCommandedOne) {
+  OrbitParams p = params();
+  p.speed = 30.0;
+  p.min_speed = 15.0;
+  p.max_speed = 50.0;
+  p.radius = 300.0;
+  // On the +x axis, moving counterclockwise (+y) at the commanded speed: the tangential
+  // acceleration is velocity_gain * (desired speed - speed).
+  const Vec3 position{300.0, 0.0, 100.0};
+  const Vec3 velocity{0.0, 30.0, 0.0};
+  const auto tangential = [&](const OrbitParams& q, double phase_error) {
+    return swarm::orbit_guidance(position, velocity, p.center, 300.0, 30.0, 100.0, phase_error, q,
+                                 1.0)
+        .y;
+  };
+  // Behind by 1 rad asks for 0.05 * 300 * 1 = 15 m/s more, as before without a cap.
+  EXPECT_NEAR(tangential(p, 1.0), 15.0, 1e-9);
+  OrbitParams capped = p;
+  capped.max_catchup = 3.0;
+  EXPECT_NEAR(tangential(capped, 1.0), 3.0, 1e-9);
+  // Ahead of the slot, slowing down is not capped.
+  EXPECT_NEAR(tangential(capped, -0.5), tangential(p, -0.5), 1e-12);
+  // A cap above what is asked changes nothing, and a negative one is refused.
+  capped.max_catchup = 20.0;
+  EXPECT_NEAR(tangential(capped, 1.0), 15.0, 1e-9);
+  capped.max_catchup = -1.0;
+  EXPECT_THROW(
+      swarm::orbit_guidance(position, velocity, p.center, 300.0, 30.0, 100.0, 0.0, capped, 1.0),
+      std::invalid_argument);
+}
+
 TEST(Orbit, OneAircraftFromSeveralStartsConvergesToItsCircleAndPhase) {
   struct Start {
     Vec3 pos;
