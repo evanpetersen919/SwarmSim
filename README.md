@@ -16,17 +16,17 @@ The same run at 10 s, before the jam: three aircraft are already in degraded nav
 
 The same run at 30 s, during the jam: two aircraft are in degraded communication and three in safe hold, and the strip shows the followed aircraft's state band moving from nominal to degraded communication.
 
-![A fixed-wing aircraft banking past a cliff](docs/img/viewer_cliff.jpg)
+![A fixed-wing aircraft flying past a cliff face in fog](docs/img/viewer_cliff.jpg)
 
-One of the five aircraft of the same run, banking past a cliff, from the viewer's follow camera. The aircraft is drawn 2.5 times its size so that it reads at this distance. The small two-blade propeller at the tail is the part that turns.
+One of the five aircraft of the same run at 9 s, past a cliff face and trees in fog, from the viewer's follow camera. The aircraft is drawn 4 times its size (`-SwarmScale=4`) so that it reads at this distance. The small two-blade propeller at the tail is the part that turns.
 
-![A fixed-wing aircraft flying through a gap between cliffs](docs/img/viewer_gap.jpg)
+![A fixed-wing aircraft between canyon walls in fog](docs/img/viewer_gap.jpg)
 
-The same run, flying through a gap between cliffs. The orbit is raised by terrain guidance, from a prior map of the level, to clear the highest ground along it.
+The same run at 14 s, between canyon walls. The orbit is raised by terrain guidance, from a prior map of the level that is 100 m too low, to keep the aircraft above the highest ground along it.
 
 ![Four fixed-wing aircraft in formation over a clearing](docs/img/viewer_formation.jpg)
 
-Four aircraft in formation over the same level. This is a scratch variant of [scenarios/fixed_wing_formation.yaml](scenarios/fixed_wing_formation.yaml) fitted to the level (4 aircraft, seed 7). The simulation never renders anything; the viewer only reads the log. See [Credits](#credits) for the level and the aircraft model.
+Four aircraft in formation over the same level, from an earlier run than the images above. This is a scratch variant of [scenarios/fixed_wing_formation.yaml](scenarios/fixed_wing_formation.yaml) fitted to the level (4 aircraft, seed 7). The simulation never renders anything; the viewer only reads the log. See [Credits](#credits) for the level and the aircraft model.
 
 ## Status
 
