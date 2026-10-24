@@ -128,6 +128,11 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   UFUNCTION(BlueprintCallable, Category = "SwarmSim")
   void ConfigureFrames(const FString& Directory, double Fps, double Seconds);
 
+  // Real seconds at the start of a frame capture during which the playback is held and nothing is
+  // saved, so a World Partition level can stream in and the exposure can settle.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  double FrameWarmupSeconds = 0.0;
+
   UFUNCTION(BlueprintCallable, Category = "SwarmSim")
   double GetSpeed() const { return Speed; }
 
@@ -173,7 +178,9 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   // A small window under the map with a camera on the drone the main camera follows, looking along
   // its heading. It is the viewer's own rendered view of the level, with the level's fog, and not
   // the simulation's sensor: the simulation's camera fix is a position model and draws nothing.
-  // C toggles it; -SwarmNoPip starts without it.
+  // Known limit: in the bright, fogged Electric Dreams level the window is exposed far too high and
+  // shows mostly white; it looks right in the Demo_Scene level. C toggles it; -SwarmNoPip starts
+  // without it.
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bShowPip = true;
 
@@ -303,6 +310,7 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   double FrameFps = 30.0;
   int32 FrameTotal = 0;
   int32 FramesRequested = 0;
+  double WarmupClock = 0.0;
 
   FString ShotDirectory;
   double ShotDelay = 0.0;

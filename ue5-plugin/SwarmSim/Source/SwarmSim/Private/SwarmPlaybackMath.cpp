@@ -141,6 +141,7 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
   FParse::Value(CommandLine, TEXT("SwarmFrameDir="), Options.FrameDir);
   ReadNumber(TEXT("SwarmFrameFps="), 1.0, 120.0, Options.FrameFps);
   ReadNumber(TEXT("SwarmFrameSeconds="), 0.1, 3600.0, Options.FrameSeconds);
+  ReadNumber(TEXT("SwarmFrameWarmup="), 0.0, 600.0, Options.FrameWarmup);
   double Count = static_cast<double>(Options.ShotCount);
   ReadNumber(TEXT("SwarmShotDelay="), 0.0, 3600.0, Options.ShotDelay);
   ReadNumber(TEXT("SwarmShotEvery="), 1.0, 3600.0, Options.ShotEvery);

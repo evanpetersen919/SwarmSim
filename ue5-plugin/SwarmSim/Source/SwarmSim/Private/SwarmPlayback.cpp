@@ -485,6 +485,15 @@ void ASwarmPlayback::Tick(float DeltaSeconds) {
       FPlatformMisc::RequestExit(false);
       return;
     }
+    if (FramesRequested == 0 && WarmupClock < FrameWarmupSeconds) {
+      // Hold the first frame while the level streams in; nothing is saved yet.
+      WarmupClock += DeltaSeconds;
+      BindKeys();
+      ApplyFrame(DeltaSeconds, false);
+      UpdateCamera(DeltaSeconds);
+      UpdatePip();
+      return;
+    }
     DeltaSeconds = static_cast<float>(1.0 / FrameFps);
   }
   BindKeys();  // the controller may not have existed at BeginPlay

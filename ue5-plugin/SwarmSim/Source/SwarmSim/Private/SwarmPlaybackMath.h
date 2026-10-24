@@ -85,6 +85,8 @@ constexpr double kDrawnFogMaxVisibilityM = 5000.0;
 //                         waiting for each to be saved, then quit
 //   -SwarmFrameFps=N      frames per second of the video (default 30)
 //   -SwarmFrameSeconds=S  length of the video in seconds (default 30)
+//   -SwarmFrameWarmup=S   seconds of real time to wait at the first frame, with the playback
+//                         held, so the level streams in and the exposure settles (default 0)
 struct FLaunchOptions {
   FString LogPath;
   FString SceneFile;
@@ -104,6 +106,7 @@ struct FLaunchOptions {
   FString FrameDir;
   double FrameFps = 30.0;
   double FrameSeconds = 30.0;
+  double FrameWarmup = 0.0;
   bool bValid = true;  // false if a value could not be read
   FString Problem;
 };

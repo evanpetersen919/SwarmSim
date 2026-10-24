@@ -184,6 +184,12 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
             ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoTelemetry);
   TestTrue(TEXT("-SwarmNoTelemetry starts without it"),
            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoTelemetry")).bNoTelemetry);
+  TestEqual(TEXT("no warm-up by default"), ParseLaunchOptions(TEXT("-SwarmLog=a")).FrameWarmup,
+            0.0);
+  TestEqual(TEXT("-SwarmFrameWarmup is read"),
+            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmFrameWarmup=40")).FrameWarmup, 40.0);
+  TestFalse(TEXT("-SwarmFrameWarmup must not be negative"),
+            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmFrameWarmup=-1")).bValid);
 
   // The mini map's square, with the numbers written out. The larger side of the box is 40 m, and
   // with a quarter on each side the square is 60 m, centered on (10, 10).

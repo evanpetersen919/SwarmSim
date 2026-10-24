@@ -74,6 +74,7 @@ void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
                                    /*bQuitAfter=*/true);
   }
   if (!Options.FrameDir.IsEmpty()) {
+    Playback->FrameWarmupSeconds = Options.FrameWarmup;
     Playback->ConfigureFrames(Options.FrameDir, Options.FrameFps, Options.FrameSeconds);
   }
   if (Options.Camera == TEXT("orbit")) {

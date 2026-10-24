@@ -4,9 +4,17 @@ Deterministic C++17 simulation and benchmark for drone-swarm behavior under degr
 
 [![ci](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml/badge.svg)](https://github.com/evanpetersen919/SwarmSim/actions/workflows/ci.yml) [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![A fixed-wing aircraft banking through a canyon, from the viewer's follow camera](docs/img/hero.gif)
+![Five fixed-wing aircraft on an orbit as a jammer starts, from the viewer's follow camera](docs/img/hero.gif)
 
-Eight seconds of a recorded run played back in the Unreal viewer: five ALTIUS-700-class aircraft on a 300 m orbit at 70 mph, seed 7, follow camera, with the viewer's overlay. A jammer blocks the radio from 5 s to 8 s of the run. The mini map in the corner draws a line between the sender and receiver of every message, green when it is delivered and red when the jammer blocks it. The overlay gives the speed, altitude, climb rate, and heading of the followed drone and counts the messages of the last second, and it turns red while any drone is out of its nominal state. The scenario is a scratch one fitted to a 2 km export of a premade level and is not in the repository; the aircraft parameters are figures supplied without a source (see below). The GIF is small (480 px, 8 frames per second) to stay under 5 MB.
+Six seconds of a recorded run played back in the Unreal viewer (13 s to 19 s of a 60 s run): five ALTIUS-700-class aircraft on a 300 m orbit at 70 mph, seed 7, in fog of 375 m visibility, follow camera. A jammer blocks the radio from 15 s to 35 s. The mini map in the corner draws a line between the sender and receiver of every message, green when it is delivered and red when the jammer blocks it. At the start of the GIF the lines are green and the overlay counts no jammed messages; by the end the lines are red, the overlay counts 176 jammed messages in the last second, and the followed aircraft has gone from nominal to degraded communication (the band under the telemetry strip, lower left). The telemetry strip plots the altitude and speed of the followed aircraft over the last 30 s. The scenario is a scratch one fitted to a 2 km export of a premade level and is not in the repository; the aircraft parameters are figures supplied without a source (see below). The GIF is small (480 px, 8 frames per second); the full clip is [docs/img/demo.mp4](docs/img/demo.mp4) (37 s, 1280 by 720, with about 2 s cut where the camera passed through foliage).
+
+![Aircraft in fog over a canyon](docs/img/viewer_fog.jpg)
+
+The same run at 10 s, before the jam: three aircraft are already in degraded navigation because the fog blinds the camera position fix, the followed aircraft is nominal, and the fog from the scenario's visibility is drawn in the level.
+
+![Aircraft over forest during the jam](docs/img/viewer_jam.jpg)
+
+The same run at 30 s, during the jam: two aircraft are in degraded communication and three in safe hold, and the strip shows the followed aircraft's state band moving from nominal to degraded communication.
 
 ![A fixed-wing aircraft banking past a cliff](docs/img/viewer_cliff.jpg)
 
@@ -29,7 +37,7 @@ What exists, by area. [docs/PLAN.md](docs/PLAN.md) has the scope and the dated c
 - **Estimation and control.** A Kalman pose estimator, neighbor reports, three neighbor predictors (hold last state, dead reckoning, Kalman), a drone brain with consensus formation, separation, and a fallback state machine, and for the fixed-wing aircraft orbit, racetrack, lanes, and formation patterns (trail, echelon, vee, rake) with terrain-aware altitude guidance.
 - **Scenarios and metrics.** Runs are described by strict, versioned scenario files and measured from their logs: formation or path error, separation, collisions, recovery time, message latency and delivery ratio, height above ground and ground contacts, exported as CSV. A scenario can run with its messages over real UDP and TCP sockets on loopback and writes the same log as the simulated run.
 - **Experiments.** Experiment files expand into a matrix of cells that `swarm_batch` runs in parallel into a table that does not depend on the job count. A Python package summarizes the table with intervals and figures.
-- **Unreal viewer.** A plugin that builds a scene from a log and plays it back, or plays a log in a premade level. Its overlay shows the speed of the followed drone, the fallback states in words (green while every drone is nominal, red when one is not), and counts of the messages delivered, lost, and jammed; on request it draws a line for every message. It is checked by automation tests and by eye locally, not by CI.
+- **Unreal viewer.** A plugin that builds a scene from a log and plays it back, or plays a log in a premade level. It also has a telemetry strip and, outside the bright Electric Dreams level, a small window with a camera on the followed drone (the window is exposed too high in that level and is off in the images here). Its overlay shows the speed of the followed drone, the fallback states in words (green while every drone is nominal, red when one is not), and counts of the messages delivered, lost, and jammed; on request it draws a line for every message. It is checked by automation tests and by eye locally, not by CI.
 
 ## Results
 
