@@ -54,6 +54,20 @@ FLinearColor StateColor(uint8 FallbackState, bool bAlive);
 // A state hash as sixteen lowercase hexadecimal digits, as `swarm_sim` prints it.
 FString HashString(uint64 Hash);
 
+// The visibility in meters that a run's configuration text (the canonical scenario text a log's
+// header holds) gives under `weather:`. False if there is none or it is not a positive number.
+bool VisibilityFromConfig(const FString& Config, double& OutVisibilityM);
+
+// The `FogDensity` of an exponential height fog that gives a uniform fog of the visibility
+// `VisibilityM` meters by Koschmieder's law, extinction 3.912 / visibility. Unreal divides the
+// density by 1000 to get an extinction per centimeter, so the density is 39.12 / visibility. Clamped
+// to the component's range [0, 10]; zero for a visibility that is not positive.
+double FogDensityForVisibility(double VisibilityM);
+
+// The visibility in meters above which the viewer leaves the level's own atmosphere alone: in air
+// that clear the simulation's fog is not something to draw over the level.
+constexpr double kDrawnFogMaxVisibilityM = 5000.0;
+
 // Options for a replay given on the command line:
 //   -SwarmLog=PATH        the run log to play (required to play)
 //   -SwarmAnchor=X,Y      where the simulation's origin is in the level, in centimeters

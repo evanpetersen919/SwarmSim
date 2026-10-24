@@ -166,6 +166,48 @@ FVector2D MapPoint(const FMapExtent& Extent, const FVector2D& MapOrigin, double 
   return FVector2D(MapOrigin.X + U * MapSize, MapOrigin.Y + (1.0 - V) * MapSize);
 }
 
+bool VisibilityFromConfig(const FString& Config, double& OutVisibilityM) {
+  // The canonical text writes `weather:` at the left margin and its keys indented under it, one per
+  // line, so the line that starts with `weather:` is followed by the indented lines of the section.
+  TArray<FString> Lines;
+  Config.ParseIntoArrayLines(Lines, false);
+  bool bInWeather = false;
+  for (const FString& Line : Lines) {
+    if (Line.StartsWith(TEXT("weather:"), ESearchCase::CaseSensitive)) {
+      bInWeather = true;
+      continue;
+    }
+    if (!bInWeather) {
+      continue;
+    }
+    if (!Line.IsEmpty() && !Line.StartsWith(TEXT(" "))) {
+      return false;  // the next top-level key: the section ended without a visibility
+    }
+    const FString Trimmed = Line.TrimStartAndEnd();
+    if (!Trimmed.StartsWith(TEXT("visibility_m:"), ESearchCase::CaseSensitive)) {
+      continue;
+    }
+    const FString Number = Trimmed.Mid(FCString::Strlen(TEXT("visibility_m:"))).TrimStartAndEnd();
+    if (!Number.IsNumeric()) {
+      return false;
+    }
+    const double Value = FCString::Atod(*Number);
+    if (!(Value > 0.0)) {
+      return false;
+    }
+    OutVisibilityM = Value;
+    return true;
+  }
+  return false;
+}
+
+double FogDensityForVisibility(double VisibilityM) {
+  if (!(VisibilityM > 0.0)) {
+    return 0.0;
+  }
+  return FMath::Clamp(39.12 / VisibilityM, 0.0, 10.0);
+}
+
 double ScaleBarMeters(double MaxMeters) {
   if (!(MaxMeters > 0.0)) {
     return 0.0;

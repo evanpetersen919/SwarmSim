@@ -291,4 +291,11 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   void BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) const;
   double CameraClock = 0.0;
   FVector CameraLocation = FVector::ZeroVector;
+
+  // The visibility in meters that the loaded run's scenario gives, or zero if it has none. When it
+  // is under SwarmSim::kDrawnFogMaxVisibilityM the level's exponential height fog is set to a
+  // uniform fog of that visibility (or one is spawned), so the viewer shows the weather the run was
+  // flown in.
+  double VisibilityM = 0.0;
+  void ApplyWeather();
 };

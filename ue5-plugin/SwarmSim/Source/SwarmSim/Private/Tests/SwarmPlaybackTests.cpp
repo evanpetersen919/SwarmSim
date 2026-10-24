@@ -23,6 +23,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSwarmPlaybackMathTest, "SwarmSim.Playback.Math
                                  EAutomationTestFlags::EditorContext |
                                      EAutomationTestFlags::EngineFilter)
 bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
+  // The visibility comes from the weather section of the run's scenario text, and only from there.
+  double Visibility = 0.0;
+  TestTrue(TEXT("a visibility is read"),
+           VisibilityFromConfig(TEXT("name: x\nweather:\n  visibility_m: 375\n  rain_mm_h: 0\n"),
+                                Visibility));
+  TestTrue(TEXT("the value is 375"), FMath::IsNearlyEqual(Visibility, 375.0, 1e-9));
+  TestTrue(TEXT("a fractional value is read"),
+           VisibilityFromConfig(TEXT("weather:\n  rain_mm_h: 0\n  visibility_m: 1500.5\n"),
+                                Visibility) &&
+               FMath::IsNearlyEqual(Visibility, 1500.5, 1e-9));
+  TestFalse(TEXT("no weather section"),
+            VisibilityFromConfig(TEXT("name: x\nseed: 1\n"), Visibility));
+  TestFalse(TEXT("a visibility of another section is not the weather's"),
+            VisibilityFromConfig(TEXT("weather:\n  rain_mm_h: 0\nsensors:\n  visibility_m: 9\n"),
+                                 Visibility));
+  TestFalse(TEXT("zero is not a visibility"),
+            VisibilityFromConfig(TEXT("weather:\n  visibility_m: 0\n"), Visibility));
+  TestFalse(TEXT("text is not a visibility"),
+            VisibilityFromConfig(TEXT("weather:\n  visibility_m: far\n"), Visibility));
+  // Koschmieder's law, in Unreal's units: extinction 3.912 / V per meter is 3.912 / (100 V) per
+  // centimeter, and Unreal divides a fog density by 1000 to get that.
+  TestTrue(TEXT("375 m gives a density of 0.1043"),
+           FMath::IsNearlyEqual(FogDensityForVisibility(375.0), 39.12 / 375.0, 1e-9));
+  TestTrue(TEXT("no visibility gives no fog"), FogDensityForVisibility(0.0) == 0.0);
+  TestTrue(TEXT("the density stays within the component's range"),
+           FogDensityForVisibility(1.0) <= 10.0);
   // Heading follows the horizontal velocity, in Unreal's axes.
   TestTrue(
       TEXT("east is yaw 0"),

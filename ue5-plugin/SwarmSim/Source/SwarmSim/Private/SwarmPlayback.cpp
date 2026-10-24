@@ -9,9 +9,12 @@
 #include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDrawService.h"
 #include "Engine/Canvas.h"
+#include "Components/ExponentialHeightFogComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/ExponentialHeightFog.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/DefaultPawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
@@ -159,6 +162,9 @@ bool ASwarmPlayback::LoadLog(const FString& Path, FString& OutError) {
   MapSize = bAny ? Extent.Size : 0.0;
   DestroyDrones();
   BuildDrones(static_cast<int32>(Replay->header().agent_count));
+  VisibilityM = 0.0;
+  SwarmSim::VisibilityFromConfig(UTF8_TO_TCHAR(Replay->header().config.c_str()), VisibilityM);
+  ApplyWeather();
   PlaybackTick = static_cast<double>(Replay->first_tick());
   FollowIndex = 0;
   ApplyFrame(0.0, true);
@@ -166,6 +172,34 @@ bool ASwarmPlayback::LoadLog(const FString& Path, FString& OutError) {
          Drones.Num(), static_cast<int32>(Replay->frames().size()),
          static_cast<uint64>(Replay->first_tick()), static_cast<uint64>(Replay->last_tick()));
   return true;
+}
+
+void ASwarmPlayback::ApplyWeather() {
+  UWorld* World = GetWorld();
+  if (World == nullptr || !(VisibilityM > 0.0) || VisibilityM > SwarmSim::kDrawnFogMaxVisibilityM) {
+    return;
+  }
+  AExponentialHeightFog* Fog = nullptr;
+  for (TActorIterator<AExponentialHeightFog> It(World); It; ++It) {
+    Fog = *It;
+    break;
+  }
+  if (Fog == nullptr) {
+    Fog = World->SpawnActor<AExponentialHeightFog>(FVector::ZeroVector, FRotator::ZeroRotator);
+  }
+  UExponentialHeightFogComponent* Component = Fog != nullptr ? Fog->GetComponent() : nullptr;
+  if (Component == nullptr) {
+    return;
+  }
+  // The simulation's fog is uniform, so the fog does not thin out with height, and it reaches the
+  // observer at once.
+  const double Density = SwarmSim::FogDensityForVisibility(VisibilityM);
+  Component->SetFogDensity(static_cast<float>(Density));
+  Component->SetFogHeightFalloff(0.0f);
+  Component->SetStartDistance(0.0f);
+  Component->SetFogMaxOpacity(1.0f);
+  UE_LOG(LogSwarmSim, Display, TEXT("Weather: visibility %.0f m, fog density %.4f"), VisibilityM,
+         Density);
 }
 
 void ASwarmPlayback::DestroyDrones() {
@@ -626,6 +660,15 @@ void ASwarmPlayback::UpdateCamera(double DeltaSeconds) {
     }
     default:
       return;
+  }
+  // A camera never sits inside the level: when something is between the target and the wanted
+  // place, the camera stops in front of it.
+  if (UWorld* World = GetWorld()) {
+    FHitResult Hit;
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(SwarmCamera), false, this);
+    if (World->LineTraceSingleByChannel(Hit, Target, Wanted, ECC_Visibility, Params)) {
+      Wanted = Hit.Location + (Target - Wanted).GetSafeNormal() * 300.0;
+    }
   }
   CameraLocation =
       CameraClock < 1e-6 ? Wanted : FMath::VInterpTo(CameraLocation, Wanted, DeltaSeconds, 3.0f);
