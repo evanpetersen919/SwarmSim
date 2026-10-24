@@ -8,6 +8,8 @@ class ADefaultPawn;
 class APlayerCameraManager;
 class UCameraComponent;
 class UMaterialInstanceDynamic;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
 class UMaterialInterface;
 class USceneComponent;
 class UStaticMesh;
@@ -168,6 +170,19 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   // with a margin. Empty before a log is loaded.
   FBox2D GetMapBounds() const;
 
+  // A small window under the map with a camera on the drone the main camera follows, looking along
+  // its heading. It is the viewer's own rendered view of the level, with the level's fog, and not
+  // the simulation's sensor: the simulation's camera fix is a position model and draws nothing.
+  // C toggles it; -SwarmNoPip starts without it.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  bool bShowPip = true;
+
+  // A strip at the lower left: the altitude and speed of the followed drone over the last 30 s of
+  // play, and a band of its logged fallback state. T toggles it; -SwarmNoTelemetry starts without
+  // it.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
+  bool bShowTelemetry = true;
+
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SwarmSim")
   bool bLoop = false;
 
@@ -206,6 +221,12 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   void DrawMessages();
   void DrawMap(UCanvas* Canvas, APlayerController* Controller);
   void ToggleMap() { bShowMap = !bShowMap; }
+  void TogglePip() { bShowPip = !bShowPip; }
+  void ToggleTelemetry() { bShowTelemetry = !bShowTelemetry; }
+  void UpdatePip();
+  void DrawPanels(UCanvas* Canvas, APlayerController* Controller);
+  void DrawPip(UCanvas* Canvas, double MapSide) const;
+  void DrawTelemetry(UCanvas* Canvas) const;
   void HideMessageLines();
   void ToggleMessages() { bShowMessages = !bShowMessages; }
   void BindKeys();
@@ -240,6 +261,20 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   double MapMinY = 0.0;
   double MapSize = 0.0;
   FDelegateHandle MapDrawHandle;
+  FDelegateHandle PanelDrawHandle;
+
+  // The viewer camera window: a capture component on the followed drone, drawing into a render
+  // target that the canvas shows.
+  UPROPERTY()
+  TObjectPtr<USceneCaptureComponent2D> PipCapture;
+
+  UPROPERTY()
+  TObjectPtr<UTextureRenderTarget2D> PipTarget;
+
+  int32 PipDrone = -1;  // the drone whose parts the capture hides, so it does not see itself
+  // Height of the followed drone above the level's surface straight below it, by a trace down, in
+  // meters; negative when nothing is below.
+  double HeightAboveTerrainM = -1.0;
 
   UPROPERTY()
   TObjectPtr<UCameraComponent> Camera;

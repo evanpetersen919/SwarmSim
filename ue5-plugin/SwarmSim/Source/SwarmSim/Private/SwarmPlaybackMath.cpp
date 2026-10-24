@@ -121,6 +121,8 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
   FParse::Value(CommandLine, TEXT("SwarmDroneModel="), Options.DroneModel);
   Options.bMessages = FParse::Param(CommandLine, TEXT("SwarmMessages"));
   Options.bNoMap = FParse::Param(CommandLine, TEXT("SwarmNoMap"));
+  Options.bNoPip = FParse::Param(CommandLine, TEXT("SwarmNoPip"));
+  Options.bNoTelemetry = FParse::Param(CommandLine, TEXT("SwarmNoTelemetry"));
   FParse::Value(CommandLine, TEXT("SwarmShotDir="), Options.ShotDir);
   const auto ReadNumber = [&](const TCHAR* Key, double Low, double High, double& Out) {
     FString Value;

@@ -59,6 +59,8 @@ void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
   Playback->DroneModelPath = Options.DroneModel;
   Playback->bShowMessages = Options.bMessages;
   Playback->bShowMap = !Options.bNoMap;
+  Playback->bShowPip = !Options.bNoPip;
+  Playback->bShowTelemetry = !Options.bNoTelemetry;
   Playback->SetAnchor(Options.AnchorCm);
   Playback->SetSpeed(Options.Speed);
   FString Error;

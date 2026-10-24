@@ -95,6 +95,8 @@ struct FLaunchOptions {
   FString DroneModel;
   bool bMessages = false;  // -SwarmMessages: draw the messages between drones from the start
   bool bNoMap = false;     // -SwarmNoMap: start without the mini map
+  bool bNoPip = false;     // -SwarmNoPip: start without the viewer camera window
+  bool bNoTelemetry = false;  // -SwarmNoTelemetry: start without the telemetry strip
   FString ShotDir;
   double ShotDelay = 30.0;
   double ShotEvery = 20.0;

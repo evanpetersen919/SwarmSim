@@ -177,6 +177,13 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
   TestFalse(TEXT("the map starts on"), ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoMap);
   TestTrue(TEXT("-SwarmNoMap starts without it"),
            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoMap")).bNoMap);
+  TestFalse(TEXT("the viewer camera starts on"), ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoPip);
+  TestTrue(TEXT("-SwarmNoPip starts without it"),
+           ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoPip")).bNoPip);
+  TestFalse(TEXT("the telemetry strip starts on"),
+            ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoTelemetry);
+  TestTrue(TEXT("-SwarmNoTelemetry starts without it"),
+           ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoTelemetry")).bNoTelemetry);
 
   // The mini map's square, with the numbers written out. The larger side of the box is 40 m, and
   // with a quarter on each side the square is 60 m, centered on (10, 10).

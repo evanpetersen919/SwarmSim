@@ -5,6 +5,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "CanvasItem.h"
 #include "Components/InputComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDrawService.h"
@@ -13,6 +15,7 @@
 #include "Engine/Engine.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/DefaultPawn.h"
@@ -67,6 +70,12 @@ bool NameStartsWithAny(const UStaticMesh* Mesh, const TCHAR* const* Prefixes, in
   return false;
 }
 constexpr uint64 kHudKeyBase = 7100;
+// The size of the viewer camera's render target, in pixels.
+constexpr int32 kPipWidth = 480;
+constexpr int32 kPipHeight = 270;
+// How much play time the telemetry strip shows, and how many samples it takes over it.
+constexpr double kTelemetrySeconds = 30.0;
+constexpr int32 kTelemetrySamples = 60;
 }  // namespace
 
 ASwarmPlayback::ASwarmPlayback() {
@@ -76,6 +85,12 @@ ASwarmPlayback::ASwarmPlayback() {
   Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
   Camera->SetupAttachment(Root);
   Camera->SetFieldOfView(70.0f);
+  PipCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("PipCapture"));
+  PipCapture->SetupAttachment(Root);
+  PipCapture->FOVAngle = 70.0f;
+  PipCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+  PipCapture->bCaptureEveryFrame = false;
+  PipCapture->bCaptureOnMovement = false;
 }
 
 void ASwarmPlayback::BeginPlay() {
@@ -84,12 +99,22 @@ void ASwarmPlayback::BeginPlay() {
   // The map is drawn on the game's canvas, by the engine's debug draw service.
   MapDrawHandle = UDebugDrawService::Register(
       TEXT("Game"), FDebugDrawDelegate::CreateUObject(this, &ASwarmPlayback::DrawMap));
+  PanelDrawHandle = UDebugDrawService::Register(
+      TEXT("Game"), FDebugDrawDelegate::CreateUObject(this, &ASwarmPlayback::DrawPanels));
+  PipTarget = NewObject<UTextureRenderTarget2D>(this);
+  PipTarget->InitCustomFormat(kPipWidth, kPipHeight, PF_B8G8R8A8, false);
+  PipTarget->UpdateResourceImmediate(true);
+  PipCapture->TextureTarget = PipTarget;
 }
 
 void ASwarmPlayback::EndPlay(const EEndPlayReason::Type EndPlayReason) {
   if (MapDrawHandle.IsValid()) {
     UDebugDrawService::Unregister(MapDrawHandle);
     MapDrawHandle.Reset();
+  }
+  if (PanelDrawHandle.IsValid()) {
+    UDebugDrawService::Unregister(PanelDrawHandle);
+    PanelDrawHandle.Reset();
   }
   Super::EndPlay(EndPlayReason);
 }
@@ -126,6 +151,8 @@ void ASwarmPlayback::BindKeys() {
   InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ASwarmPlayback::SelectNextDrone);
   InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ASwarmPlayback::ToggleMessages);
   InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ASwarmPlayback::ToggleMap);
+  InputComponent->BindKey(EKeys::C, IE_Pressed, this, &ASwarmPlayback::TogglePip);
+  InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ASwarmPlayback::ToggleTelemetry);
   bKeysBound = true;
 }
 
@@ -478,6 +505,7 @@ void ASwarmPlayback::Tick(float DeltaSeconds) {
   TakeScheduledShot(DeltaSeconds);
   ApplyFrame(DeltaSeconds, false);
   UpdateCamera(DeltaSeconds);
+  UpdatePip();
   if (bShowMessages) {
     DrawMessages();
   } else if (bMessagesDrawn) {
@@ -1066,6 +1094,229 @@ void ASwarmPlayback::DrawMap(UCanvas* Canvas, APlayerController*) {
       Line(Here + FVector2D(-8.0, 8.0), Here + FVector2D(-8.0, -8.0), White, 1.5f);
     }
   }
+}
+
+void ASwarmPlayback::UpdatePip() {
+  if (PipCapture == nullptr || Drones.IsEmpty()) {
+    return;
+  }
+  const int32 Followed = FMath::Clamp(FollowIndex, 0, Drones.Num() - 1);
+  const FDrone& Own = Drones[Followed];
+  if (Own.Root == nullptr) {
+    return;
+  }
+  const FVector Location = Own.Root->GetComponentLocation();
+
+  // The height above the surface below the followed drone, for the window and the strip.
+  HeightAboveTerrainM = -1.0;
+  if (UWorld* World = GetWorld()) {
+    FHitResult Hit;
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(SwarmHeight), false, this);
+    if (World->LineTraceSingleByChannel(Hit, Location, Location - FVector(0.0, 0.0, 200000.0),
+                                        ECC_Visibility, Params)) {
+      HeightAboveTerrainM = Hit.Distance / 100.0;
+    }
+  }
+
+  // Capture only while the window is shown.
+  PipCapture->bCaptureEveryFrame = bShowPip;
+  if (!bShowPip) {
+    return;
+  }
+  if (PipDrone != Followed) {
+    // The capture does not draw the drone it sits on.
+    PipCapture->ClearHiddenComponents();
+    TArray<USceneComponent*> Parts;
+    Own.Root->GetChildrenComponents(true, Parts);
+    Parts.Add(Own.Root);
+    for (USceneComponent* Part : Parts) {
+      if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Part)) {
+        PipCapture->HideComponent(Primitive);
+      }
+    }
+    PipDrone = Followed;
+  }
+  PipCapture->SetWorldLocationAndRotation(Location,
+                                          FRotator(Own.PitchDeg, Own.YawDeg, Own.RollDeg));
+}
+
+namespace {
+void CanvasTile(UCanvas* Canvas, const FVector2D& Position, const FVector2D& Size,
+                const FLinearColor& Color) {
+  FCanvasTileItem Item(Position, Canvas->DefaultTexture->GetResource(), Size, Color);
+  Item.BlendMode = SE_BLEND_Translucent;
+  Canvas->DrawItem(Item);
+}
+
+void CanvasLine(UCanvas* Canvas, const FVector2D& From, const FVector2D& To,
+                const FLinearColor& Color, float Thickness) {
+  FCanvasLineItem Item(From, To);
+  Item.SetColor(Color);
+  Item.LineThickness = Thickness;
+  Canvas->DrawItem(Item);
+}
+
+void CanvasText(UCanvas* Canvas, const FString& Label, const FVector2D& Position,
+                const FLinearColor& Color) {
+  FCanvasTextItem Item(Position, FText::FromString(Label), GEngine->GetSmallFont(), Color);
+  Item.EnableShadow(FLinearColor::Black);
+  Canvas->DrawItem(Item);
+}
+
+void CanvasBox(UCanvas* Canvas, const FVector2D& Origin, const FVector2D& Size,
+               const FLinearColor& Color) {
+  CanvasLine(Canvas, Origin, Origin + FVector2D(Size.X, 0.0), Color, 1.0f);
+  CanvasLine(Canvas, Origin + FVector2D(Size.X, 0.0), Origin + Size, Color, 1.0f);
+  CanvasLine(Canvas, Origin + Size, Origin + FVector2D(0.0, Size.Y), Color, 1.0f);
+  CanvasLine(Canvas, Origin + FVector2D(0.0, Size.Y), Origin, Color, 1.0f);
+}
+}  // namespace
+
+void ASwarmPlayback::DrawPanels(UCanvas* Canvas, APlayerController*) {
+  if (Canvas == nullptr || !Replay.IsValid() || Drones.IsEmpty() ||
+      Canvas->DefaultTexture == nullptr) {
+    return;
+  }
+  const double MapSide = bShowMap ? FMath::Clamp(0.3 * Canvas->SizeY, 140.0, 380.0) : 0.0;
+  if (bShowPip) {
+    DrawPip(Canvas, MapSide);
+  }
+  if (bShowTelemetry) {
+    DrawTelemetry(Canvas);
+  }
+}
+
+void ASwarmPlayback::DrawPip(UCanvas* Canvas, double MapSide) const {
+  if (PipTarget == nullptr) {
+    return;
+  }
+  FTextureRenderTargetResource* Resource = PipTarget->GameThread_GetRenderTargetResource();
+  if (Resource == nullptr) {
+    return;
+  }
+  const int32 Followed = FMath::Clamp(FollowIndex, 0, Drones.Num() - 1);
+  const FDrone& Own = Drones[Followed];
+  const double Width = FMath::Clamp(0.3 * Canvas->SizeX, 200.0, 480.0);
+  const FVector2D Size(Width, Width * kPipHeight / kPipWidth);
+  const FVector2D Origin(Canvas->SizeX - Size.X - 16.0,
+                         16.0 + (MapSide > 0.0 ? MapSide + 10.0 : 0.0));
+
+  FCanvasTileItem Image(Origin, Resource, Size, FLinearColor::White);
+  Image.BlendMode = SE_BLEND_Opaque;
+  Canvas->DrawItem(Image);
+  CanvasBox(Canvas, Origin, Size, FLinearColor(0.8f, 0.8f, 0.8f, 0.8f));
+
+  // A small cross at the center, and the labels. The window is the viewer's view, not a sensor.
+  const FVector2D Center = Origin + 0.5 * Size;
+  const FLinearColor Cross(1.0f, 1.0f, 1.0f, 0.6f);
+  CanvasLine(Canvas, Center + FVector2D(-10.0, 0.0), Center + FVector2D(-3.0, 0.0), Cross, 1.0f);
+  CanvasLine(Canvas, Center + FVector2D(3.0, 0.0), Center + FVector2D(10.0, 0.0), Cross, 1.0f);
+  CanvasLine(Canvas, Center + FVector2D(0.0, -10.0), Center + FVector2D(0.0, -3.0), Cross, 1.0f);
+  CanvasLine(Canvas, Center + FVector2D(0.0, 3.0), Center + FVector2D(0.0, 10.0), Cross, 1.0f);
+  CanvasText(Canvas, FString::Printf(TEXT("VIEWER CAMERA   drone %d"), Followed),
+             Origin + FVector2D(6.0, 4.0), FLinearColor::White);
+  FString Lower =
+      FString::Printf(TEXT("%03d deg   %.0f m/s   alt %.0f m"),
+                      FMath::RoundToInt(Own.HeadingDeg) % 360, Own.SpeedMps, Own.AltitudeM);
+  if (HeightAboveTerrainM >= 0.0) {
+    Lower += FString::Printf(TEXT("   above terrain %.0f m"), HeightAboveTerrainM);
+  }
+  CanvasText(Canvas, Lower, Origin + FVector2D(6.0, Size.Y - 18.0), FLinearColor::White);
+}
+
+void ASwarmPlayback::DrawTelemetry(UCanvas* Canvas) const {
+  const double Dt = Replay->header().dt;
+  if (!(Dt > 0.0)) {
+    return;
+  }
+  const int32 Followed = FMath::Clamp(FollowIndex, 0, Drones.Num() - 1);
+  const double Width = FMath::Clamp(0.3 * Canvas->SizeX, 260.0, 520.0);
+  const double Height = FMath::Clamp(0.17 * Canvas->SizeY, 100.0, 170.0);
+  const FVector2D Size(Width, Height);
+  const FVector2D Origin(16.0, Canvas->SizeY - Height - 16.0);
+
+  // Samples of the followed drone, oldest first, over the last kTelemetrySeconds.
+  struct FSample {
+    double Altitude;
+    double Speed;
+    FLinearColor State;
+  };
+  std::vector<FSample> Samples;
+  std::vector<swarm::AgentSnapshot> Frame;
+  const double StepTicks = kTelemetrySeconds / kTelemetrySamples / Dt;
+  for (int32 K = kTelemetrySamples - 1; K >= 0; --K) {
+    const double Tick = FMath::Max(static_cast<double>(Replay->first_tick()),
+                                   PlaybackTick - static_cast<double>(K) * StepTicks);
+    if (!Replay->sample(Tick, Frame) || static_cast<size_t>(Followed) >= Frame.size()) {
+      return;
+    }
+    const swarm::AgentSnapshot& A = Frame[static_cast<size_t>(Followed)];
+    Samples.push_back({A.position[2], FVector(A.velocity[0], A.velocity[1], A.velocity[2]).Size(),
+                       SwarmSim::StateColor(A.fallback_state, A.alive)});
+  }
+  if (Samples.size() < 2) {
+    return;
+  }
+  double AltLow = Samples[0].Altitude;
+  double AltHigh = AltLow;
+  double SpeedLow = Samples[0].Speed;
+  double SpeedHigh = SpeedLow;
+  for (const FSample& S : Samples) {
+    AltLow = FMath::Min(AltLow, S.Altitude);
+    AltHigh = FMath::Max(AltHigh, S.Altitude);
+    SpeedLow = FMath::Min(SpeedLow, S.Speed);
+    SpeedHigh = FMath::Max(SpeedHigh, S.Speed);
+  }
+  // A flat trace is not stretched to fill the panel.
+  const auto Widen = [](double& Low, double& High, double MinSpan) {
+    if (High - Low < MinSpan) {
+      const double Middle = 0.5 * (High + Low);
+      Low = Middle - 0.5 * MinSpan;
+      High = Middle + 0.5 * MinSpan;
+    }
+  };
+  Widen(AltLow, AltHigh, 20.0);
+  Widen(SpeedLow, SpeedHigh, 10.0);
+  if (SpeedLow < 0.0) {
+    SpeedHigh -= SpeedLow;
+    SpeedLow = 0.0;
+  }
+
+  CanvasTile(Canvas, Origin, Size, FLinearColor(0.0f, 0.0f, 0.0f, 0.55f));
+  CanvasBox(Canvas, Origin, Size, FLinearColor(0.8f, 0.8f, 0.8f, 0.8f));
+  const double Top = Origin.Y + 18.0;
+  const double Bottom = Origin.Y + Size.Y - 12.0;
+  const double Left = Origin.X + 6.0;
+  const double Right = Origin.X + Size.X - 6.0;
+  const double Span = static_cast<double>(Samples.size() - 1);
+  const FLinearColor AltColor(0.3f, 0.85f, 1.0f, 1.0f);
+  const FLinearColor SpeedColor(1.0f, 0.7f, 0.2f, 1.0f);
+  const auto Plot = [&](bool bAltitude, double Low, double High, const FLinearColor& Color) {
+    FVector2D Previous = FVector2D::ZeroVector;
+    for (size_t I = 0; I < Samples.size(); ++I) {
+      const double Value = bAltitude ? Samples[I].Altitude : Samples[I].Speed;
+      const FVector2D Point(Left + (Right - Left) * static_cast<double>(I) / Span,
+                            Bottom - (Bottom - Top) * (Value - Low) / (High - Low));
+      if (I > 0) {
+        CanvasLine(Canvas, Previous, Point, Color, 1.5f);
+      }
+      Previous = Point;
+    }
+  };
+  Plot(true, AltLow, AltHigh, AltColor);
+  Plot(false, SpeedLow, SpeedHigh, SpeedColor);
+
+  // The band under the traces: the followed drone's logged fallback state.
+  for (size_t I = 0; I + 1 < Samples.size(); ++I) {
+    const double X0 = Left + (Right - Left) * static_cast<double>(I) / Span;
+    const double X1 = Left + (Right - Left) * static_cast<double>(I + 1) / Span;
+    CanvasTile(Canvas, FVector2D(X0, Bottom + 3.0), FVector2D(X1 - X0 + 1.0, 5.0),
+               Samples[I].State);
+  }
+  CanvasText(Canvas,
+             FString::Printf(TEXT("drone %d, last %.0f s   alt %.0f to %.0f m   speed %.0f to %.0f"),
+                             Followed, kTelemetrySeconds, AltLow, AltHigh, SpeedLow, SpeedHigh),
+             Origin + FVector2D(6.0, 3.0), FLinearColor::White);
 }
 
 void ASwarmPlayback::DrawHud() const {
