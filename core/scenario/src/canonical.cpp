@@ -102,7 +102,7 @@ bool environment_used(const Scenario& s) { return wind_used(s) || s.ground_conta
 std::uint64_t scenario_version(const Scenario& s) {
   if (s.vehicle.dynamics == FixedWingDynamics::kEnergy || environment_used(s) ||
       s.terrain_guidance.enabled || s.pattern.kind != PatternKind::kOrbit || s.altimeter_used ||
-      s.forward_used || s.avoid.enabled) {
+      s.forward_used || s.avoid.enabled || s.start.clearance_m) {
     return kScenarioFlightVersion;
   }
   return s.vehicle.kind == VehicleKind::kQuad ? 1 : kScenarioVehicleVersion;
@@ -149,6 +149,9 @@ std::string canonical_text(const Scenario& s) {
   line("    jitter_m: " + num(s.start.jitter_m));
   line("    altitude_m: " + num(s.start.altitude_m));
   line("    altitude_jitter_m: " + num(s.start.altitude_jitter_m));
+  if (s.start.clearance_m) {
+    line("    clearance_m: " + num(*s.start.clearance_m));
+  }
 
   line("mission:");
   line("  waypoints:");

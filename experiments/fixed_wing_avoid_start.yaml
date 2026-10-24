@@ -1,0 +1,37 @@
+# The start experiment (ADR 0020): does starting above the true ground remove the launch and early
+# losses of the no-map arm, and do the aircraft that then fly survive the hills? 2 weather levels x
+# 3 steepness levels x 2 maps x 2 start rules = 24 cells. Run with 30 seeds, 720 runs, on
+# base_fixed_wing_avoid.yaml. Compare the start rules with `paired_difference` on the start axis,
+# within each weather, steepness, and map level.
+#
+# The criteria Z1 to Z5 were written in ADR 0020 before this file was run.
+#
+# weather:   clear air, and fog of 375 m visibility.
+# amplitude: hills of 40 (a gentle control), 400, and 480 m.
+# map:       none (no terrain guidance; the aircraft fly at 100 m and only a sensor can react), and
+#            exact (terrain guidance from an exact map).
+# start:     free (the aircraft start on their slots, as before); cleared (at least 60 m above the
+#            highest surface at the start point). Both fly the best avoidance so far: the settings
+#            of ADR 0015, turn_first, and a catch-up cap of 3 m/s.
+version: 1
+name: fixed_wing_avoid_start
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+  - name: start
+    levels:
+      - {label: free, set: {sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3}}}}
+      - {label: cleared, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3}}}}

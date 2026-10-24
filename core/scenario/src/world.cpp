@@ -355,6 +355,12 @@ ScenarioWorld build_world(const Scenario& s) {
           s.pattern.kind == PatternKind::kOrbit
               ? orbit_reference(i, s.drones, 0.0, c.brain.orbit).velocity
               : pattern_reference(i, s.drones, 0.0, s.pattern, c.brain.orbit).velocity;
+      if (s.start.clearance_m) {
+        // Launched from where the ground is known to be: above the highest surface at the start
+        // point by the clearance. The scene is read here, in the setup, and not by any controller.
+        c.start.z = std::max(c.start.z, world.scene->surface_height(starts[i].x, starts[i].y) +
+                                            *s.start.clearance_m);
+      }
       if (s.terrain_guidance.enabled) {
         // An aircraft starts at the altitude its own guidance would ask for at time 0, which is
         // the floor over the whole of its path and not only over the ground beneath it: a start

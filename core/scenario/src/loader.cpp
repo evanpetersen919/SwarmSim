@@ -510,6 +510,10 @@ void read_swarm(Section& root, Scenario& s) {
       read_double(st, "jitter_m", s.start.jitter_m, at_least(0.0));
       read_double(st, "altitude_m", s.start.altitude_m, closed(-1.0e6, 1.0e6));
       read_double(st, "altitude_jitter_m", s.start.altitude_jitter_m, at_least(0.0));
+      double clearance = 0.0;
+      if (read_double(st, "clearance_m", clearance, at_least(0.0))) {
+        s.start.clearance_m = clearance;
+      }
       st.finish();
     }
   }
@@ -1496,6 +1500,12 @@ LoadResult load_scenario(const std::string& text, const std::string& default_nam
   } else if (root.find("vehicle").IsDefined()) {
     ctx.add("vehicle", line_of(root.find("vehicle")),
             "needs version " + std::to_string(kScenarioVehicleVersion));
+  }
+  if (s.start.clearance_m &&
+      (version < kScenarioFlightVersion || s.vehicle.kind != VehicleKind::kFixedWing)) {
+    ctx.add(
+        "swarm.start.clearance_m", line_of(root.find("swarm")),
+        "needs version " + std::to_string(kScenarioFlightVersion) + " and vehicle type fixed_wing");
   }
   read_environment(root, s, version);
   read_weather(root, s);

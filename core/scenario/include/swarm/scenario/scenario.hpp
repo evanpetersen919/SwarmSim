@@ -35,6 +35,11 @@ struct StartLayout {
   double jitter_m = 8.0;
   double altitude_m = 20.0;
   double altitude_jitter_m = 3.0;
+  // ADR 0020, fixed-wing only (version 3). When set, an aircraft starts at least this far above the
+  // highest solid surface at its start point. Empty leaves the start as it was. It is a property of
+  // where the aircraft is launched and reads the scene, as a launch site would be known; no
+  // controller sees it.
+  std::optional<double> clearance_m;
 };
 
 // How a drone estimates its neighbors. The first three are the predictors in

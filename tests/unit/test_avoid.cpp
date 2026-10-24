@@ -508,6 +508,74 @@ TEST(AvoidFlight, OnHillsThatClimbingCannotClearTurningKeepsMoreAircraftOffTheGr
   EXPECT_LT(turning, climbing_only);
 }
 
+namespace {
+
+std::string hills_start_scenario(std::uint64_t seed, const std::string& start) {
+  std::string text;
+  text += "version: 3\n";
+  text += "seed: " + std::to_string(seed) + "\n";
+  text += "duration_s: 5\n";
+  text += "scene: {type: hills, size_m: [2000, 2000], cell_m: 10, amplitude_m: 400, ";
+  text += "obstacles: {density_per_m2: 0.0}}\n";
+  text += "swarm: {drones: 6" + start + "}\n";
+  text += "mission:\n  waypoints:\n    - [0, 0, 100]\n  speed_mps: 31.3\n";
+  text += "vehicle:\n  type: fixed_wing\n  max_speed_mps: 51\n";
+  text += "control:\n  orbit: {radius_m: 300, radius_step_m: 0, altitude_step_m: 8}\n";
+  return text;
+}
+
+}  // namespace
+
+TEST(StartClearance, AnAircraftStartsAboveTheHighestSurfaceAtItsStartPointByTheClearance) {
+  int below_without = 0;
+  for (std::uint64_t seed = 1; seed <= 10; ++seed) {
+    const swarm::LoadResult plain = swarm::load_scenario(hills_start_scenario(seed, ""));
+    const swarm::LoadResult cleared =
+        swarm::load_scenario(hills_start_scenario(seed, ", start: {clearance_m: 50}"));
+    ASSERT_TRUE(plain.ok()) << first_error(plain);
+    ASSERT_TRUE(cleared.ok()) << first_error(cleared);
+    const swarm::ScenarioWorld without = swarm::build_world(plain.scenario);
+    const swarm::ScenarioWorld with = swarm::build_world(cleared.scenario);
+    for (std::size_t i = 0; i < without.agents.size(); ++i) {
+      const swarm::Vec3 s = without.agents[i].start;
+      const double ground = without.scene->surface_height(s.x, s.y);
+      below_without += s.z < ground + 50.0 ? 1 : 0;
+      // Same place; never lower than without the option; at least the clearance above the ground.
+      EXPECT_DOUBLE_EQ(with.agents[i].start.x, s.x);
+      EXPECT_DOUBLE_EQ(with.agents[i].start.y, s.y);
+      EXPECT_GE(with.agents[i].start.z, s.z);
+      EXPECT_GE(with.agents[i].start.z, ground + 50.0 - 1e-9);
+    }
+  }
+  EXPECT_GT(below_without, 0);  // the option changes something on these hills
+}
+
+TEST(StartClearance, TheKeyIsReadRoundTripsAndNeedsVersionThreeAndAFixedWing) {
+  const swarm::LoadResult r =
+      swarm::load_scenario(hills_start_scenario(1, ", start: {clearance_m: 50}"));
+  ASSERT_TRUE(r.ok()) << first_error(r);
+  ASSERT_TRUE(r.scenario.start.clearance_m.has_value());
+  EXPECT_DOUBLE_EQ(*r.scenario.start.clearance_m, 50.0);
+  const std::string text = swarm::canonical_text(r.scenario);
+  EXPECT_NE(text.find("clearance_m: 50"), std::string::npos);
+  const swarm::LoadResult again = swarm::load_scenario(text);
+  ASSERT_TRUE(again.ok()) << first_error(again);
+  EXPECT_EQ(swarm::canonical_text(again.scenario), text);
+  // Without the key there is no trace of it.
+  const swarm::LoadResult plain = swarm::load_scenario(hills_start_scenario(1, ""));
+  ASSERT_TRUE(plain.ok());
+  EXPECT_FALSE(plain.scenario.start.clearance_m.has_value());
+  EXPECT_EQ(swarm::canonical_text(plain.scenario).find("clearance_m"), std::string::npos);
+  // A quad, an older version, and a negative value are refused.
+  std::string quad = hills_start_scenario(1, ", start: {clearance_m: 50}");
+  quad.replace(quad.find("fixed_wing"), 10, "quad");
+  EXPECT_FALSE(swarm::load_scenario(quad).ok());
+  std::string old = hills_start_scenario(1, ", start: {clearance_m: 50}");
+  old.replace(old.find("version: 3"), 10, "version: 2");
+  EXPECT_FALSE(swarm::load_scenario(old).ok());
+  EXPECT_FALSE(swarm::load_scenario(hills_start_scenario(1, ", start: {clearance_m: -1}")).ok());
+}
+
 TEST(AvoidKinematics, TheReachableClimbFollowsTheRampAndThenTheLimit) {
   // Limit 3 m/s, acceleration 2 m/s^2: from rest the ramp takes 1.5 s and gains 2.25 m.
   EXPECT_DOUBLE_EQ(swarm::reachable_climb(0.0, 3.0, 2.0, 1.0), 1.0);   // a t^2 / 2
