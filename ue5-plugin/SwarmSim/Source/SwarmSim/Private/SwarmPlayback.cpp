@@ -148,6 +148,7 @@ void ASwarmPlayback::BindKeys() {
   InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &ASwarmPlayback::ChooseOrbit);
   InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ASwarmPlayback::ChooseFollow);
   InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &ASwarmPlayback::ChooseCinematic);
+  InputComponent->BindKey(EKeys::Five, IE_Pressed, this, &ASwarmPlayback::ChooseSide);
   InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ASwarmPlayback::SelectNextDrone);
   InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ASwarmPlayback::ToggleMessages);
   InputComponent->BindKey(EKeys::N, IE_Pressed, this, &ASwarmPlayback::ToggleMap);
@@ -687,6 +688,18 @@ void ASwarmPlayback::UpdateCamera(double DeltaSeconds) {
       Wanted = Target - Forward * 1500.0 + FVector(0.0, 0.0, 500.0);
       break;
     }
+    case ESwarmCameraMode::Side: {
+      // Level with the followed drone and off to the right of its heading, to judge how far it is
+      // from the ground and the trees below it.
+      const FDrone& Drone = Drones[FMath::Clamp(FollowIndex, 0, Drones.Num() - 1)];
+      if (Drone.Root == nullptr) {
+        return;
+      }
+      Target = Drone.Root->GetComponentLocation();
+      const FVector Right = FRotator(0.0, Drone.YawDeg + 90.0, 0.0).Vector();
+      Wanted = Target + Right * 12000.0;
+      break;
+    }
     case ESwarmCameraMode::Cinematic: {
       const double Angle = FMath::DegreesToRadians(3.0 * T);
       const double Radius = FMath::Max((110.0 + 50.0 * FMath::Sin(0.05 * T)) * 100.0, 1.5 * Extent);
@@ -819,7 +832,8 @@ void ASwarmPlayback::BuildHud(TArray<FString>& Lines, TArray<FColor>& Colors) co
       FColor::White);
   Add(FString::Printf(TEXT("drones alive %d of %d"), AliveCount, Drones.Num()), FColor::White);
   Add(FString::Printf(TEXT("state hash %s"), *GetHashString()), FColor::White);
-  static const TCHAR* Names[] = {TEXT("free"), TEXT("orbit"), TEXT("follow"), TEXT("cinematic")};
+  static const TCHAR* Names[] = {TEXT("free"), TEXT("orbit"), TEXT("follow"), TEXT("cinematic"),
+                                  TEXT("side")};
   Add(FString::Printf(TEXT("camera %s   seed %llu"), Names[static_cast<int32>(CameraMode)],
                       static_cast<uint64>(Replay->header().seed)),
       FColor::White);

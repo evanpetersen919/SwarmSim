@@ -177,6 +177,8 @@ bool FSwarmPlaybackMathTest::RunTest(const FString& Parameters) {
   TestFalse(TEXT("the map starts on"), ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoMap);
   TestTrue(TEXT("-SwarmNoMap starts without it"),
            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoMap")).bNoMap);
+  TestEqual(TEXT("-SwarmCamera=side is accepted"),
+            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmCamera=side")).Camera, FString(TEXT("side")));
   TestFalse(TEXT("the viewer camera starts on"), ParseLaunchOptions(TEXT("-SwarmLog=a")).bNoPip);
   TestTrue(TEXT("-SwarmNoPip starts without it"),
            ParseLaunchOptions(TEXT("-SwarmLog=a -SwarmNoPip")).bNoPip);

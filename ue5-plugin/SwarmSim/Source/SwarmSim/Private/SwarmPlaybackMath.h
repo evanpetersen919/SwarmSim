@@ -74,7 +74,7 @@ constexpr double kDrawnFogMaxVisibilityM = 5000.0;
 //   -SwarmSpeed=N         playback speed, 1 is real time
 //   -SwarmSceneFile=PATH  a scene file to build the terrain, trees, and rocks from (editor only)
 //   -SwarmScale=N         how much larger than life the drones are drawn
-//   -SwarmCamera=NAME     free, orbit, follow, or cinematic
+//   -SwarmCamera=NAME     free, orbit, follow, cinematic, or side
 //   -SwarmDroneModel=PATH a content folder (for example /Game/Altius) whose static meshes are the
 //                         pieces of one aircraft, drawn in place of the stand-in drone
 //   -SwarmShotDir=DIR     save screenshots of the game's own render here (not of the desktop)

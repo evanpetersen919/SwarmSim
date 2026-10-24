@@ -83,5 +83,7 @@ void USwarmPlaybackSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
     Playback->SetCameraMode(ESwarmCameraMode::Follow);
   } else if (Options.Camera == TEXT("cinematic")) {
     Playback->SetCameraMode(ESwarmCameraMode::Cinematic);
+  } else if (Options.Camera == TEXT("side")) {
+    Playback->SetCameraMode(ESwarmCameraMode::Side);
   }
 }

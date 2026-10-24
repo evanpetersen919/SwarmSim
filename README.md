@@ -22,11 +22,13 @@ One of the five aircraft of the same run at 9 s, past a cliff face and trees in 
 
 ![A fixed-wing aircraft between canyon walls in fog](docs/img/viewer_gap.jpg)
 
-The same run at 14 s, between canyon walls. The orbit is raised by terrain guidance, from a prior map of the level that is 100 m too low, to keep the aircraft above the highest ground along it.
+The same run at 14 s, between canyon walls. Terrain guidance plans from a prior map of the level that is 100 m too low (see the limit below).
 
 ![Five fixed-wing aircraft on an orbit over a canyon, from the orbit camera](docs/img/viewer_swarm.jpg)
 
 The same scenario with clear weather (visibility 20,000 m instead of 375 m), at 5 s, before the jammer starts, from the viewer's orbit camera. Five aircraft fly a 300 m orbit and three are in view. They are drawn 12 times their size (`-SwarmScale=12`), because from the orbit camera, about 450 m out, they would be a few pixels wide at life size. The simulation never renders anything; the viewer only reads the log. See [Credits](#credits) for the level and the aircraft model.
+
+**Limit of these images.** The simulation's copy of this level leaves out the level's background scenery, an actor named `PCGDemo_BackgroundBP`: its rock pillars and trees have no collision, and the exporter skips them on purpose, because they stand at heights unrelated to the playable ground. The viewer draws them. At 31 s of the fog run, by the positions of the drawn meshes, the bases of hornbeam trees stand 14 to 34 m from the followed aircraft, with tops up to 188 m, above its 149 m, and the camera is inside their leaves from about 32 s. The simulation scores no contact there, because to it those trees do not exist. So these images show the viewer, not obstacle avoidance on this level; the avoidance results are in [docs/RESULTS.md](docs/RESULTS.md), on generated terrain, where the simulation's world is the world that is scored.
 
 ## Status
 

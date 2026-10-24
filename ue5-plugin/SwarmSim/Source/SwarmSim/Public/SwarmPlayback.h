@@ -25,6 +25,7 @@ enum class ESwarmCameraMode : uint8 {
   Orbit,      // circles the swarm
   Follow,     // behind and above one drone
   Cinematic,  // a slow, varying orbit
+  Side,       // level with one drone, 120 m to the side of its heading
 };
 
 // Plays a recorded run: a drone for each agent in the log, moved along its logged path.
@@ -38,7 +39,7 @@ enum class ESwarmCameraMode : uint8 {
 //
 // Keys, in a game: Space pauses, Up and Down double and halve the speed, Left and Right step back
 // and forward ten seconds, R restarts, 1 to 4 choose the camera (free, orbit, follow, cinematic),
-// and Tab chooses the drone to follow.
+// 5 chooses a side view of the followed drone, and Tab chooses the drone to follow.
 class UCanvas;
 
 UCLASS()
@@ -245,6 +246,7 @@ class SWARMSIM_API ASwarmPlayback : public AActor {
   void ChooseOrbit() { SetCameraMode(ESwarmCameraMode::Orbit); }
   void ChooseFollow() { SetCameraMode(ESwarmCameraMode::Follow); }
   void ChooseCinematic() { SetCameraMode(ESwarmCameraMode::Cinematic); }
+  void ChooseSide() { SetCameraMode(ESwarmCameraMode::Side); }
   FVector DroneWorldLocation(double X, double Y, double Z) const;
 
   TSharedPtr<swarm::Replay> Replay;

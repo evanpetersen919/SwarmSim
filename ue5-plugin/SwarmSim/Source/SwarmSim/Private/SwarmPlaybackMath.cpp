@@ -110,12 +110,12 @@ FLaunchOptions ParseLaunchOptions(const TCHAR* CommandLine) {
   if (FParse::Value(CommandLine, TEXT("SwarmCamera="), Text)) {
     Text = Text.ToLower();
     if (Text == TEXT("free") || Text == TEXT("orbit") || Text == TEXT("follow") ||
-        Text == TEXT("cinematic")) {
+        Text == TEXT("cinematic") || Text == TEXT("side")) {
       Options.Camera = Text;
     } else {
       Options.bValid = false;
       Options.Problem = FString::Printf(
-          TEXT("-SwarmCamera must be free, orbit, follow, or cinematic, got '%s'"), *Text);
+          TEXT("-SwarmCamera must be free, orbit, follow, cinematic, or side, got '%s'"), *Text);
     }
   }
   FParse::Value(CommandLine, TEXT("SwarmDroneModel="), Options.DroneModel);
