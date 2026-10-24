@@ -24,9 +24,9 @@ One of the five aircraft of the same run at 9 s, past a cliff face and trees in 
 
 The same run at 14 s, between canyon walls. The orbit is raised by terrain guidance, from a prior map of the level that is 100 m too low, to keep the aircraft above the highest ground along it.
 
-![Four fixed-wing aircraft in formation over a clearing](docs/img/viewer_formation.jpg)
+![Five fixed-wing aircraft on an orbit over a canyon, from the orbit camera](docs/img/viewer_swarm.jpg)
 
-Four aircraft in formation over the same level, from an earlier run than the images above. This is a scratch variant of [scenarios/fixed_wing_formation.yaml](scenarios/fixed_wing_formation.yaml) fitted to the level (4 aircraft, seed 7). The simulation never renders anything; the viewer only reads the log. See [Credits](#credits) for the level and the aircraft model.
+The same scenario with clear weather (visibility 20,000 m instead of 375 m), at 5 s, before the jammer starts, from the viewer's orbit camera. Five aircraft fly a 300 m orbit and three are in view. They are drawn 12 times their size (`-SwarmScale=12`), because from the orbit camera, about 450 m out, they would be a few pixels wide at life size. The simulation never renders anything; the viewer only reads the log. See [Credits](#credits) for the level and the aircraft model.
 
 ## Status
 
