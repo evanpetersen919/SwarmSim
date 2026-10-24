@@ -52,6 +52,7 @@ TEST(ExperimentFiles, EveryExperimentFileLoadsAndExpandsToTheDocumentedCellCount
       {"fixed_wing_avoid_turnfirst.yaml", 36},
       {"fixed_wing_avoid_catchup.yaml", 48},
       {"fixed_wing_avoid_start.yaml", 24},
+      {"fixed_wing_final.yaml", 84},
       {"probe_fixed_wing_phase.yaml", 6},
       {"fixed_wing_avoid_clearance.yaml", 6},
       {"fixed_wing_share.yaml", 108},

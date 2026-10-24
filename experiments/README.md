@@ -27,6 +27,7 @@ Experiment files for the batch tools. The format is described in [docs/MODELS.md
 | `probe_fixed_wing_phase.yaml` | A probe of the orbit phase gain (0.05, 0.02, 0) on 400 and 480 m hills in fog; 6 cells (ADR 0019) |
 | `fixed_wing_avoid_catchup.yaml` | The catch-up experiment: 2 weather levels, 3 steepness levels, 2 maps, 4 arms (no cap, 6, 3, and 0 m/s); 48 cells (ADR 0019) |
 | `fixed_wing_avoid_start.yaml` | The start experiment: 2 weather levels, 3 steepness levels, 2 maps, 2 start rules (free, cleared to 60 m); 24 cells (ADR 0020) |
+| `fixed_wing_final.yaml` | The ladder: every stage of the avoidance work (forward, avoid, all3, turnfirst, cap3, urgent6, share) on one setup with a cleared start; 84 cells |
 | `fixed_wing_avoid_clearance.yaml` | The avoidance clearance (15, 30, 60 m) with the three changes of ADR 0015; 6 cells |
 | `fixed_wing_share.yaml` | The sharing experiment: 3 steepness levels, 2 weather levels, 3 loss levels, 2 jam levels, 3 arms (avoid, memory, share); 108 cells (ADR 0016) |
 | `fixed_wing_share_sensitivity.yaml` | How long a point is kept and how many a report carries; 6 cells (ADR 0016) |

@@ -1,0 +1,48 @@
+# The ladder (ADR 0020 and after): every stage of the avoidance work on the same setup, so that the
+# numbers of the results page are consistent. The earlier experiments were each run with the options
+# of their time and with the aircraft starting on their slots at the nominal altitude. Here all arms
+# start at least 60 m above the true ground (swarm.start.clearance_m) and differ only in what the
+# aircraft does: 2 weather levels x 3 steepness levels x 2 maps x 7 arms = 84 cells. Run with 30
+# seeds, 2,520 runs, on base_fixed_wing_avoid.yaml.
+#
+# This is a description, not a test of a new claim: no criteria beyond those of the ADRs that built
+# each stage. What is reported is fixed here: total and late ground contacts, the corridor share,
+# time on station, radial error, mean height, collision episodes, and closest approach, by cell, and
+# each arm against the previous one (paired by seed) for the steep hills with no map.
+#
+# weather:   clear air, and fog of 375 m visibility.
+# amplitude: hills of 40 (a gentle control), 400, and 480 m.
+# map:       none (no terrain guidance; the aircraft fly at 100 m and only a sensor can react), and
+#            exact (terrain guidance from an exact map).
+# arm:       forward (the forward sensor and its altitude floor only, ADR 0013); avoid (turning and
+#            slowing, ADR 0014); all3 (rejoin, kinematic feasibility, clearance 30 m, ADR 0015);
+#            turnfirst (the turn keeps its share of the acceleration limit, ADR 0018); cap3 (a
+#            catch-up cap of 3 m/s, ADR 0019); urgent6 (the whole bank under 6 s, ADR 0017); share
+#            (the aircraft also share what they see, ADR 0016).
+version: 1
+name: fixed_wing_final
+base: base_fixed_wing_avoid.yaml
+seeds: {first: 1, count: 5}
+axes:
+  - name: weather
+    levels:
+      - {label: clear, set: {weather: {visibility_m: 20000, rain_mm_h: 0}}}
+      - {label: fog, set: {weather: {visibility_m: 375, rain_mm_h: 0}}}
+  - name: amplitude
+    levels:
+      - {label: a40, set: {scene: {amplitude_m: 40}}}
+      - {label: a400, set: {scene: {amplitude_m: 400}}}
+      - {label: a480, set: {scene: {amplitude_m: 480}}}
+  - name: map
+    levels:
+      - {label: none, set: {}}
+      - {label: exact, set: {control: {terrain: {clearance_m: 60}}}}
+  - name: arm
+    levels:
+      - {label: forward, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}}}
+      - {label: avoid, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12}}}}
+      - {label: all3, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30}}}}
+      - {label: turnfirst, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true}}}}
+      - {label: cap3, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3}}}}
+      - {label: urgent6, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3, urgent_s: 6}}}}
+      - {label: share, set: {swarm: {start: {clearance_m: 60}}, sensors: {forward: {period_ticks: 5}}, control: {avoid: {horizon_s: 12, rejoin: true, feasibility: kinematic, clearance_m: 30, turn_first: true, catchup_cap_mps: 3, urgent_s: 6}, share: {mode: share}}}}
