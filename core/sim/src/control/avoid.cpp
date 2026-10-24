@@ -215,12 +215,11 @@ AvoidResult assess_avoidance(const AvoidParams& params, const AvoidInput& in) {
     const double turn_rate = std::abs(result.turn_accel) / speed;
     result.slow = result.time_to_threat < std::abs(result.turn_angle) / turn_rate;
   }
-  if (result.all_blocked) {
-    result.turn_accel = result.turn_angle > 0.0 ? limit : -limit;
-    result.slow = true;
-  } else if (params.urgent_s > 0.0 && result.time_to_threat < params.urgent_s &&
-             std::abs(result.turn_angle) > 1e-12) {
-    // Little time: the whole bank toward the chosen column, and the lowest speed.
+  // With every column blocked, or with little time (ADR 0017): the whole bank toward the chosen
+  // column, and the lowest speed.
+  const bool urgent = params.urgent_s > 0.0 && result.time_to_threat < params.urgent_s &&
+                      std::abs(result.turn_angle) > 1e-12;
+  if (result.all_blocked || urgent) {
     result.turn_accel = result.turn_angle > 0.0 ? limit : -limit;
     result.slow = true;
   }
